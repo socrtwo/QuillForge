@@ -10,7 +10,7 @@
 import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from 'prosemirror-state';
 import { Fragment, Slice, type Mark, type Node as PMNode } from 'prosemirror-model';
 import { ReplaceStep, ReplaceAroundStep, AddMarkStep, RemoveMarkStep, AttrStep, DocAttrStep, AddNodeMarkStep, RemoveNodeMarkStep } from 'prosemirror-transform';
-import { ChangeSet } from 'prosemirror-changeset';
+import { ChangeSet, simplifyChanges } from 'prosemirror-changeset';
 import { schema } from '../schema';
 
 export interface TrackState { enabled: boolean; author: string; lockTracking: boolean }
@@ -87,7 +87,8 @@ export function trackTransaction(tr: Transaction, oldState: EditorState, force =
 
   let cs = ChangeSet.create(oldState.doc);
   cs = cs.addSteps(tr.doc, tr.mapping.maps, null);
-  const changes = [...cs.changes];
+  // 'trackWords' (AI edits): present whole-word changes, as reviewers expect, instead of minimal character runs.
+  const changes = tr.getMeta('trackWords') ? simplifyChanges(cs.changes, tr.doc) : [...cs.changes];
   if (!changes.length) return tr;
 
   const out = tr; // append steps to the same transaction so undo treats it as one unit

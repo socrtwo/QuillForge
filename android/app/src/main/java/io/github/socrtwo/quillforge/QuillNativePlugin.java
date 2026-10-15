@@ -3,6 +3,10 @@ package io.github.socrtwo.quillforge;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
+import android.content.ClipDescription;
+import android.content.ClipboardManager;
+import android.os.Build;
+import android.os.PersistableBundle;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
@@ -54,6 +58,9 @@ import java.util.concurrent.Executors;
  *   <li>getLaunchFile() -> {uri?, name, mime, data} | {} (consumed once)</li>
  *   <li>keepAwake({on: boolean}) -> void</li>
  *   <li>event "fileOpened" -> same payload as getLaunchFile, for files opened while running</li>
+ *   <li>secureSet({key, value}) / secureGet({key}) -> {value} / secureRemove({key}): Keystore-encrypted secrets</li>
+ *   <li>readClipboard() -> {text} / writeClipboard({text, sensitive})</li>
+ *   <li>startLoopback({timeoutMs, successHtml}) -> {port}; event "oauthCallback" {url}; stopLoopback()</li>
  * </ul>
  */
 @CapacitorPlugin(name = "QuillNative")
@@ -71,13 +78,158 @@ public class QuillNativePlugin extends Plugin {
     /** Largest document read into memory (bytes); bigger files are refused instead of crashing. */
     private static final long MAX_READ_BYTES = 64L * 1024L * 1024L;
 
+    private AiSupport.Loopback loopback;
+
     private final Object launchLock = new Object();
     private boolean launchFileConsumed = false;
 
     @Override
     protected void handleOnDestroy() {
+        if (loopback != null) {
+            loopback.stop();
+        }
         io.shutdown();
         super.handleOnDestroy();
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // AI setup: secrets, clipboard, OAuth loopback
+    // ---------------------------------------------------------------------------------------------
+
+    @PluginMethod
+    public void secureSet(PluginCall call) {
+        final String key = call.getString("key");
+        final String value = call.getString("value");
+        if (key == null || value == null) {
+            call.reject("secureSet requires 'key' and 'value'");
+            return;
+        }
+        io.execute(() -> {
+            try {
+                AiSupport.put(getContext(), key, value);
+                call.resolve();
+            } catch (Throwable e) {
+                call.reject("Could not store the secret: " + e.getMessage(), asException(e));
+            }
+        });
+    }
+
+    @PluginMethod
+    public void secureGet(PluginCall call) {
+        final String key = call.getString("key");
+        if (key == null) {
+            call.reject("secureGet requires 'key'");
+            return;
+        }
+        io.execute(() -> {
+            JSObject ret = new JSObject();
+            try {
+                ret.put("value", AiSupport.get(getContext(), key));
+            } catch (Throwable e) {
+                // A Keystore key lost after a device restore cannot decrypt old values: report none.
+                Log.w(TAG, "secureGet failed", e);
+                ret.put("value", JSObject.NULL);
+            }
+            call.resolve(ret);
+        });
+    }
+
+    @PluginMethod
+    public void secureRemove(PluginCall call) {
+        final String key = call.getString("key");
+        if (key == null) {
+            call.reject("secureRemove requires 'key'");
+            return;
+        }
+        AiSupport.remove(getContext(), key);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void readClipboard(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            JSObject ret = new JSObject();
+            try {
+                ClipboardManager cm = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+                ClipData clip = cm != null ? cm.getPrimaryClip() : null;
+                if (clip != null && clip.getItemCount() > 0) {
+                    CharSequence text = clip.getItemAt(0).coerceToText(getContext());
+                    ret.put("text", text != null ? text.toString() : JSObject.NULL);
+                } else {
+                    ret.put("text", JSObject.NULL);
+                }
+                call.resolve(ret);
+            } catch (Throwable e) {
+                call.reject("Could not read the clipboard: " + e.getMessage(), asException(e));
+            }
+        });
+    }
+
+    @PluginMethod
+    public void writeClipboard(PluginCall call) {
+        final String text = call.getString("text", "");
+        final boolean sensitive = Boolean.TRUE.equals(call.getBoolean("sensitive", false));
+        getActivity().runOnUiThread(() -> {
+            try {
+                ClipboardManager cm = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+                if (cm == null) {
+                    call.reject("No clipboard service");
+                    return;
+                }
+                if ((text == null || text.isEmpty()) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    cm.clearPrimaryClip();
+                } else {
+                    ClipData clip = ClipData.newPlainText("QuillForge", text);
+                    if (sensitive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        PersistableBundle extras = new PersistableBundle();
+                        extras.putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true);
+                        clip.getDescription().setExtras(extras);
+                    }
+                    cm.setPrimaryClip(clip);
+                }
+                call.resolve();
+            } catch (Throwable e) {
+                call.reject("Could not write the clipboard: " + e.getMessage(), asException(e));
+            }
+        });
+    }
+
+    @PluginMethod
+    public void startLoopback(PluginCall call) {
+        long timeoutMs = call.getLong("timeoutMs", 600_000L);
+        String html = call.getString("successHtml");
+        synchronized (this) {
+            if (loopback != null) {
+                loopback.stop();
+            }
+            try {
+                loopback = new AiSupport.Loopback(timeoutMs, html, (url) -> {
+                    JSObject ev = new JSObject();
+                    ev.put("url", url);
+                    notifyListeners("oauthCallback", ev, true);
+                });
+            } catch (Throwable e) {
+                call.reject("Could not start the sign-in listener: " + e.getMessage(), asException(e));
+                return;
+            }
+            Thread t = new Thread(loopback, "quillforge-oauth");
+            t.setDaemon(true);
+            t.start();
+            JSObject ret = new JSObject();
+            ret.put("port", loopback.port());
+            call.resolve(ret);
+        }
+    }
+
+    @PluginMethod
+    public void stopLoopback(PluginCall call) {
+        synchronized (this) {
+            if (loopback != null) {
+                loopback.stop();
+                loopback = null;
+            }
+        }
+        call.resolve();
     }
 
     // ---------------------------------------------------------------------------------------------

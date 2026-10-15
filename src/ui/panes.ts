@@ -16,6 +16,7 @@ import { modifyStyle } from '../commands/format';
 import { kvKeys, kvGet, kvDel } from '../util/store';
 import { compareDocs } from '../editor/compare';
 import { suggest, addWord } from '../proof/proofing';
+import { aiPaneDef } from './aiPane';
 
 export interface PaneDef {
   id: string;
@@ -574,5 +575,5 @@ const mailmerge: PaneDef = {
   },
 };
 
-export const PANES: Record<string, PaneDef> = { navigation, styles, inspector, clipboard, find, comments, revisions, spelling, thesaurus, accessibility, reveal, selection, snippets, notes, versions, mailmerge };
+export const PANES: Record<string, PaneDef> = { navigation, styles, inspector, clipboard, find, comments, revisions, spelling, thesaurus, accessibility, reveal, selection, snippets, notes, versions, mailmerge, ai: aiPaneDef };
 void toast; void openDialog; void pageOfPos;

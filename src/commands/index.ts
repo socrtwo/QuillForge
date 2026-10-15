@@ -13,4 +13,5 @@ import './developer';
 import './table';
 import './picture';
 import './tools';
+import './ai';
 export { allCommands, getCommand, commandCount, searchCommands } from './registry';

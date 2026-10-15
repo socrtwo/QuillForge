@@ -27,8 +27,26 @@ app.createTab();
 (window as any).__qfAllIds = allCommands().map((c) => c.id);
 (window as any).__qfGetCommand = getCommand;
 (window as any).__qfIO = () => import('./io');
+(window as any).__qfAi = async () => ({ ...(await import('./ai/client')), ...(await import('./ai/store')), ...(await import('./ai/providers')) });
 
 async function start() {
+  // Browser build: this tab may be the OpenRouter sign-in callback opened by the AI setup wizard.
+  if (!isNative() && /[?&]qf-oauth=/.test(location.search)) {
+    try {
+      const { handleOAuthRedirect } = await import('./ai/oauth');
+      const { setApiKey, saveAiSettings } = await import('./ai/store');
+      const ok = await handleOAuthRedirect(async (key) => {
+        await setApiKey('openrouter', key);
+        saveAiSettings((s) => {
+          s.providers.openrouter = s.providers.openrouter || { id: 'openrouter', model: 'openrouter/free', fastModel: 'openrouter/free' };
+          if (!s.active) s.active = 'openrouter';
+        });
+      });
+      if (ok) toast('Signed in to OpenRouter and saved the key. You can close this tab and return to QuillForge.', { ms: 15000 });
+    } catch (e: any) {
+      toast(`OpenRouter sign-in did not complete: ${e?.message || e}`, { ms: 10000 });
+    }
+  }
   const { openBuffer } = await import('./commands/file');
   const lf = await launchFile();
   if (lf) await openBuffer(app, lf.data, lf.name, lf.uri);

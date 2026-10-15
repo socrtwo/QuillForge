@@ -27,6 +27,17 @@ interface QuillNativePlugin {
   /** Keep the screen awake (read-aloud, teleprompter). */
   keepAwake(opts: { on: boolean }): Promise<void>;
   addListener(event: 'fileOpened', cb: (f: { uri?: string; name?: string; mime?: string; data?: string }) => void): Promise<{ remove: () => void }>;
+  addListener(event: 'oauthCallback', cb: (r: { url: string }) => void): Promise<{ remove: () => void }>;
+  /** Android Keystore-backed encrypted preferences (API keys). */
+  secureSet(opts: { key: string; value: string }): Promise<void>;
+  secureGet(opts: { key: string }): Promise<{ value?: string | null }>;
+  secureRemove(opts: { key: string }): Promise<void>;
+  /** ClipboardManager text (foreground app only; Android 12+ shows a "pasted" notice). */
+  readClipboard(): Promise<{ text?: string | null }>;
+  writeClipboard(opts: { text: string; sensitive?: boolean }): Promise<void>;
+  /** One-shot http://127.0.0.1:<port>/ listener for OAuth redirects (OpenRouter PKCE). */
+  startLoopback(opts: { timeoutMs: number; successHtml?: string }): Promise<{ port: number }>;
+  stopLoopback(): Promise<void>;
 }
 
 const Native = registerPlugin<QuillNativePlugin>('QuillNative');
@@ -170,3 +181,54 @@ export const OPEN_MIMES = [
   'application/msword', 'application/vnd.ms-word.document.macroEnabled.12',
   'application/rtf', 'text/rtf', 'text/html', 'text/markdown', 'text/plain', 'application/epub+zip', 'application/json', 'application/octet-stream', '*/*',
 ];
+
+// ------------------------------------------------------------------------------------------
+// Secure storage, clipboard, OAuth loopback, app resume (AI setup)
+
+export async function secureSet(key: string, value: string): Promise<void> {
+  await Native.secureSet({ key, value });
+}
+export async function secureGet(key: string): Promise<string | null> {
+  return (await Native.secureGet({ key })).value ?? null;
+}
+export async function secureRemove(key: string): Promise<void> {
+  await Native.secureRemove({ key });
+}
+
+/** Read clipboard text. Returns null when the platform refuses (no permission, no focus). */
+export async function readClipboardText(): Promise<string | null> {
+  try {
+    if (isNative()) return (await Native.readClipboard()).text ?? null;
+    if (navigator.clipboard?.readText) return await navigator.clipboard.readText();
+  } catch { /* denied */ }
+  return null;
+}
+
+export async function writeClipboardText(text: string, sensitive = false): Promise<boolean> {
+  try {
+    if (isNative()) { await Native.writeClipboard({ text, sensitive }); return true; }
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch { return false; }
+}
+
+export async function startOAuthLoopback(timeoutMs: number, successHtml?: string): Promise<number> {
+  return (await Native.startLoopback({ timeoutMs, successHtml })).port;
+}
+export async function stopOAuthLoopback(): Promise<void> {
+  try { await Native.stopLoopback(); } catch { /* not running */ }
+}
+export function onOAuthCallback(cb: (url: string) => void): Promise<{ remove: () => void }> {
+  return Native.addListener('oauthCallback', (r) => cb(r.url));
+}
+
+/** Called when the app returns to the foreground (Android resume, browser tab visible again). */
+export function onAppResume(cb: () => void): () => void {
+  const vis = () => { if (document.visibilityState === 'visible') cb(); };
+  document.addEventListener('visibilitychange', vis);
+  let remove: (() => void) | null = null;
+  if (isNative()) {
+    import('@capacitor/app').then(({ App }) => App.addListener('resume', cb)).then((h) => { remove = () => h.remove(); }).catch(() => undefined);
+  }
+  return () => { document.removeEventListener('visibilitychange', vis); remove?.(); };
+}
