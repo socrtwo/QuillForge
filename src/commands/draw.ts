@@ -1,4 +1,5 @@
 /** Draw tab: ink canvas (pen, pencil, highlighter, eraser), signature capture. */
+import { safeColor, safeNum } from '../util/sanitize';
 import { def } from './registry';
 import type { App } from '../app';
 import { schema } from '../editor/schema';
@@ -14,14 +15,17 @@ interface InkData { w: number; h: number; strokes: Stroke[]; bg?: string }
 export const inkPrefs = { tool: 'pen', color: '#1f3864', width: 3 };
 
 function strokePath(s: Stroke): string {
-  if (s.pts.length < 2) { const [x, y] = s.pts[0] || [0, 0]; return `M${x},${y} l0.1,0`; }
-  let d = `M${s.pts[0][0].toFixed(1)},${s.pts[0][1].toFixed(1)}`;
-  for (let i = 1; i < s.pts.length - 1; i++) {
-    const [x0, y0] = s.pts[i], [x1, y1] = s.pts[i + 1];
-    d += ` Q${x0.toFixed(1)},${y0.toFixed(1)} ${((x0 + x1) / 2).toFixed(1)},${((y0 + y1) / 2).toFixed(1)}`;
+  // Points come from document data (editData), so coerce every coordinate to a number.
+  const n = (v: unknown) => safeNum(v, 0).toFixed(1);
+  const pts = Array.isArray(s.pts) ? s.pts : [];
+  if (pts.length < 2) { const [x, y] = pts[0] || [0, 0]; return `M${n(x)},${n(y)} l0.1,0`; }
+  let d = `M${n(pts[0][0])},${n(pts[0][1])}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [x0, y0] = pts[i].map(Number), [x1, y1] = pts[i + 1].map(Number);
+    d += ` Q${n(x0)},${n(y0)} ${n((x0 + x1) / 2)},${n((y0 + y1) / 2)}`;
   }
-  const l = s.pts[s.pts.length - 1];
-  return d + ` L${l[0].toFixed(1)},${l[1].toFixed(1)}`;
+  const l = pts[pts.length - 1];
+  return d + ` L${n(l[0])},${n(l[1])}`;
 }
 
 export function inkSvg(d: InkData): string {
@@ -29,9 +33,10 @@ export function inkSvg(d: InkData): string {
     const avgP = s.pts.reduce((a, p) => a + (p[2] || 0.5), 0) / (s.pts.length || 1);
     const w = s.tool === 'highlighter' ? s.width * 4 : s.width * (0.6 + avgP * 0.8);
     const op = s.tool === 'highlighter' ? 0.35 : s.tool === 'pencil' ? 0.75 : 1;
-    return `<path d="${strokePath(s)}" fill="none" stroke="${s.color}" stroke-width="${w.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="${op}"${s.tool === 'pencil' ? ' stroke-dasharray="0.5 0.6"' : ''}/>`;
+    return `<path d="${strokePath(s)}" fill="none" stroke="${safeColor(s.color)}" stroke-width="${safeNum(w, 1, 0, 500).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="${op}"${s.tool === 'pencil' ? ' stroke-dasharray="0.5 0.6"' : ''}/>`;
   }).join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${d.w}" height="${d.h}" viewBox="0 0 ${d.w} ${d.h}">${d.bg ? `<rect width="100%" height="100%" fill="${d.bg}"/>` : ''}${paths}</svg>`;
+  const W = safeNum(d.w, 600, 1, 20000), H = safeNum(d.h, 400, 1, 20000);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${d.bg ? `<rect width="100%" height="100%" fill="${safeColor(d.bg, '#ffffff')}"/>` : ''}${paths}</svg>`;
 }
 
 async function inkDialog(app: App, init: InkData, title: string): Promise<InkData | null> {

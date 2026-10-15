@@ -1,4 +1,5 @@
 /** Picture Format contextual commands. */
+import { escHtml, isScriptUrl } from '../util/sanitize';
 import { def } from './registry';
 import type { App } from '../app';
 import { NodeSelection } from 'prosemirror-state';
@@ -22,6 +23,8 @@ export function selectedImage(app: App, pos?: number): { node: PMNode; pos: numb
   if (before && before.type === N.image) return { node: before, pos: sel.from - 1 };
   return null;
 }
+
+const safeImgSrc = (src: string) => (isScriptUrl(src || '') ? '' : src || '');
 
 function setImg(app: App, patch: Record<string, any> | ((a: Record<string, any>) => Record<string, any>), pos?: number) {
   const im = selectedImage(app, pos);
@@ -82,7 +85,7 @@ def([
         { key: 'hue', label: 'Hue rotate', type: 'range', min: 0, max: 360, value: 0, suffix: '°' },
         { key: 'blur', label: 'Blur (px)', type: 'range', min: 0, max: 10, step: 0.5, value: 0 },
         { key: 'op', label: 'Transparency', type: 'range', min: 0, max: 95, value: Math.round((1 - (selectedImage(app)!.node.attrs.opacity ?? 1)) * 100), suffix: '%' },
-      ], onChange: (x, ctl) => ctl.setPreview(`<img src="${selectedImage(app)!.node.attrs.src}" style="max-width:100%;max-height:160px;filter:brightness(${x.b}%) contrast(${x.c}%) saturate(${x.s}%) hue-rotate(${x.hue}deg) blur(${x.blur}px);opacity:${1 - x.op / 100}">`) });
+      ], onChange: (x, ctl) => ctl.setPreview(`<img src="${escHtml(safeImgSrc(selectedImage(app)!.node.attrs.src))}" style="max-width:100%;max-height:160px;filter:brightness(${x.b}%) contrast(${x.c}%) saturate(${x.s}%) hue-rotate(${x.hue}deg) blur(${x.blur}px);opacity:${1 - x.op / 100}">`) });
       if (r) setImg(app, { filter: `brightness(${r.b}%) contrast(${r.c}%) saturate(${r.s}%) hue-rotate(${r.hue}deg)${r.blur ? ` blur(${r.blur}px)` : ''}`, opacity: r.op ? 1 - r.op / 100 : null });
     },
   },
@@ -96,7 +99,7 @@ def([
         { key: 'l', label: 'Left %', type: 'number', value: c.l || 0, half: true }, { key: 'r', label: 'Right %', type: 'number', value: c.r || 0, half: true },
         { key: 'shape', label: 'Crop to shape', type: 'select', options: ['none', 'circle', 'ellipse', 'rounded'], value: 'none', half: true },
         { key: 'perm', label: 'Apply permanently (delete cropped areas)', type: 'checkbox', value: false, half: true },
-      ], onChange: (x, ctl) => ctl.setPreview(`<img src="${im.node.attrs.src}" style="max-width:100%;max-height:180px;clip-path:${x.shape === 'circle' ? 'circle(50%)' : x.shape === 'ellipse' ? 'ellipse(50% 50%)' : `inset(${x.t}% ${x.r}% ${x.b}% ${x.l}%${x.shape === 'rounded' ? ' round 12%' : ''})`}">`) });
+      ], onChange: (x, ctl) => ctl.setPreview(`<img src="${escHtml(safeImgSrc(im.node.attrs.src))}" style="max-width:100%;max-height:180px;clip-path:${x.shape === 'circle' ? 'circle(50%)' : x.shape === 'ellipse' ? 'ellipse(50% 50%)' : `inset(${x.t}% ${x.r}% ${x.b}% ${x.l}%${x.shape === 'rounded' ? ' round 12%' : ''})`}">`) });
       if (!r) return;
       if (r.perm || r.shape !== 'none') {
         const img = new Image();

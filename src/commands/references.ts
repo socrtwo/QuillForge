@@ -10,6 +10,7 @@ import { pageOfPos } from '../editor/plugins/pagination';
 import { footnoteLabel } from '../editor/plugins/decorations';
 import { openDialog, toast, promptDialog } from '../ui/dialog';
 import { esc } from '../ui/dom';
+import { sanitizeGeneratedHtml } from '../util/sanitize';
 import { slug } from './edit';
 
 const N = schema.nodes;
@@ -155,11 +156,12 @@ export function generateBlock(app: App, kind: string, options: Record<string, an
       const entries = new Map<string, Map<string, Set<string>>>();
       st.doc.descendants((n, pos) => {
         if (n.type === N.index_entry && n.attrs.kind !== 'toa') {
-          const term = n.attrs.term, sub = n.attrs.sub || '';
+          const term = String(n.attrs.term || '').trim(), sub = n.attrs.sub || '';
+          if (!term) return true;
           if (!entries.has(term)) entries.set(term, new Map());
           const m = entries.get(term)!;
           if (!m.has(sub)) m.set(sub, new Set());
-          m.get(sub)!.add(n.attrs.see ? `see ${n.attrs.see}` : pg(pos) || '•');
+          m.get(sub)!.add(n.attrs.see ? esc(`see ${n.attrs.see}`) : pg(pos) || '•');
         }
         return true;
       });
@@ -168,7 +170,7 @@ export function generateBlock(app: App, kind: string, options: Record<string, an
       let html = '<div class="qf-index" style="column-count:2;column-gap:24pt">';
       let letter = '';
       for (const t of terms) {
-        const L = t[0].toUpperCase();
+        const L = (t[0] || '#').toUpperCase();
         if (L !== letter) { letter = L; html += `<p class="qf-index-letter">${esc(L)}</p>`; }
         const subs = entries.get(t)!;
         const main = subs.get('');
@@ -427,7 +429,7 @@ def([
         ], onChange: (x, ctl) => {
           const src = s.sources.find((q) => q.id === x.id);
           const info = ctl.body.querySelector('.qf-info');
-          if (info) info.innerHTML = src ? `<p class="qf-help">Preview (${s.citationStyle}):</p><p>${formatBibEntry(src, s.citationStyle, 1)}</p>` : '';
+          if (info) info.innerHTML = src ? `<p class="qf-help">Preview (${esc(s.citationStyle)}):</p><p>${sanitizeGeneratedHtml(formatBibEntry(src, s.citationStyle, 1))}</p>` : '';
         } });
         if (!r || !r.act) break;
         if (r.act === 'new') { const src = await editSource(app); if (src) app.updateSettings((st) => { st.sources.push(src); }); }

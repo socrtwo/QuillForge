@@ -68,6 +68,8 @@ export interface DialogOptions {
 }
 
 let dialogDepth = 0;
+/** Open dialogs, innermost last: only the top one handles Escape and Enter. */
+const dialogStack: HTMLElement[] = [];
 
 export function openDialog(opts: DialogOptions): Promise<Record<string, any> | null> {
   return new Promise((resolve) => {
@@ -129,6 +131,8 @@ export function openDialog(opts: DialogOptions): Promise<Record<string, any> | n
       if (done) return;
       done = true;
       dialogDepth--;
+      const at = dialogStack.indexOf(overlay);
+      if (at >= 0) dialogStack.splice(at, 1);
       overlay.classList.add('qf-out');
       setTimeout(() => overlay.remove(), 120);
       document.removeEventListener('keydown', onKey, true);
@@ -136,9 +140,10 @@ export function openDialog(opts: DialogOptions): Promise<Record<string, any> | n
       resolve(result);
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(null); }
+      if (dialogStack[dialogStack.length - 1] !== overlay) return;
+      if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); finish(null); }
       if (e.key === 'Enter' && !(e.target instanceof HTMLTextAreaElement) && !(e.target instanceof HTMLButtonElement) && opts.ok !== false) {
-        e.preventDefault(); e.stopPropagation(); okClick();
+        e.preventDefault(); e.stopImmediatePropagation(); okClick();
       }
     };
     const okClick = () => {
@@ -161,6 +166,7 @@ export function openDialog(opts: DialogOptions): Promise<Record<string, any> | n
     overlay.appendChild(box);
     overlay.addEventListener('mousedown', (e) => { if (e.target === overlay && !isPhone()) finish(null); });
     document.body.appendChild(overlay);
+    dialogStack.push(overlay);
     document.addEventListener('keydown', onKey, true);
     build();
     opts.onOpen?.(ctl);

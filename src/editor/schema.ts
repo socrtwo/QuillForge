@@ -15,6 +15,7 @@
  */
 import { Schema, type NodeSpec, type MarkSpec, type Node as PMNode, type Mark, type DOMOutputSpec } from 'prosemirror-model';
 import { tableNodes } from 'prosemirror-tables';
+import { sanitizeGeneratedHtml, isScriptUrl } from '../util/sanitize';
 
 type Attrs = Record<string, any>;
 
@@ -492,7 +493,8 @@ const nodes: Record<string, NodeSpec> = {
       const el = d as HTMLElement;
       let options = {};
       try { options = JSON.parse(el.getAttribute('data-options') || '{}'); } catch { /* */ }
-      return { kind: el.getAttribute('data-kind') || 'toc', options, cache: el.innerHTML };
+      const kind = el.getAttribute('data-kind') || 'toc';
+      return { kind: /^[a-z]{2,16}$/.test(kind) ? kind : 'toc', options, cache: sanitizeGeneratedHtml(el.innerHTML) };
     } }],
     toDOM: (node) => {
       const div = document.createElement('div');
@@ -500,7 +502,8 @@ const nodes: Record<string, NodeSpec> = {
       div.setAttribute('data-kind', node.attrs.kind);
       div.setAttribute('data-options', JSON.stringify(node.attrs.options || {}));
       div.contentEditable = 'false';
-      div.innerHTML = node.attrs.cache || `<p class="qf-gen-empty">[${node.attrs.kind.toUpperCase()} — use Update to generate]</p>`;
+      if (node.attrs.cache) div.innerHTML = sanitizeGeneratedHtml(node.attrs.cache);
+      else { const p = document.createElement('p'); p.className = 'qf-gen-empty'; p.textContent = `[${String(node.attrs.kind).toUpperCase()} — use Update to generate]`; div.appendChild(p); }
       return div;
     },
   },
@@ -691,8 +694,11 @@ const marks: Record<string, MarkSpec> = {
   link: {
     attrs: { href: { default: '' }, title: { default: null }, target: { default: null } },
     inclusive: false,
-    parseDOM: [{ tag: 'a[href]', getAttrs: (d) => ({ href: (d as HTMLElement).getAttribute('href'), title: (d as HTMLElement).getAttribute('title') }) }],
-    toDOM: (m) => ['a', { href: m.attrs.href, title: m.attrs.title, rel: 'noopener noreferrer' }, 0],
+    parseDOM: [{ tag: 'a[href]', getAttrs: (d) => {
+      const href = (d as HTMLElement).getAttribute('href') || '';
+      return isScriptUrl(href) ? false : { href, title: (d as HTMLElement).getAttribute('title') };
+    } }],
+    toDOM: (m) => ['a', { href: isScriptUrl(m.attrs.href || '') ? '#' : m.attrs.href, title: m.attrs.title, rel: 'noopener noreferrer' }, 0],
   },
   bold: {
     parseDOM: [

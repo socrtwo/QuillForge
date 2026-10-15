@@ -66,6 +66,10 @@ public class QuillNativePlugin extends Plugin {
 
     /** Single background thread for file I/O so large documents never block the UI or the plugin queue. */
     private final ExecutorService io = Executors.newSingleThreadExecutor();
+    /** Large payloads waiting for an activity result, kept out of the call's saved state. */
+    private static final java.util.Map<String, String> pendingData = new java.util.concurrent.ConcurrentHashMap<>();
+    /** Largest document read into memory (bytes); bigger files are refused instead of crashing. */
+    private static final long MAX_READ_BYTES = 64L * 1024L * 1024L;
 
     private final Object launchLock = new Object();
     private boolean launchFileConsumed = false;
@@ -110,8 +114,8 @@ public class QuillNativePlugin extends Plugin {
         io.execute(() -> {
             try {
                 call.resolve(readDocument(uri, null));
-            } catch (Exception e) {
-                call.reject("Could not read document: " + e.getMessage(), e);
+            } catch (Throwable e) {
+                call.reject("Could not read document: " + e.getMessage(), asException(e));
             }
         });
     }
@@ -128,9 +132,14 @@ public class QuillNativePlugin extends Plugin {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType(mime == null || mime.isEmpty() ? "application/octet-stream" : mime);
         intent.putExtra(Intent.EXTRA_TITLE, name);
+        // Capacitor parcels the call's data into onSaveInstanceState while the picker is up;
+        // a large base64 document there exceeds the 1 MB binder limit (TransactionTooLargeException).
+        pendingData.put(call.getCallbackId(), call.getString("data"));
+        call.getData().remove("data");
         try {
             startActivityForResult(call, intent, "saveResult");
         } catch (ActivityNotFoundException e) {
+            pendingData.remove(call.getCallbackId());
             call.reject("No document picker is available on this device", e);
         }
     }
@@ -141,21 +150,27 @@ public class QuillNativePlugin extends Plugin {
             return;
         }
         final Uri uri = resultUri(result);
+        final String data = pendingData.remove(call.getCallbackId());
         if (uri == null) {
             resolveCancelled(call);
             return;
         }
+        if (data == null) {
+            // The app process was recreated while the picker was open.
+            call.reject("The document was not kept while the file picker was open. Please save again.");
+            return;
+        }
         io.execute(() -> {
             try {
-                writeBytes(uri, decodeBase64(call.getString("data")));
+                writeBytes(uri, decodeBase64(data));
                 takePersistablePermission(uri);
                 String name = queryDisplayName(uri);
                 JSObject ret = new JSObject();
                 ret.put("uri", uri.toString());
                 ret.put("name", name != null ? name : call.getString("name", ""));
                 call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Could not save document: " + e.getMessage(), e);
+            } catch (Throwable e) {
+                call.reject("Could not save document: " + e.getMessage(), asException(e));
             }
         });
     }
@@ -174,8 +189,8 @@ public class QuillNativePlugin extends Plugin {
                 JSObject ret = new JSObject();
                 ret.put("ok", true);
                 call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Could not write document: " + e.getMessage(), e);
+            } catch (Throwable e) {
+                call.reject("Could not write document: " + e.getMessage(), asException(e));
             }
         });
     }
@@ -190,8 +205,8 @@ public class QuillNativePlugin extends Plugin {
         io.execute(() -> {
             try {
                 call.resolve(readDocument(Uri.parse(uriString), null));
-            } catch (Exception e) {
-                call.reject("Could not read document: " + e.getMessage(), e);
+            } catch (Throwable e) {
+                call.reject("Could not read document: " + e.getMessage(), asException(e));
             }
         });
     }
@@ -219,8 +234,8 @@ public class QuillNativePlugin extends Plugin {
                 PrintDocumentAdapter adapter = webView.createPrintDocumentAdapter(jobName);
                 printManager.print(jobName, adapter, new PrintAttributes.Builder().build());
                 call.resolve();
-            } catch (Exception e) {
-                call.reject("Could not start printing: " + e.getMessage(), e);
+            } catch (Throwable e) {
+                call.reject("Could not start printing: " + e.getMessage(), asException(e));
             }
         });
     }
@@ -272,8 +287,8 @@ public class QuillNativePlugin extends Plugin {
                         call.reject("No app is available to share with", e);
                     }
                 });
-            } catch (Exception e) {
-                call.reject("Could not share document: " + e.getMessage(), e);
+            } catch (Throwable e) {
+                call.reject("Could not share document: " + e.getMessage(), asException(e));
             }
         });
     }
@@ -319,8 +334,8 @@ public class QuillNativePlugin extends Plugin {
             try {
                 JSObject file = readIntent(intent);
                 call.resolve(file != null ? file : new JSObject());
-            } catch (Exception e) {
-                call.reject("Could not read the launch file: " + e.getMessage(), e);
+            } catch (Throwable e) {
+                call.reject("Could not read the launch file: " + e.getMessage(), asException(e));
             }
         });
     }
@@ -562,6 +577,10 @@ public class QuillNativePlugin extends Plugin {
         return data != null ? data.getData() : null;
     }
 
+    private static Exception asException(Throwable t) {
+        return t instanceof Exception ? (Exception) t : new Exception(t.toString(), t);
+    }
+
     private static void resolveCancelled(PluginCall call) {
         JSObject ret = new JSObject();
         ret.put("cancelled", true);
@@ -572,7 +591,12 @@ public class QuillNativePlugin extends Plugin {
         ByteArrayOutputStream out = new ByteArrayOutputStream(64 * 1024);
         byte[] buffer = new byte[64 * 1024];
         int read;
+        long total = 0;
         while ((read = in.read(buffer)) != -1) {
+            total += read;
+            if (total > MAX_READ_BYTES) {
+                throw new IOException("File is larger than " + (MAX_READ_BYTES / (1024 * 1024)) + " MB");
+            }
             out.write(buffer, 0, read);
         }
         return out.toByteArray();

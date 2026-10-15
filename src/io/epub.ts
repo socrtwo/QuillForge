@@ -23,6 +23,7 @@ import {
 } from './serialize';
 
 const x = escapeXml;
+const safeDecode = (u: string) => { try { return decodeURIComponent(u); } catch { return u; } };
 const EPUB_MIME = 'application/epub+zip';
 
 interface Chapter { title: string; blocks: PMNode[]; file: string }
@@ -242,11 +243,11 @@ export async function importEpub(data: ArrayBuffer, name: string): Promise<PMNod
   let zip: JSZip;
   try { zip = await JSZip.loadAsync(data); } catch { return finishDoc([], settings); }
   const read = async (p: string): Promise<string | null> => {
-    const f = zip.file(p) || zip.file(decodeURIComponent(p));
+    const f = zip.file(p) || zip.file(safeDecode(p));
     return f ? f.async('string') : null;
   };
   const readBytes = async (p: string): Promise<Uint8Array | null> => {
-    const f = zip.file(p) || zip.file(decodeURIComponent(p));
+    const f = zip.file(p) || zip.file(safeDecode(p));
     return f ? f.async('uint8array') : null;
   };
   try {
@@ -277,7 +278,7 @@ export async function importEpub(data: ArrayBuffer, name: string): Promise<PMNod
     let spineIds = byLocal(opf, 'itemref').map((r) => r.getAttribute('idref') || '');
     if (!spineIds.length) spineIds = [...manifest.entries()].filter(([, v]) => /html/.test(v.type)).map(([k]) => k);
     const files = spineIds.map((sid) => manifest.get(sid)).filter((m): m is { href: string; type: string; props: string } => !!m && /html|xml/.test(m.type) && !/\bnav\b/.test(m.props))
-      .map((m) => resolvePath(base, decodeURIComponent(m.href.split('#')[0])));
+      .map((m) => resolvePath(base, safeDecode(m.href.split('#')[0])));
     const index = new Map(files.map((f, i) => [f, i]));
     const parts: string[] = [];
     const imageCache = new Map<string, string>();
@@ -302,7 +303,7 @@ export async function importEpub(data: ArrayBuffer, name: string): Promise<PMNod
           const [file, frag] = href.split('#');
           if (!file) el.setAttribute('href', `#${pre}${frag || ''}`);
           else {
-            const target = index.get(resolvePath(dir, decodeURIComponent(file)));
+            const target = index.get(resolvePath(dir, safeDecode(file)));
             if (target != null) el.setAttribute('href', frag ? `#c${target + 1}-${frag}` : `#c${target + 1}-top`);
           }
         }
@@ -312,7 +313,7 @@ export async function importEpub(data: ArrayBuffer, name: string): Promise<PMNod
       for (const im of imgs) {
         const ref = im.localName === 'img' ? im.getAttribute('src') : (im.getAttribute('xlink:href') || im.getAttributeNS('http://www.w3.org/1999/xlink', 'href') || im.getAttribute('href'));
         if (!ref || /^(data|https?):/i.test(ref)) continue;
-        const p = resolvePath(dir, decodeURIComponent(ref));
+        const p = resolvePath(dir, safeDecode(ref));
         let url = imageCache.get(p);
         if (!url) {
           const bytes = await readBytes(p);

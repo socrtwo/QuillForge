@@ -1,4 +1,6 @@
 /** QuillForge application core: document tabs, dispatch pipeline, command execution. */
+import { isSafeExternalUrl } from './util/sanitize';
+import { normalizeTables } from './editor/normalize';
 import { EditorState, TextSelection, type Transaction } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import type { Node as PMNode } from 'prosemirror-model';
@@ -98,6 +100,7 @@ export class App {
   // Documents
 
   createTab(doc?: PMNode, meta: Partial<DocTab> = {}): DocTab {
+    if (doc) doc = normalizeTables(doc);
     const tab = new DocTab(this);
     Object.assign(tab, meta);
     if (!meta.viewMode) tab.viewMode = this.defaultViewMode();
@@ -175,9 +178,13 @@ export class App {
         if (node.type === schema.nodes.citation) { this.exec('refs.editCitation', { pos: nodePos }); return true; }
         if (node.type === schema.nodes.field && (e as MouseEvent).detail >= 2) { this.exec('insert.editField', { pos: nodePos }); return true; }
         const link = t.closest?.('a[href]') as HTMLAnchorElement | null;
-        if (link && ((e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey || tab.viewMode === 'read' || !view.editable)) {
-          this.followLink(link.getAttribute('href') || '');
-          return true;
+        if (link) {
+          // Never let the WebView navigate itself to a document link.
+          e.preventDefault();
+          if ((e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey || tab.viewMode === 'read' || !view.editable) {
+            this.followLink(link.getAttribute('href') || '');
+            return true;
+          }
         }
         return false;
       },
@@ -220,7 +227,7 @@ export class App {
   }
 
   replaceDoc(tab: DocTab, doc: PMNode): void {
-    const state = EditorState.create({ doc, plugins: tab.view.state.plugins });
+    const state = EditorState.create({ doc: normalizeTables(doc), plugins: tab.view.state.plugins });
     tab.view.updateState(state);
     this.applySettingsToDom(tab);
     this.updateFields(tab);
@@ -370,7 +377,8 @@ export class App {
       if (s.differentFirst && page === 1) hf = kind === 'header' ? s.firstHeader : s.firstFooter;
       else if (s.differentOddEven && page % 2 === 0) hf = kind === 'header' ? s.evenHeader : s.evenFooter;
       const c = hfCtx(page, pages);
-      const part = (t: string) => expandTokens(esc(t || ''), c).replace(/\n/g, '<br>');
+      // Escape after expanding: token values (title, author, file name...) come from the document.
+      const part = (t: string) => esc(expandTokens(t || '', c)).replace(/\n/g, '<br>');
       if (!hf.left && !hf.center && !hf.right) return '';
       return `<span class="qf-hf-l">${part(hf.left)}</span><span class="qf-hf-c">${part(hf.center)}</span><span class="qf-hf-r">${part(hf.right)}</span>`;
     };
@@ -490,6 +498,7 @@ export class App {
 
   followLink(href: string): void {
     if (href.startsWith('#')) { this.exec('nav.gotoAnchor', href.slice(1)); return; }
+    if (!isSafeExternalUrl(href)) { toast(`Blocked a link with an unsupported or unsafe address: ${href.slice(0, 60)}`); return; }
     import('./platform/native').then(({ openExternal }) => openExternal(href));
   }
 

@@ -9,6 +9,7 @@
  * - schema repair: turn loosely-built node trees into a valid `doc`
  * - nested-list builder used by importers that only know "paragraph at level n"
  */
+import { stripInvalidXml } from './ooxml-util';
 import { DOMSerializer, Fragment, Mark, type Node as PMNode, type NodeType, type DOMOutputSpec } from 'prosemirror-model';
 import { EditorState } from 'prosemirror-state';
 import { fixTables } from 'prosemirror-tables';
@@ -629,7 +630,8 @@ export function toXhtml(el: Element): string {
   const ser = new XMLSerializer();
   let out = '';
   el.childNodes.forEach((c) => { out += ser.serializeToString(c); });
-  return out.replace(/ xmlns="http:\/\/www\.w3\.org\/1999\/xhtml"/g, '');
+  // XHTML must be well-formed XML: drop characters XML 1.0 forbids (control chars, lone surrogates, U+FFFE/F).
+  return stripInvalidXml(out.replace(/ xmlns="http:\/\/www\.w3\.org\/1999\/xhtml"/g, ''));
 }
 
 /** Base CSS shared by HTML and EPUB exports (layout, tables, lists, notes). */

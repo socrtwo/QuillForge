@@ -3,6 +3,7 @@ import type { Node as PMNode } from 'prosemirror-model';
 import type { EditorView, NodeView, NodeViewConstructor } from 'prosemirror-view';
 import { NodeSelection } from 'prosemirror-state';
 import katex from 'katex';
+import { sanitizeGeneratedHtml, escHtml } from '../util/sanitize';
 
 export interface NodeViewHooks {
   editMath: (view: EditorView, pos: number, node: PMNode) => void;
@@ -205,8 +206,9 @@ class GenBlockView implements NodeView {
   }
   render() {
     this.dom.dataset.kind = this.node.attrs.kind;
-    this.dom.innerHTML = (this.node.attrs.cache || `<p class="qf-gen-empty">${labelFor(this.node.attrs.kind)} — tap Update to generate</p>`) +
-      `<div class="qf-gen-bar"><button type="button" data-act="update">↻ Update ${labelFor(this.node.attrs.kind)}</button></div>`;
+    const label = escHtml(labelFor(this.node.attrs.kind));
+    this.dom.innerHTML = (sanitizeGeneratedHtml(this.node.attrs.cache) || `<p class="qf-gen-empty">${label} — tap Update to generate</p>`) +
+      `<div class="qf-gen-bar"><button type="button" data-act="update">↻ Update ${label}</button></div>`;
   }
   update(node: PMNode) {
     if (node.type !== this.node.type) return false;

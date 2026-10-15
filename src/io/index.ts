@@ -7,6 +7,7 @@
  */
 import type { Node as PMNode } from 'prosemirror-model';
 import type { RecoveryReport } from './recover';
+import { normalizeTables } from '../editor/normalize';
 
 export interface ExportOptions {
   fileName: string;
@@ -125,6 +126,11 @@ export interface ImportResult {
 const RECOVERABLE = ['docx', 'doc', 'odt', 'rtf', 'epub', 'fodt'];
 
 export async function importFile(data: ArrayBuffer, name: string, opts: { repair?: boolean; textOnly?: boolean } = {}): Promise<ImportResult> {
+  const r = await importRaw(data, name, opts);
+  return { ...r, doc: normalizeTables(r.doc) };
+}
+
+async function importRaw(data: ArrayBuffer, name: string, opts: { repair?: boolean; textOnly?: boolean }): Promise<ImportResult> {
   const fmt = sniffFormat(data, name);
   const recover = async (cause: unknown, force: boolean) => {
     const { recoverDocument } = await import('./recover');
@@ -165,7 +171,7 @@ function hasAtoms(doc: PMNode): boolean {
 export async function exportFile(doc: PMNode, formatId: string, opts: ExportOptions): Promise<Blob> {
   const fmt = formatById(formatId);
   if (!fmt || !fmt.export) throw new Error(`Cannot export as ${formatId}`);
-  return fmt.export(doc, opts);
+  return fmt.export(normalizeTables(doc), opts);
 }
 
 export function decodeText(data: ArrayBuffer): string {

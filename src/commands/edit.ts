@@ -52,7 +52,8 @@ async function pasteWith(app: App, mode: 'keep' | 'merge' | 'text' | 'html' | 'm
   try { const { cleanPastedHtml } = await import('../io/html'); html = cleanPastedHtml(html); } catch { /* */ }
   if (mode === 'merge') {
     // Keep structure (paragraphs, lists, tables, links, bold/italic) but drop fonts, sizes, colors.
-    const div = document.createElement('div');
+    // An inert document: nothing in the pasted HTML loads or runs while it is rewritten.
+    const div = document.implementation.createHTMLDocument('').body;
     div.innerHTML = html;
     div.querySelectorAll<HTMLElement>('[style]').forEach((el) => {
       el.style.removeProperty('font-family'); el.style.removeProperty('font-size'); el.style.removeProperty('color');

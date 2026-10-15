@@ -1,4 +1,5 @@
 /** Character, paragraph, list and style commands (Home tab). */
+import { escHtml, safeColor, safeNum } from '../util/sanitize';
 import { def, type MenuEntry } from './registry';
 import type { App } from '../app';
 import { schema, PARA_DEFAULTS } from '../editor/schema';
@@ -24,6 +25,9 @@ export const FONT_SIZES = [8, 9, 10, 10.5, 11, 12, 14, 16, 18, 20, 22, 24, 26, 2
 export const recentFonts: string[] = [];
 
 export const lastColors = { font: '#c00000', highlight: '#ffff00', shading: '#d9e2f3', underline: '#c00000' };
+
+/** A font family name safe inside a single-quoted CSS string in a style attribute. */
+const cssStr = (v: unknown) => String(v ?? '').replace(/[^\p{L}\p{N} _.,-]/gu, '');
 
 function v(app: App) { return app.view; }
 
@@ -870,7 +874,7 @@ export async function modifyStyle(app: App, name: string) {
       { key: 'outlineLevel', label: 'Outline level (0 = body)', type: 'number', min: 0, max: 9, value: e.outlineLevel || 0, half: true, visibleIf: () => s.type !== 'character' },
       { key: 'quick', label: 'Add to the Styles gallery', type: 'checkbox', value: !!s.quick, half: true },
     ],
-    onChange: (vv, ctl) => ctl.setPreview(`<div style="font-family:'${vv.font?.startsWith('+') ? app.settings.theme.bodyFont : vv.font}';font-size:${vv.size}pt;font-weight:${vv.bold ? 700 : 400};font-style:${vv.italic ? 'italic' : 'normal'};${vv.underline ? 'text-decoration:underline;' : ''}${vv.smallCaps ? 'font-variant:small-caps;' : ''}color:${vv.useColor ? vv.color : 'inherit'};text-align:${vv.align || 'left'};line-height:${vv.lineHeight}">${name} — The quick brown fox jumps over the lazy dog.</div>`),
+    onChange: (vv, ctl) => ctl.setPreview(`<div style="font-family:'${cssStr(vv.font?.startsWith('+') ? app.settings.theme.bodyFont : vv.font)}';font-size:${safeNum(vv.size, 11, 1, 1638)}pt;font-weight:${vv.bold ? 700 : 400};font-style:${vv.italic ? 'italic' : 'normal'};${vv.underline ? 'text-decoration:underline;' : ''}${vv.smallCaps ? 'font-variant:small-caps;' : ''}color:${vv.useColor ? safeColor(vv.color) : 'inherit'};text-align:${/^(left|right|center|justify)$/.test(vv.align) ? vv.align : 'left'};line-height:${safeNum(vv.lineHeight, 1, 0.1, 20)}">${escHtml(name)} — The quick brown fox jumps over the lazy dog.</div>`),
   });
   if (!r) return;
   app.updateSettings((st) => {
@@ -916,7 +920,7 @@ def({
         { key: 'ligatures', label: 'Ligatures', type: 'select', options: [{ value: '', label: 'Default' }, { value: 'none', label: 'None' }, { value: 'common-ligatures', label: 'Standard' }, { value: 'common-ligatures discretionary-ligatures', label: 'Standard + Discretionary' }, { value: 'historical-ligatures', label: 'Historical' }], value: markAttr(st, M.typo, 'ligatures') || '', half: true },
         { key: 'numerals', label: 'Number forms', type: 'select', options: [{ value: '', label: 'Default' }, { value: 'lining-nums', label: 'Lining' }, { value: 'oldstyle-nums', label: 'Old-style' }, { value: 'tabular-nums', label: 'Tabular' }, { value: 'proportional-nums', label: 'Proportional' }], value: markAttr(st, M.typo, 'numerals') || '', half: true },
       ],
-      onChange: (vv, ctl) => ctl.setPreview(`<span style="font-family:'${vv.font}';font-size:${vv.size}pt;font-weight:${vv.bold ? 700 : 400};font-style:${vv.italic ? 'italic' : 'normal'};color:${vv.color};text-decoration:${[vv.underline ? 'underline' : '', vv.strike || vv.dstrike ? 'line-through' : ''].join(' ') || 'none'};${vv.dstrike ? 'text-decoration-style:double;' : ''}${vv.smallcaps ? 'font-variant:small-caps;' : ''}${vv.allcaps ? 'text-transform:uppercase;' : ''}letter-spacing:${vv.spacing}pt;font-kerning:${vv.kerning ? 'normal' : 'none'};font-variant-ligatures:${vv.ligatures || 'normal'};font-variant-numeric:${vv.numerals || 'normal'};vertical-align:${vv.sup ? 'super' : vv.sub ? 'sub' : 'baseline'}">${fam || 'Font'} AaBbYyZz 0123456789 fi fl</span>`),
+      onChange: (vv, ctl) => ctl.setPreview(`<span style="font-family:'${cssStr(vv.font)}';font-size:${safeNum(vv.size, 11, 1, 1638)}pt;font-weight:${vv.bold ? 700 : 400};font-style:${vv.italic ? 'italic' : 'normal'};color:${safeColor(vv.color)};text-decoration:${[vv.underline ? 'underline' : '', vv.strike || vv.dstrike ? 'line-through' : ''].join(' ') || 'none'};${vv.dstrike ? 'text-decoration-style:double;' : ''}${vv.smallcaps ? 'font-variant:small-caps;' : ''}${vv.allcaps ? 'text-transform:uppercase;' : ''}letter-spacing:${safeNum(vv.spacing, 0, -100, 100)}pt;font-kerning:${vv.kerning ? 'normal' : 'none'};font-variant-ligatures:${vv.ligatures || 'normal'};font-variant-numeric:${vv.numerals || 'normal'};vertical-align:${vv.sup ? 'super' : vv.sub ? 'sub' : 'baseline'}">${escHtml(fam || 'Font')} AaBbYyZz 0123456789 fi fl</span>`),
     });
     if (!r) return;
     const view = v(app);

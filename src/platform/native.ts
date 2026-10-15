@@ -151,6 +151,8 @@ export async function keepAwake(on: boolean): Promise<void> {
 
 /** Open a URL outside the app (system browser, mail or phone app). */
 export function openExternal(url: string): void {
+  // Only hand ordinary web/mail/phone addresses to the system; never navigate this WebView to script.
+  if (!/^(https?|mailto|tel|ftp|sms|geo):/i.test(url.trim())) return;
   if (isNative()) { window.location.href = url; return; }
   window.open(url, '_blank', 'noopener');
 }

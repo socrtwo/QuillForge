@@ -12,6 +12,7 @@
  * links, KaTeX/MathJax math, task lists, nested-list quirks) and then runs
  * DOMParser.fromSchema(schema).
  */
+import { stripActiveContent, escHtml } from '../util/sanitize';
 import { DOMParser as PMDOMParser, type Node as PMNode } from 'prosemirror-model';
 import { schema } from '../editor/schema';
 import { stylesCss } from '../editor/styles';
@@ -212,7 +213,7 @@ function convertFootnotes(root: Element): void {
   const removeTargets = new Set<Element>();
   for (const a of anchors) {
     if (!a.isConnected) continue;
-    const id = decodeURIComponent((a.getAttribute('href') || '').slice(1));
+    const id = safeDecode((a.getAttribute('href') || '').slice(1));
     const et = (a.getAttribute('epub:type') || a.getAttribute('role') || '').toLowerCase();
     const cls = (a.getAttribute('class') || '').toLowerCase();
     const looksRef = /noteref/.test(et) || /footnote-ref|fnref|noteref|footnote/.test(cls) || /^(_?ftn|_?edn|fn|footnote|endnote|note)[-_:]?\d+$/i.test(id) ||
@@ -276,8 +277,11 @@ function latexFromMath(el: Element): string {
 }
 
 /** DOM-level clean-up of pasted or imported HTML (operates in place). */
+const safeDecode = (u: string) => { try { return decodeURIComponent(u); } catch { return u; } };
+
 export function cleanHtmlDom(root: HTMLElement): void {
   const doc = root.ownerDocument;
+  stripActiveContent(root);
   const raw = root.innerHTML;
   const isWord = /mso-|class="?Mso|urn:schemas-microsoft-com/i.test(raw);
 
@@ -582,7 +586,9 @@ export function cleanPastedHtml(html: string): string {
     cleanHtmlDom(d.body);
     return d.body.innerHTML;
   } catch {
-    return html;
+    // Never fall back to the raw clipboard HTML: paste it as plain text instead.
+    const t = new DOMParser().parseFromString(html, 'text/html').body.textContent || '';
+    return t.split(/\n/).map((l) => `<p>${escHtml(l)}</p>`).join('');
   }
 }
 
