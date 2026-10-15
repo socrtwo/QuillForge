@@ -488,7 +488,7 @@ export class App {
 
   followLink(href: string): void {
     if (href.startsWith('#')) { this.exec('nav.gotoAnchor', href.slice(1)); return; }
-    window.open(href, '_blank', 'noopener');
+    import('./platform/native').then(({ openExternal }) => openExternal(href));
   }
 
   focus(): void {

@@ -281,7 +281,7 @@ def([
         const first = record(app, idx[0]);
         const text = mergeInto(doc, first, idx[0]);
         const body = schema.node('doc', null, text).textBetween(0, schema.node('doc', null, text).content.size, '\n');
-        window.open(`mailto:${encodeURIComponent(first[ef])}?subject=${encodeURIComponent(app.settings.properties.subject || app.tab.title)}&body=${encodeURIComponent(body)}`, '_blank');
+        (await import('../platform/native')).openExternal(`mailto:${encodeURIComponent(first[ef])}?subject=${encodeURIComponent(app.settings.properties.subject || app.tab.title)}&body=${encodeURIComponent(body)}`);
         toast('Opened the first message in your email app. Mobile mail apps send one message at a time.');
         return;
       }

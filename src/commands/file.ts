@@ -5,7 +5,7 @@ import type { Node as PMNode } from 'prosemirror-model';
 import { schema } from '../editor/schema';
 import { normalizeSettings } from '../editor/settings';
 import { FORMATS, formatById, formatForName, importFile, exportFile } from '../io';
-import { openDocument, saveAs, writeBack, printDocument, shareFile, readUri, OPEN_ACCEPT, OPEN_MIMES } from '../platform/native';
+import { openDocument, saveAs, writeBack, printDocument, shareFile, readUri, openExternal, OPEN_ACCEPT, OPEN_MIMES } from '../platform/native';
 import { openDialog, toast, confirmDialog, choiceDialog, alertDialog } from '../ui/dialog';
 import { kvGet, kvSet, kvKeys, kvDel } from '../util/store';
 import { TEMPLATES } from '../templates';
@@ -467,6 +467,6 @@ def([
       h('p', null, 'Open-source components: ProseMirror (MIT), prosemirror-tables (MIT), JSZip (MIT/GPLv3 dual), KaTeX (MIT), nspell (MIT) with the SCOWL en_US Hunspell dictionary (BSD-style), Material Symbols (Apache 2.0), Capacitor (MIT), fonts Carlito, Caladea, Gelasio, EB Garamond, Courier Prime, Libre Baskerville, Lato, Merriweather, Open Sans (SIL OFL 1.1) and Tinos, Arimo, Cousine (Apache 2.0).'),
     )),
   },
-  { id: 'help.feedback', label: 'Report an Issue', icon: 'bug_report', tab: 'Help', group: 'Help', noRecord: true, run: () => window.open('https://github.com/socrtwo/QuillForge/issues', '_blank') },
+  { id: 'help.feedback', label: 'Report an Issue', icon: 'bug_report', tab: 'Help', group: 'Help', noRecord: true, run: () => openExternal('https://github.com/socrtwo/QuillForge/issues') },
   { id: 'help.whatsNew', label: 'What’s New', icon: 'new_releases', tab: 'Help', group: 'Help', noRecord: true, run: () => alertDialog('What’s New in 0.1', 'First release: full command library with a fully customizable Quick Access Bar and tabs, Print Layout pagination, DOCX/ODT/RTF/HTML/Markdown/EPUB/TXT, track changes, comments, references, mail merge, macros, and Android packaging.') },
 ]);

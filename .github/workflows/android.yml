@@ -79,6 +79,9 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The legacy "tools" package (the action's default) no longer exists in the SDK repository.
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
 
       - name: Sync Capacitor Android project
         run: npx cap sync android

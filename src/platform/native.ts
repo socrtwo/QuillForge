@@ -149,6 +149,12 @@ export async function keepAwake(on: boolean): Promise<void> {
   try { await Native.keepAwake({ on }); } catch { /* */ }
 }
 
+/** Open a URL outside the app (system browser, mail or phone app). */
+export function openExternal(url: string): void {
+  if (isNative()) { window.location.href = url; return; }
+  window.open(url, '_blank', 'noopener');
+}
+
 export async function onBackButton(cb: () => boolean): Promise<void> {
   if (!isNative()) return;
   const { App } = await import('@capacitor/app');

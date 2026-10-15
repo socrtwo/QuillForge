@@ -9,7 +9,7 @@ import { compareDocs } from '../editor/compare';
 import { countWords, docText, selectedText, textblocks, wordAt } from '../editor/ops';
 import { openDialog, toast, promptDialog, confirmDialog, alertDialog } from '../ui/dialog';
 import { h } from '../ui/dom';
-import { keepAwake } from '../platform/native';
+import { keepAwake, openExternal } from '../platform/native';
 
 const N = schema.nodes;
 const M = schema.marks;
@@ -102,7 +102,7 @@ def([
     run: async (app) => {
       const t = selectedText(app.state) || docText(app.state.doc).slice(0, 4000);
       const r = await openDialog({ title: 'Translate', help: 'Opens an online translator in your browser. The selected text is sent to that service.', fields: [{ key: 'to', label: 'Translate to', type: 'select', options: ['es', 'fr', 'de', 'it', 'pt', 'nl', 'sv', 'pl', 'ru', 'uk', 'el', 'tr', 'ar', 'he', 'hi', 'zh-CN', 'ja', 'ko', 'la'], value: 'es' }] });
-      if (r) window.open(`https://translate.google.com/?sl=auto&tl=${r.to}&text=${encodeURIComponent(t)}&op=translate`, '_blank');
+      if (r) openExternal(`https://translate.google.com/?sl=auto&tl=${r.to}&text=${encodeURIComponent(t)}&op=translate`);
     },
   },
 ]);

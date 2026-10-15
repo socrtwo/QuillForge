@@ -6,7 +6,7 @@ import { baseKeymap, chainCommands, exitCode, newlineInCode, createParagraphNear
 import { splitListItem, liftListItem, sinkListItem } from 'prosemirror-schema-list';
 import { dropCursor } from 'prosemirror-dropcursor';
 import { gapCursor } from 'prosemirror-gapcursor';
-import { columnResizing, tableEditing, goToNextCell, fixTables } from 'prosemirror-tables';
+import { columnResizing, tableEditing, goToNextCell, fixTables, addRowAfter, isInTable } from 'prosemirror-tables';
 import { schema, PARA_DEFAULTS } from './schema';
 import { buildInputRules, autocorrectPlugin, type AutoFormatPrefs } from './autoformat';
 import { trackPlugin } from './plugins/trackChanges';
@@ -131,7 +131,12 @@ export function buildPlugins(hooks: SetupHooks): Plugin[] {
     'Mod-Backspace': withMeta(backspace, 'trackDir', 'back'),
     Delete: withMeta(del, 'trackDir', 'forward'),
     'Mod-Delete': withMeta(del, 'trackDir', 'forward'),
-    Tab: chainCommands(goToNextCell(1), sinkListItem(S.nodes.list_item), sinkListItem(S.nodes.task_item), insertTab),
+    Tab: chainCommands(goToNextCell(1), (state, dispatch, view) => {
+      if (!isInTable(state)) return false;
+      if (!dispatch || !view) return true;
+      addRowAfter(state, dispatch);
+      return goToNextCell(1)(view.state, view.dispatch);
+    }, sinkListItem(S.nodes.list_item), sinkListItem(S.nodes.task_item), insertTab),
     'Shift-Tab': chainCommands(goToNextCell(-1), liftListItem(S.nodes.list_item), liftListItem(S.nodes.task_item), outdentPara),
     'Mod-z': undo,
     'Mod-y': redo,
