@@ -475,6 +475,7 @@ export class Shell {
     def.render(this.app, body, opts);
     def.onOpen?.(this.app, body, opts);
     this.refresh();
+    requestAnimationFrame(() => this.app.applyZoom(this.app.tab));
   }
 
   closePane(): void {
@@ -485,6 +486,7 @@ export class Shell {
     this.paneEl.setAttribute('aria-hidden', 'true');
     this.root.classList.remove('qf-pane-open');
     this.app.refresh();
+    requestAnimationFrame(() => this.app.applyZoom(this.app.tab));
   }
 
   togglePane(id: string, opts?: any): void { if (this.pane?.def.id === id) this.closePane(); else this.openPane(id, opts); }

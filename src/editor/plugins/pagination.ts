@@ -200,7 +200,7 @@ function measure(view: EditorView, cfg: PageConfig) {
   let fnHtml = '';
   const ml = cfg.margin.left * PT, mr = cfg.margin.right * PT;
   const domRect = view.dom.getBoundingClientRect();
-  const measurer = footnoteMeasurer(view, cfg);
+  const measurer = footnoteMeasurer(view, cfg, z);
 
   const pushBreak = (pos: number, inline: boolean, shiftL = ml, shiftR = mr) => {
     breaks.push({ pos, inline, fill: Math.max(0, contentH - used), page, fnHtml, fnH: fnUsed, shiftLeft: shiftL, shiftRight: shiftR });
@@ -337,7 +337,7 @@ function measure(view: EditorView, cfg: PageConfig) {
   return { breaks, finalFill: Math.max(0, contentH - used), finalFnHtml: fnHtml, finalFnH: fnUsed };
 }
 
-function footnoteMeasurer(view: EditorView, cfg: PageConfig) {
+function footnoteMeasurer(view: EditorView, cfg: PageConfig, z = 1) {
   const host = document.createElement('div');
   host.className = 'qf-pg-footnotes qf-measure';
   host.style.cssText = `position:absolute;visibility:hidden;left:-10000px;top:0;width:${(cfg.widthPt - cfg.margin.left - cfg.margin.right) * PT}px`;
@@ -348,7 +348,7 @@ function footnoteMeasurer(view: EditorView, cfg: PageConfig) {
       let h = cache.get(html);
       if (h == null) {
         host.innerHTML = html;
-        h = host.getBoundingClientRect().height;
+        h = Math.ceil(host.getBoundingClientRect().height / (z || 1)) + 1;
         cache.set(html, h);
       }
       return h;
