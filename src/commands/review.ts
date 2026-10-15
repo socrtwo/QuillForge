@@ -312,6 +312,15 @@ def([
   },
 ]);
 
+/** Accept/Reject and the Document Inspector dispatch with trackSkip (which bypasses protection), so they
+ *  refuse while the document is protected or read-only. Returns true when refused. */
+export function refuseIfProtected(app: App): boolean {
+  const s = app.settings;
+  if (s.protection.mode === 'none' && !s.markedFinal && !app.tab.readOnly) return false;
+  toast('This document is protected. Use Review ▸ Restrict Editing to remove protection first.');
+  return true;
+}
+
 function acceptReject(app: App, accept: boolean, scope: 'one' | 'all' | 'shown' | 'selection' | 'author', moveNext = false) {
   const st = app.state;
   let changes = listChanges(st.doc);
@@ -330,6 +339,7 @@ function acceptReject(app: App, accept: boolean, scope: 'one' | 'all' | 'shown' 
     changes = changes.filter((c) => !(el.classList.contains('qf-hideInsertions') && (c.kind === 'insertion' || c.kind === 'deletion')) && !(el.classList.contains('qf-hideFormatting') && c.kind === 'format'));
   }
   if (!changes.length) { toast('No tracked changes.'); return; }
+  if (refuseIfProtected(app)) return;
   const end = Math.max(...changes.map((c) => c.to));
   v(app).dispatch(resolveChanges(app.state, changes, accept));
   if (moveNext) {
@@ -351,14 +361,15 @@ def([
   },
   { id: 'review.acceptAll', label: 'Accept All Changes', icon: 'done_all', tab: 'Review', group: 'Changes', edits: true, run: (app) => acceptReject(app, true, 'all') },
   { id: 'review.rejectAll', label: 'Reject All Changes', icon: 'remove_done', tab: 'Review', group: 'Changes', edits: true, run: (app) => acceptReject(app, false, 'all') },
-  { id: 'review.acceptAllStop', label: 'Accept All and Stop Tracking', icon: 'done_all', tab: 'Review', group: 'Changes', edits: true, run: (app) => { acceptReject(app, true, 'all'); setTracking(app, false); } },
-  { id: 'review.rejectAllStop', label: 'Reject All and Stop Tracking', icon: 'remove_done', tab: 'Review', group: 'Changes', edits: true, run: (app) => { acceptReject(app, false, 'all'); setTracking(app, false); } },
+  { id: 'review.acceptAllStop', label: 'Accept All and Stop Tracking', icon: 'done_all', tab: 'Review', group: 'Changes', edits: true, run: (app) => { if (refuseIfProtected(app)) return; acceptReject(app, true, 'all'); setTracking(app, false); } },
+  { id: 'review.rejectAllStop', label: 'Reject All and Stop Tracking', icon: 'remove_done', tab: 'Review', group: 'Changes', edits: true, run: (app) => { if (refuseIfProtected(app)) return; acceptReject(app, false, 'all'); setTracking(app, false); } },
   {
     id: 'review.acceptByAuthor', label: 'Accept/Reject by Reviewer…', icon: 'person_search', tab: 'Review', group: 'Changes', edits: true,
     run: async (app) => {
       const all = listChanges(app.state.doc);
       const authors = [...new Set(all.map((c) => c.author))];
       if (!authors.length) { toast('No tracked changes.'); return; }
+      if (refuseIfProtected(app)) return;
       const r = await openDialog({ title: 'Changes by Reviewer', fields: [{ key: 'a', label: 'Reviewer', type: 'select', options: authors, value: authors[0] }, { key: 'act', label: 'Action', type: 'radio', options: [{ value: 'accept', label: 'Accept' }, { value: 'reject', label: 'Reject' }], value: 'accept' }] });
       if (r) v(app).dispatch(resolveChanges(app.state, all.filter((c) => c.author === r.a), r.act === 'accept'));
     },
@@ -450,7 +461,8 @@ def([
   { id: 'review.hideInk', label: 'Hide Ink', icon: 'ink_eraser', tab: 'Review', group: 'Ink', kind: 'toggle', run: (app) => { app.tab.el.classList.toggle('qf-hide-ink'); app.refresh(); }, isActive: (app) => app.tab.el.classList.contains('qf-hide-ink') },
 ]);
 
-async function sha(s: string): Promise<string> {
+/** Hash used for Restrict Editing passwords (also used by Developer ▸ Protect for Form Filling). */
+export async function sha(s: string): Promise<string> {
   const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('quillforge:' + s));
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }

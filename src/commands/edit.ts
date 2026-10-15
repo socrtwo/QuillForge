@@ -346,11 +346,44 @@ export function replaceAll(app: App, o: { find: string; replace: string; regex?:
   let matches = findMatches(st.doc, re);
   if (o.inSelection && !st.selection.empty) matches = matches.filter((m) => m.from >= st.selection.from && m.to <= st.selection.to);
   const tr = st.tr;
+  // Block text built exactly like findMatches (one char per position) so regex replacements
+  // see the same context (lookaround, \b, ^) the search did.
+  const blocks = new Map<number, { start: number; text: string; posMap: number[] }>();
+  const blockText = (pos: number) => {
+    const $p = st.doc.resolve(pos);
+    const start = $p.start();
+    let b = blocks.get(start);
+    if (!b) {
+      let text = '';
+      const posMap: number[] = [];
+      $p.parent.forEach((child, off) => {
+        if (child.isText) { for (let k = 0; k < child.text!.length; k++) posMap.push(start + off + k); text += child.text; }
+        else { posMap.push(start + off); text += child.type === N.hard_break ? '\n' : '￼'; }
+      });
+      b = { start, text, posMap };
+      blocks.set(start, b);
+    }
+    return b;
+  };
+  const sticky = (o.regex || o.wildcards) ? new RegExp(re.source, re.flags.replace('g', '') + 'y') : null;
+  const tmpl = o.replace.replace(/\\(\d)/g, '$$$1');
+  let skipped = 0;
   for (let i = matches.length - 1; i >= 0; i--) {
     const m = matches[i];
-    const text = st.doc.textBetween(m.from, m.to, '\n', '￼');
-    let rep = o.replace.replace(/\^p/g, '\n').replace(/\^t/g, '\t').replace(/\^&/g, text);
-    if (o.regex || o.wildcards) { const one = new RegExp(re.source, re.flags.replace('g', '')); rep = text.replace(one, o.replace.replace(/\\(\d)/g, '$$$1')); }
+    const b = blockText(m.from);
+    const idx = b.posMap[m.from - b.start] === m.from ? m.from - b.start : b.posMap.indexOf(m.from);
+    const text = idx < 0 ? '' : b.text.slice(idx, idx + (m.to - m.from));
+    // Matches spanning pictures, fields or other inline objects would destroy them; leave those alone.
+    if (idx < 0 || text.includes('￼')) { matches.splice(i, 1); skipped++; continue; }
+    let rep = o.replace.replace(/\^p/g, '\n').replace(/\^t/g, '\t').replace(/\^&/g, () => text);
+    if (sticky) {
+      sticky.lastIndex = idx;
+      const mm = sticky.exec(b.text);
+      if (!mm || mm[0].length !== text.length) { matches.splice(i, 1); skipped++; continue; }
+      sticky.lastIndex = idx;
+      const out = b.text.replace(sticky, tmpl);
+      rep = out.slice(idx, out.length - (b.text.length - idx - text.length));
+    }
     if (o.preserveCase) {
       if (text === text.toUpperCase()) rep = rep.toUpperCase();
       else if (text[0] === text[0].toUpperCase()) rep = rep.charAt(0).toUpperCase() + rep.slice(1);
@@ -359,6 +392,9 @@ export function replaceAll(app: App, o: { find: string; replace: string; regex?:
     const parts = rep.split('\n');
     if (parts.length === 1) {
       if (rep) tr.replaceWith(m.from, m.to, schema.text(rep, marks)); else tr.delete(m.from, m.to);
+    } else if (sticky) {
+      // In regex/wildcard mode a newline can only come from matched line breaks: keep them as line breaks.
+      tr.replaceWith(m.from, m.to, parts.flatMap((part, j) => [...(j ? [N.hard_break.create()] : []), ...(part ? [schema.text(part, marks)] : [])]));
     } else {
       tr.delete(m.from, m.to);
       let p = m.from;
@@ -373,7 +409,7 @@ export function replaceAll(app: App, o: { find: string; replace: string; regex?:
     }
   }
   if (matches.length) app.view.dispatch(tr);
-  toast(`${matches.length} replacement(s) made`);
+  toast(`${matches.length} replacement(s) made` + (skipped ? `; ${skipped} skipped (match spans a picture or other object)` : ''));
   return matches.length;
 }
 

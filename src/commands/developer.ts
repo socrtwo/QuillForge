@@ -8,6 +8,7 @@ import { insertInline, selectedText, docText } from '../editor/ops';
 import { openDialog, toast, promptDialog, confirmDialog, showMenu } from '../ui/dialog';
 import { pickFile, readFileAsDataURL } from '../ui/dom';
 import { replaceAll } from './edit';
+import { sha } from './review';
 import type { Macro } from '../prefs';
 
 const N = schema.nodes;
@@ -23,7 +24,7 @@ export function macroApi(app: App) {
     insert: (text: string) => app.view.dispatch(app.state.tr.insertText(String(text)).scrollIntoView()),
     replaceAll: (find: string, replace: string, opts: Record<string, any> = {}) => replaceAll(app, { find, replace, ...opts }),
     paragraphs: () => { const out: { index: number; style: string; text: string }[] = []; app.state.doc.forEach((n, _p, i) => out.push({ index: i, style: n.attrs.style || n.type.name, text: n.textContent })); return out; },
-    setStyle: (index: number, style: string) => { let pos = 0; app.state.doc.forEach((n, p, i) => { if (i === index) pos = p; }); const n = app.state.doc.nodeAt(pos); if (n && n.type === N.paragraph) app.view.dispatch(app.state.tr.setNodeMarkup(pos, undefined, { ...n.attrs, style })); },
+    setStyle: (index: number, style: string) => { let pos = -1; app.state.doc.forEach((n, p, i) => { if (i === index) pos = p; }); if (pos < 0) return; const n = app.state.doc.nodeAt(pos); if (n && n.type === N.paragraph) app.view.dispatch(app.state.tr.setNodeMarkup(pos, undefined, { ...n.attrs, style })); },
     select: (from: number, to: number) => app.view.dispatch(app.state.tr.setSelection(TextSelection.create(app.state.doc, from, to))),
     docJSON: () => app.state.doc.toJSON(),
     settings: () => JSON.parse(JSON.stringify(app.settings)),
@@ -32,6 +33,14 @@ export function macroApi(app: App) {
     prompt: (label: string, value = '') => promptDialog('Macro', label, value),
     toast: (m: string) => toast(String(m)),
   };
+}
+
+/** Keeps only well-formed macros (string name, array of steps with string ids) from imported JSON. */
+export function validMacros(data: unknown): Macro[] {
+  if (!Array.isArray(data)) throw new Error('not a list');
+  return data.filter((m): m is Macro => !!m && typeof m === 'object' && typeof m.name === 'string' && !!m.name && Array.isArray(m.steps)
+    && m.steps.every((s: any) => !!s && typeof s === 'object' && typeof s.id === 'string'))
+    .map((m) => ({ ...m, description: typeof m.description === 'string' ? m.description : undefined, created: typeof m.created === 'number' ? m.created : Date.now() }));
 }
 
 export async function runMacro(app: App, m: Macro, times = 1) {
@@ -87,7 +96,7 @@ def([
       if (r.act === 'edit' && m) {
         if (m.steps[0]?.id === '__script') return editScript(app, m);
         const rr = await openDialog({ title: `Edit Macro: ${m.name}`, wide: true, help: 'Recorded steps as JSON: [{"id":"command.id","arg":…}]', fields: [{ key: 'json', label: 'Steps', type: 'textarea', rows: 14, value: JSON.stringify(m.steps, null, 1) }, { key: 'desc', label: 'Description', type: 'text', value: m.description || '' }] });
-        if (rr) { try { m.steps = JSON.parse(rr.json); m.description = rr.desc; app.savePrefs(); } catch { toast('Invalid JSON.'); } }
+        if (rr) { try { const steps = JSON.parse(rr.json); if (!validMacros([{ name: m.name, steps }]).length) throw new Error('bad steps'); m.steps = steps; m.description = rr.desc; app.savePrefs(); } catch { toast('Invalid JSON.'); } }
         return;
       }
       if (m) await runMacro(app, m, Math.max(1, r.times || 1));
@@ -140,7 +149,13 @@ def([
   },
   {
     id: 'dev.importMacros', label: 'Import Macros', icon: 'file_open', tab: 'Developer', group: 'Code', noRecord: true,
-    run: async (app) => { const f = await pickFile('.json,application/json'); if (!f.length) return; try { const list = JSON.parse(await f[0].text()) as Macro[]; app.prefs.macros = [...app.prefs.macros.filter((m) => !list.some((x) => x.name === m.name)), ...list]; app.savePrefs(); app.ui.rebuild(); toast(`${list.length} macro(s) imported`); } catch { toast('Not a macro file.'); } },
+    run: async (app) => {
+      const f = await pickFile('.json,application/json'); if (!f.length) return;
+      let list: Macro[];
+      try { list = validMacros(JSON.parse(await f[0].text())); } catch { toast('Not a macro file.'); return; }
+      if (!list.length) { toast('No valid macros in this file.'); return; }
+      app.prefs.macros = [...app.prefs.macros.filter((m) => !list.some((x) => x.name === m.name)), ...list]; app.savePrefs(); app.ui.rebuild(); toast(`${list.length} macro(s) imported`);
+    },
   },
 ]);
 
@@ -175,7 +190,20 @@ def([
     run: (app) => { app.tab.el.classList.toggle('qf-design-mode'); app.refresh(); }, isActive: (app) => app.tab.el.classList.contains('qf-design-mode'),
   },
   { id: 'dev.restrictEditing', label: 'Restrict Editing', icon: 'shield_lock', tab: 'Developer', group: 'Protect', run: (app) => app.exec('review.restrictEditing') },
-  { id: 'dev.fillForms', label: 'Protect for Form Filling', icon: 'edit_document', tab: 'Developer', group: 'Protect', kind: 'toggle', run: (app) => { const on = app.settings.protection.mode !== 'forms'; app.view.dispatch(app.state.tr.setDocAttribute('settings', { ...JSON.parse(JSON.stringify(app.settings)), protection: { mode: on ? 'forms' : 'none' } }).setMeta('allowProtected', true).setMeta('trackSkip', true)); app.view.setProps({}); }, isActive: (app) => app.settings.protection.mode === 'forms' },
+  {
+    id: 'dev.fillForms', label: 'Protect for Form Filling', icon: 'edit_document', tab: 'Developer', group: 'Protect', kind: 'toggle',
+    run: async (app) => {
+      const p = app.settings.protection;
+      const on = p.mode !== 'forms';
+      if (p.hash && p.mode !== 'none') {
+        const pw = await promptDialog('Unprotect Document', 'Password:', '', { type: 'password' });
+        if (pw == null || (await sha(pw)) !== p.hash) { toast('Incorrect password.'); return; }
+      }
+      app.view.dispatch(app.state.tr.setDocAttribute('settings', { ...JSON.parse(JSON.stringify(app.settings)), protection: { mode: on ? 'forms' : 'none', hash: on ? p.hash : undefined } }).setMeta('allowProtected', true).setMeta('trackSkip', true));
+      app.view.setProps({});
+    },
+    isActive: (app) => app.settings.protection.mode === 'forms',
+  },
   {
     id: 'dev.exportFormData', label: 'Export Form Data (CSV)', icon: 'table_view', tab: 'Developer', group: 'Protect', noRecord: true,
     run: async (app) => {

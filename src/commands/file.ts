@@ -15,6 +15,7 @@ import { DEFAULT_AUTOFORMAT, DEFAULT_REPLACEMENTS } from '../editor/autoformat';
 import { commandCount } from './registry';
 import { h } from '../ui/dom';
 import { showRecoveryReport, showManualRecovery, recoverySummary } from '../ui/recovery';
+import { refuseIfProtected } from './review';
 
 const N = schema.nodes;
 
@@ -338,6 +339,7 @@ def([
   {
     id: 'file.inspect', label: 'Inspect Document…', icon: 'policy', tab: 'Backstage', group: 'Info', noRecord: true,
     run: async (app) => {
+      if (refuseIfProtected(app)) return;
       const st = app.state;
       const s = app.settings;
       let hidden = 0, ink = 0;

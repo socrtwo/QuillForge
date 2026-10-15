@@ -57,8 +57,10 @@ function textEach(app: App, fn: (t: string) => string) {
   mapSelectedText(v(app), fn);
 }
 
-const paraText = (p: PMNode) => p.textContent;
-const sameAttrs = (src: PMNode, text: string) => N.paragraph.create(src.attrs, text ? schema.text(text) : null);
+/** Paragraph text with manual line breaks as '\n' (textContent would glue the words on either side). */
+const paraText = (p: PMNode) => p.textBetween(0, p.content.size, '\n', (n) => (n.type === N.hard_break ? '\n' : ''));
+/** Plain paragraph with the source's attributes; '\n' becomes a manual line break. */
+const sameAttrs = (src: PMNode, text: string) => N.paragraph.create(src.attrs, text.split('\n').flatMap((l, i) => [...(i ? [N.hard_break.create()] : []), ...(l ? [schema.text(l)] : [])]));
 
 def([
   {
@@ -158,7 +160,7 @@ def([
           let buf = '';
           const flush = (attrs: any) => { if (buf) joined.push(N.paragraph.create(attrs, schema.text(buf))); buf = ''; };
           for (const p of out) {
-            for (const line of p.textContent.split('\n')) {
+            for (const line of paraText(p).split('\n')) {
               const tl = line.trim();
               if (!tl) { flush(p.attrs); continue; }
               if (buf && /[\p{L}]-$/u.test(buf) && /^\p{Ll}/u.test(tl)) buf = buf.slice(0, -1) + tl;
@@ -211,8 +213,10 @@ def([
     id: 'tools.autoFormatNow', label: 'AutoFormat Now', icon: 'auto_awesome', tab: 'Tools', group: 'Typography', edits: true,
     run: (app) => {
       const st = app.state; const tr = st.tr;
-      st.doc.forEach((n, pos) => {
+      st.doc.forEach((n, p0) => {
         if (n.type !== N.paragraph) return;
+        // Earlier '#' deletions shift the document: map positions from st.doc into tr.doc.
+        const pos = tr.mapping.map(p0);
         const t = n.textContent;
         const m = /^(#{1,6})\s+/.exec(t);
         if (m) { tr.setNodeMarkup(pos, undefined, { ...n.attrs, style: `Heading ${m[1].length}` }); tr.delete(pos + 1, pos + 1 + m[0].length); return; }

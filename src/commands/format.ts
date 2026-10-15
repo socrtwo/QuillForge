@@ -653,10 +653,12 @@ def([
       const st = app.state;
       const anc = findListAncestor(st);
       if (!anc || anc.node.type !== N.ordered_list) return;
-      let prev: { node: any; pos: number } | null = null;
-      st.doc.nodesBetween(0, anc.pos, (n, pos) => { if (n.type === N.ordered_list && pos < anc.pos) prev = { node: n, pos }; return pos < anc.pos; });
+      // Only a preceding numbered list at the same level (same parent), not a nested sublist inside it.
+      const $a = st.doc.resolve(anc.pos);
+      let prev: { node: any } | null = null;
+      for (let i = $a.index() - 1; i >= 0 && !prev; i--) { const n = $a.parent.child(i); if (n.type === N.ordered_list) prev = { node: n }; }
       if (!prev) { toast('No previous list to continue.'); return; }
-      const p = prev as { node: any; pos: number };
+      const p = prev as { node: any };
       v(app).dispatch(st.tr.setNodeMarkup(anc.pos, undefined, { ...anc.node.attrs, order: p.node.attrs.order + p.node.childCount, format: p.node.attrs.format }));
     },
   },

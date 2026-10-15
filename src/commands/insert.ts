@@ -5,7 +5,7 @@ import { TextSelection, NodeSelection } from 'prosemirror-state';
 import { Fragment, Slice, type Node as PMNode } from 'prosemirror-model';
 import { schema } from '../editor/schema';
 import { insertBlock, insertInline, markAttr, selectedText, setMark } from '../editor/ops';
-import { openDialog, toast, promptDialog, showMenu } from '../ui/dialog';
+import { openDialog, toast, promptDialog, showMenu, confirmDialog } from '../ui/dialog';
 import { pickFile, readFileAsDataURL, h } from '../ui/dom';
 import { SHAPES, shapeSvg, svgToDataUrl, rasterize, DIAGRAMS, diagramSvg, CHARTS, chartSvg, parseChartCsv, chartToCsv, PALETTE, type ShapeData, type DiagramData, type ChartData } from '../editor/graphics';
 import { renderLatex } from '../editor/nodeviews';
@@ -42,15 +42,21 @@ def([
   },
   {
     id: 'insert.removeCover', label: 'Remove Cover Page', icon: 'delete', tab: 'Insert', group: 'Pages', edits: true,
-    run: (app) => {
+    run: async (app) => {
       const doc = app.state.doc;
-      let end = -1;
-      doc.forEach((n, pos) => { if (end < 0 && n.type === N.page_break) end = pos + n.nodeSize; });
-      if (end < 0) { toast('No cover page found (a cover page ends with a page break).'); return; }
+      let end = -1, blocks = 0;
+      doc.forEach((n, pos, i) => { if (end < 0 && n.type === N.page_break) { end = pos + n.nodeSize; blocks = i; } });
+      if (end < 0) { toast('No cover page.'); return; }
+      // Covers made by Insert ▸ Cover Page start with a marked paragraph; anything else needs confirmation.
+      if (doc.firstChild?.attrs.id !== COVER_ID && !(await confirmDialog('Remove Cover Page', `The document does not start with a cover page inserted by QuillForge. Remove the ${blocks} paragraph(s) before the first page break?`))) return;
+      if (app.state.doc !== doc) return;
       v(app).dispatch(app.state.tr.delete(0, end));
     },
   },
 ]);
+
+/** Paragraph id marking the first block of a cover page inserted by insert.coverPage. */
+const COVER_ID = 'qf-cover';
 
 function insertCover(app: App, kind: string) {
   const s = app.settings;
@@ -68,6 +74,7 @@ function insertCover(app: App, kind: string) {
     case 'screenplay': blocks = [...spacer(14), P(title.toUpperCase(), { ...center }), P('', center), P('Written by', center), P('', center), P(author, center), ...spacer(16), P('Contact information', { align: 'left' })]; break;
     default: blocks = [...spacer(10), P(title, { style: 'Title', ...center }), P(s.properties.subject || '', { style: 'Subtitle', ...center }), ...spacer(4), P(author, center), P(date, center)];
   }
+  blocks[0] = blocks[0].type.create({ ...blocks[0].attrs, id: COVER_ID }, blocks[0].content, blocks[0].marks);
   blocks.push(N.page_break.create());
   v(app).dispatch(app.state.tr.insert(0, blocks).scrollIntoView());
   app.selectPos(1);
@@ -374,13 +381,20 @@ def([
       const st = app.state;
       let { from, to } = st.selection;
       if (from === to) {
+        // Links are non-inclusive, so $pos.marks() is unreliable at their edges: look at the inline
+        // children around the cursor and take the whole run carrying the same link mark.
         const $p = st.selection.$from;
-        const m = M.link.isInSet($p.marks());
+        const parent = $p.parent;
+        let i = $p.index();
+        const linkOf = (k: number) => (k >= 0 && k < parent.childCount ? M.link.isInSet(parent.child(k).marks) : null);
+        let m = $p.textOffset ? linkOf(i) : null;
+        if (!m && !$p.textOffset) { m = linkOf(i - 1); if (m) i--; else m = linkOf(i); }
         if (!m) return;
-        let s = from, e = from;
-        while (s > $p.start() && M.link.isInSet(st.doc.resolve(s - 1).marks()) && m.eq(M.link.isInSet(st.doc.resolve(s).marks())!)) s--;
-        while (e < $p.end() && M.link.isInSet(st.doc.resolve(e + 1).marks())) e++;
-        from = s; to = e;
+        let a = i, b = i;
+        while (a > 0 && m.isInSet(parent.child(a - 1).marks)) a--;
+        while (b < parent.childCount - 1 && m.isInSet(parent.child(b + 1).marks)) b++;
+        from = $p.start(); to = from;
+        for (let k = 0; k <= b; k++) { const size = parent.child(k).nodeSize; if (k < a) from += size; to += size; }
       }
       v(app).dispatch(st.tr.removeMark(from, to, M.link));
     },

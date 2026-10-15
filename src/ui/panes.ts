@@ -10,7 +10,7 @@ import { setFind, selectMatch, findKey, proofKey } from '../editor/plugins/decor
 import { listChanges, resolveChanges } from '../editor/plugins/trackChanges';
 import { pageOfPos, pageInfo } from '../editor/plugins/pagination';
 import { replaceAll } from '../commands/edit';
-import { commentRanges, updateComment } from '../commands/review';
+import { commentRanges, updateComment, refuseIfProtected } from '../commands/review';
 import { currentParagraph, setParagraphStyle } from '../editor/ops';
 import { modifyStyle } from '../commands/format';
 import { kvKeys, kvGet, kvDel } from '../util/store';
@@ -283,7 +283,7 @@ const revisions: PaneDef = {
         el.appendChild(h('div', { class: 'qf-rev qf-rev-' + c.kind },
           h('div', { class: 'qf-help' }, `${c.kind === 'insertion' ? 'Inserted' : c.kind === 'deletion' ? 'Deleted' : 'Formatted'} · ${c.author} · ${c.date ? new Date(c.date).toLocaleString() : ''}`),
           h('div', { class: 'qf-rev-text', onclick: () => { app.view.dispatch(app.state.tr.setSelection(TextSelection.create(app.state.doc, c.from, c.to)).scrollIntoView()); app.focus(); } }, c.text.slice(0, 160)),
-          h('div', { class: 'qf-row' }, h('button', { class: 'qf-btn qf-sm', onclick: () => app.view.dispatch(resolveChanges(app.state, [c], true)) }, '✓ Accept'), h('button', { class: 'qf-btn qf-sm', onclick: () => app.view.dispatch(resolveChanges(app.state, [c], false)) }, '✗ Reject'))));
+          h('div', { class: 'qf-row' }, h('button', { class: 'qf-btn qf-sm', onclick: () => { if (!refuseIfProtected(app)) app.view.dispatch(resolveChanges(app.state, [c], true)); } }, '✓ Accept'), h('button', { class: 'qf-btn qf-sm', onclick: () => { if (!refuseIfProtected(app)) app.view.dispatch(resolveChanges(app.state, [c], false)); } }, '✗ Reject'))));
       }
     };
     (el as any)._draw();
