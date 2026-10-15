@@ -523,12 +523,12 @@ def([
   {
     id: 'help.about', label: 'About QuillForge', icon: 'info', tab: 'Help', group: 'Help', noRecord: true,
     run: () => alertDialog('About QuillForge', h('div', { class: 'qf-msg' },
-      h('p', null, h('b', null, 'QuillForge 0.1.0'), ' — an original, open-source word processor (MIT License).'),
+      h('p', null, h('b', null, `QuillForge ${__APP_VERSION__}`), ' — an original, open-source word processor (MIT License).'),
       h('p', null, `${commandCount()} commands, every one available to the Quick Access Bar, custom tabs, keyboard shortcuts, macros and command search.`),
       h('p', null, 'QuillForge is not affiliated with, endorsed by, or sponsored by Microsoft, Google, Apple, Corel, The Document Foundation, or any other vendor. Product names are used only to describe file-format compatibility.'),
       h('p', null, 'Open-source components: ProseMirror (MIT), prosemirror-tables (MIT), JSZip (MIT/GPLv3 dual), KaTeX (MIT), nspell (MIT) with the SCOWL en_US Hunspell dictionary (BSD-style), Material Symbols (Apache 2.0), Capacitor (MIT), fonts Carlito, Caladea, Gelasio, EB Garamond, Courier Prime, Libre Baskerville, Lato, Merriweather, Open Sans (SIL OFL 1.1) and Tinos, Arimo, Cousine (Apache 2.0).'),
     )),
   },
   { id: 'help.feedback', label: 'Report an Issue', icon: 'bug_report', tab: 'Help', group: 'Help', noRecord: true, run: () => openExternal('https://github.com/socrtwo/QuillForge/issues') },
-  { id: 'help.whatsNew', label: 'What’s New', icon: 'new_releases', tab: 'Help', group: 'Help', noRecord: true, run: () => alertDialog('What’s New in 0.1', 'First release: full command library with a fully customizable Quick Access Bar and tabs, Print Layout pagination, DOCX/ODT/RTF/HTML/Markdown/EPUB/TXT, track changes, comments, references, mail merge, macros, and Android packaging.') },
+  { id: 'help.whatsNew', label: 'What’s New', icon: 'new_releases', tab: 'Help', group: 'Help', noRecord: true, run: () => alertDialog('What’s New in 0.2', 'Damaged documents now open: the Word Recovery engine salvages .docx/.doc/.odt files (File ▸ Open and Repair, Recover Text from Any File, Recovery Report). New AI tab with 67 commands, a free on-device model, and a setup wizard for free and paid AI providers. Word 97–2003 .doc files open. Security and stability fixes from a full code review. Version 0.1 introduced the full command library, customizable Quick Access Bar and tabs, Print Layout, DOCX/ODT/RTF/HTML/Markdown/EPUB/TXT, track changes, comments, references, mail merge and macros.') },
 ]);
