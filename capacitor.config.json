@@ -1,0 +1,10 @@
+{
+  "appId": "io.github.socrtwo.quillforge",
+  "appName": "QuillForge",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  }
+}

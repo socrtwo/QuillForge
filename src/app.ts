@@ -1,0 +1,504 @@
+/** QuillForge application core: document tabs, dispatch pipeline, command execution. */
+import { EditorState, TextSelection, type Transaction } from 'prosemirror-state';
+import { EditorView } from 'prosemirror-view';
+import type { Node as PMNode } from 'prosemirror-model';
+import { schema, emptyDoc } from './editor/schema';
+import { buildPlugins, canonicalKey } from './editor/setup';
+import { trackTransaction, trackKey } from './editor/plugins/trackChanges';
+import { pageInfo, repaginate, type PageConfig } from './editor/plugins/pagination';
+import { footnoteLabel, focusKey } from './editor/plugins/decorations';
+import { buildNodeViews } from './editor/nodeviews';
+import { normalizeSettings, defaultSettings, pageDims, type DocSettings } from './editor/settings';
+import { stylesCss } from './editor/styles';
+import { expandTokens, computeFields, applyFieldValues } from './editor/fields';
+import { getCommand, allCommands, type Command } from './commands/registry';
+import { loadPrefs, savePrefs, type Prefs } from './prefs';
+import { kvSet, kvDel } from './util/store';
+import { toast } from './ui/dialog';
+import { esc } from './ui/dom';
+import type { Shell } from './ui/shell';
+import { Proofer } from './proof/proofing';
+
+export type ViewMode = 'print' | 'web' | 'mobile' | 'read' | 'outline' | 'draft' | 'focus';
+
+let tabCounter = 0;
+
+export class DocTab {
+  id = `t${Date.now().toString(36)}${tabCounter++}`;
+  title = 'Document';
+  fileName = '';
+  format = 'docx';
+  uri: string | null = null;
+  dirty = false;
+  created = Date.now();
+  saved = 0;
+  viewMode: ViewMode = 'print';
+  zoom = 1;
+  zoomMode: 'fixed' | 'pageWidth' | 'onePage' | 'multi' = 'pageWidth';
+  readOnly = false;
+  editStart = Date.now();
+  sessionStartWords = -1;
+  el!: HTMLElement;        // scroll container
+  page!: HTMLElement;      // page column (zoom target)
+  mount!: HTMLElement;
+  view!: EditorView;
+  styleEl!: HTMLStyleElement;
+  lastSettings: any = null;
+  mergeIndex: number | null = null;
+  constructor(public app: App) {}
+
+  get state(): EditorState { return this.view.state; }
+  initState: EditorState | null = null;
+  get settings(): DocSettings { return normalizeSettings((this.view?.state ?? this.initState)?.doc.attrs.settings); }
+  get displayName(): string { return this.fileName || this.title; }
+}
+
+export class App {
+  prefs: Prefs = loadPrefs();
+  docs: DocTab[] = [];
+  active!: DocTab;
+  ui!: Shell;
+  recording: { name: string; steps: { id: string; arg?: any }[] } | null = null;
+  recordingPaused = false;
+  clipboard: { html: string; text: string; time: number }[] = [];
+  spike: any[] = [];
+  private refreshQueued = false;
+  private autosaveTimer: any = null;
+  private listeners = new Set<(app: App) => void>();
+  lastCommand: { id: string; arg?: any } | null = null;
+  keyIndex = new Map<string, string>();
+  editPositions: number[] = [];
+  proofer: Proofer;
+
+  constructor(public host: HTMLElement) {
+    this.proofer = new Proofer(this);
+    this.rebuildKeyIndex();
+  }
+
+  get tab(): DocTab { return this.active; }
+  get view(): EditorView { return this.active.view; }
+  get state(): EditorState { return this.active.view.state; }
+  get settings(): DocSettings { return this.active.settings; }
+
+  onRefresh(fn: (app: App) => void): () => void { this.listeners.add(fn); return () => this.listeners.delete(fn); }
+
+  savePrefs(): void { savePrefs(this.prefs); this.rebuildKeyIndex(); }
+
+  rebuildKeyIndex(): void {
+    this.keyIndex.clear();
+    for (const c of allCommands()) for (const k of c.keys || []) this.keyIndex.set(canonicalKey(k), c.id);
+    for (const [k, id] of Object.entries(this.prefs.keymap)) {
+      if (id) this.keyIndex.set(canonicalKey(k), id); else this.keyIndex.delete(canonicalKey(k));
+    }
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Documents
+
+  createTab(doc?: PMNode, meta: Partial<DocTab> = {}): DocTab {
+    const tab = new DocTab(this);
+    Object.assign(tab, meta);
+    if (!meta.viewMode) tab.viewMode = this.defaultViewMode();
+    const settings = normalizeSettings(doc?.attrs.settings);
+    if (!doc) {
+      const s = defaultSettings();
+      if (this.prefs.defaultFont || this.prefs.defaultSize) {
+        s.styles.Normal = { name: 'Normal', type: 'paragraph', ...(this.prefs.defaultFont ? { font: this.prefs.defaultFont } : {}), ...(this.prefs.defaultSize ? { size: this.prefs.defaultSize } : {}) } as any;
+      }
+      s.properties.author = this.prefs.author;
+      doc = emptyDoc(s);
+    } else if (!doc.attrs.settings || !Object.keys(doc.attrs.settings).length) {
+      doc = schema.node('doc', { settings }, doc.content);
+    }
+    this.ui.mountTab(tab);
+    const self = this;
+    const plugins = buildPlugins({
+      autoformat: () => self.prefs.autoformat,
+      replacements: () => self.prefs.replacements,
+      pageConfig: () => self.pageConfig(tab),
+      commandKey: (key) => self.handleKey(key),
+      author: () => self.prefs.author,
+      wordCompletion: () => self.prefs.wordCompletion,
+      slashMenu: (view) => self.ui.slashMenu(view),
+      slashEnabled: () => self.prefs.slashMenu,
+    });
+    const state = EditorState.create({ doc, plugins });
+    tab.initState = state;
+    tab.view = new EditorView(tab.mount, {
+      state,
+      dispatchTransaction: (tr) => this.dispatch(tab, tr),
+      editable: () => !tab.readOnly && !tab.settings.markedFinal && tab.settings.protection.mode !== 'readonly' && tab.viewMode !== 'read',
+      nodeViews: buildNodeViews({
+        editMath: (view, pos) => this.exec('insert.equationEdit', { pos }),
+        controlClick: (view, pos, node, el) => this.ui.controlClick(tab, pos, node, el),
+        imageEdit: (view, pos) => this.exec('picture.formatDialog', { pos }),
+        genBlockClick: (view, pos, node, e) => {
+          const t = e.target as HTMLElement;
+          if (t.closest('[data-act=update]')) { e.preventDefault(); this.exec('refs.updateGenerated', { pos }); }
+          const a = t.closest('a[href^="#"]') as HTMLAnchorElement | null;
+          if (a) { e.preventDefault(); this.exec('nav.gotoAnchor', a.getAttribute('href')!.slice(1)); }
+        },
+      }),
+      attributes: () => ({
+        class: 'qf-editor',
+        spellcheck: this.prefs.nativeSpellcheck ? 'true' : 'false',
+        lang: tab.settings.language || 'en-US',
+        autocapitalize: 'sentences',
+        'aria-label': 'Document body',
+        role: 'textbox',
+        'aria-multiline': 'true',
+      }),
+      handleDOMEvents: {
+        contextmenu: (view, e) => { e.preventDefault(); this.ui.contextMenu(e as MouseEvent); return true; },
+        copy: (view, e) => { this.rememberClipboard(); return false; },
+        cut: (view, e) => { this.rememberClipboard(); return false; },
+      },
+      handleTextInput: (view, from, to, text) => {
+        if (this.recording) this.recordStep('edit.typeText', text);
+        return false;
+      },
+      handleClickOn: (view, pos, node, nodePos, e) => {
+        const t = e.target as HTMLElement;
+        if (node.type === schema.nodes.task_item || t.closest?.('li.qf-task')) {
+          const li = t.closest('li.qf-task') as HTMLElement | null;
+          if (li && e.offsetX < 0 + 22 && t === li) {
+            const n = view.state.doc.nodeAt(nodePos);
+            if (n && n.type === schema.nodes.task_item) {
+              view.dispatch(view.state.tr.setNodeMarkup(nodePos, undefined, { checked: !n.attrs.checked }));
+              return true;
+            }
+          }
+        }
+        if (node.type === schema.nodes.footnote) { this.ui.showFootnote(tab, nodePos, node); return true; }
+        if (node.type === schema.nodes.citation) { this.exec('refs.editCitation', { pos: nodePos }); return true; }
+        if (node.type === schema.nodes.field && (e as MouseEvent).detail >= 2) { this.exec('insert.editField', { pos: nodePos }); return true; }
+        const link = t.closest?.('a[href]') as HTMLAnchorElement | null;
+        if (link && ((e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey || tab.viewMode === 'read' || !view.editable)) {
+          this.followLink(link.getAttribute('href') || '');
+          return true;
+        }
+        return false;
+      },
+    });
+    tab.styleEl = document.createElement('style');
+    tab.el.appendChild(tab.styleEl);
+    this.docs.push(tab);
+    this.activate(tab);
+    this.applySettingsToDom(tab);
+    this.applyViewMode(tab);
+    this.updateFields(tab);
+    tab.sessionStartWords = -1;
+    this.proofer.schedule(tab, 400);
+    return tab;
+  }
+
+  defaultViewMode(): ViewMode {
+    const pref = this.prefs.defaultView;
+    if (pref !== 'auto') return pref;
+    return window.innerWidth < 700 ? 'mobile' : 'print';
+  }
+
+  activate(tab: DocTab): void {
+    this.active = tab;
+    for (const d of this.docs) d.el.classList.toggle('qf-hidden-tab', d !== tab);
+    this.ui.tabsChanged();
+    this.refresh();
+    document.title = `${tab.displayName}${tab.dirty ? ' •' : ''} – QuillForge`;
+  }
+
+  closeTab(tab: DocTab): void {
+    const i = this.docs.indexOf(tab);
+    if (i < 0) return;
+    tab.view.destroy();
+    tab.el.remove();
+    this.docs.splice(i, 1);
+    kvDel('draft:' + tab.id);
+    if (!this.docs.length) this.createTab();
+    else this.activate(this.docs[Math.max(0, i - 1)]);
+  }
+
+  replaceDoc(tab: DocTab, doc: PMNode): void {
+    const state = EditorState.create({ doc, plugins: tab.view.state.plugins });
+    tab.view.updateState(state);
+    this.applySettingsToDom(tab);
+    this.updateFields(tab);
+    repaginate(tab.view, 0);
+    this.refresh();
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Dispatch
+
+  dispatch(tab: DocTab, tr: Transaction): void {
+    const view = tab.view;
+    const old = view.state;
+    if (tr.docChanged && !tr.getMeta('trackSkip') && !tr.getMeta('allowProtected')) {
+      const s = tab.settings;
+      if (s.protection.mode === 'readonly' || s.markedFinal) { this.blocked('This document is read-only. Use Review ▸ Restrict Editing to change protection.'); return; }
+      if (s.protection.mode === 'comments' && !tr.getMeta('comment')) { this.blocked('Only comments are allowed in this document.'); return; }
+      if (s.protection.mode === 'forms' && !tr.getMeta('form')) { this.blocked('Only form fields can be filled in.'); return; }
+    }
+    const t = trackTransaction(tr, old, tab.settings.protection.mode === 'tracked');
+    const next = old.apply(t);
+    view.updateState(next);
+    if (t.docChanged) {
+      const head = next.selection.head;
+      const lastPos = this.editPositions[this.editPositions.length - 1];
+      if (lastPos == null || Math.abs(t.mapping.map(lastPos) - head) > 200) { this.editPositions.push(head); if (this.editPositions.length > 20) this.editPositions.shift(); }
+      else this.editPositions[this.editPositions.length - 1] = head;
+      if (!tab.dirty) { tab.dirty = true; this.ui.tabsChanged(); document.title = `${tab.displayName} • – QuillForge`; }
+      this.scheduleAutosave();
+      this.proofer.schedule(tab);
+    }
+    if (old.doc.attrs.settings !== next.doc.attrs.settings) this.applySettingsToDom(tab);
+    if (t.docChanged || t.selectionSet || t.storedMarksSet || t.getMeta('refresh')) this.refresh();
+    if (this.prefs.typewriter && (t.docChanged || t.selectionSet)) this.typewriterScroll(tab);
+  }
+
+  private blocked(msg: string): void {
+    toast(msg);
+  }
+
+  refresh(): void {
+    if (this.refreshQueued) return;
+    this.refreshQueued = true;
+    requestAnimationFrame(() => {
+      this.refreshQueued = false;
+      if (!this.active) return;
+      this.ui.refresh();
+      for (const l of this.listeners) l(this);
+    });
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Commands
+
+  handleKey(key: string): boolean {
+    const id = this.keyIndex.get(canonicalKey(key));
+    if (!id) return false;
+    const c = getCommand(id);
+    if (!c) return false;
+    if (c.isEnabled && !c.isEnabled(this)) return false;
+    this.exec(id);
+    return true;
+  }
+
+  exec(id: string, arg?: any): unknown {
+    const c = getCommand(id);
+    if (!c) { toast(`Unknown command: ${id}`); return false; }
+    if (c.edits && !this.view.editable) {
+      toast('The document is read-only.');
+      return false;
+    }
+    if (c.isEnabled && !c.isEnabled(this)) { toast(`${c.label} is not available here.`); return false; }
+    if (this.recording && !c.noRecord && id !== 'dev.recordMacro' && id !== 'dev.stopRecording') this.recordStep(id, arg);
+    if (!c.noRecord && id !== 'edit.repeat') this.lastCommand = { id, arg };
+    try {
+      const r = c.run(this, arg);
+      if (r instanceof Promise) r.catch((e) => this.reportError(c, e)).finally(() => this.refresh());
+      this.refresh();
+      return r;
+    } catch (e) {
+      this.reportError(c, e);
+      return false;
+    }
+  }
+
+  private reportError(c: Command, e: unknown): void {
+    console.error(e);
+    toast(`${c.label}: ${(e as any)?.message || e}`);
+  }
+
+  recordStep(id: string, arg?: any): void {
+    if (!this.recording || this.recordingPaused) return;
+    const steps = this.recording.steps;
+    const last = steps[steps.length - 1];
+    if (id === 'edit.typeText' && last && last.id === 'edit.typeText') { last.arg += arg; return; }
+    steps.push(arg === undefined ? { id } : { id, arg: JSON.parse(JSON.stringify(arg)) });
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Settings, styles and pagination
+
+  updateSettings(fn: (s: DocSettings) => void, tab = this.active): void {
+    const cur = tab.settings;
+    const copy = JSON.parse(JSON.stringify(cur)) as DocSettings;
+    fn(copy);
+    const tr = tab.view.state.tr.setDocAttribute('settings', copy).setMeta('settingsChanged', true).setMeta('trackSkip', true);
+    tab.view.dispatch(tr);
+  }
+
+  applySettingsToDom(tab: DocTab): void {
+    const s = tab.settings;
+    const { w, h } = pageDims(s.page);
+    const p = tab.page;
+    p.style.setProperty('--qf-page-w', `${w}pt`);
+    p.style.setProperty('--qf-page-h', `${h}pt`);
+    p.style.setProperty('--qf-m-top', `${s.page.margin.top}pt`);
+    p.style.setProperty('--qf-m-right', `${s.page.margin.right}pt`);
+    p.style.setProperty('--qf-m-bottom', `${s.page.margin.bottom}pt`);
+    p.style.setProperty('--qf-m-left', `${s.page.margin.left + (s.page.gutter || 0)}pt`);
+    p.style.setProperty('--qf-page-color', s.pageColor || (this.prefs.darkPage ? '#1e1e1e' : '#ffffff'));
+    p.classList.toggle('qf-dark-page', this.prefs.darkPage && !s.pageColor);
+    p.style.setProperty('--qf-tab', `${s.defaultTab}pt`);
+    p.dataset.pageBorder = s.pageBorder ? '1' : '';
+    p.style.setProperty('--qf-page-border', s.pageBorder || 'none');
+    p.classList.toggle('qf-line-numbers', !!s.lineNumbers.enabled);
+    if (s.watermark && s.watermark.text) {
+      p.style.setProperty('--qf-wm-text', JSON.stringify(s.watermark.text));
+      p.style.setProperty('--qf-wm-color', s.watermark.color || '#c0c0c0');
+      p.style.setProperty('--qf-wm-opacity', String(s.watermark.opacity ?? 0.35));
+      p.style.setProperty('--qf-wm-rot', s.watermark.diagonal ? '-45deg' : '0deg');
+      p.dataset.watermark = '1';
+    } else delete p.dataset.watermark;
+    const css = stylesCss(s);
+    if (tab.styleEl.textContent !== css) tab.styleEl.textContent = css;
+    tab.lastSettings = tab.view.state.doc.attrs.settings;
+    this.ui.updatePrintCss(tab);
+    repaginate(tab.view, 0);
+  }
+
+  pageConfig(tab: DocTab): PageConfig {
+    const s = tab.settings;
+    const { w, h } = pageDims(s.page);
+    const enabled = tab.viewMode === 'print';
+    const hfCtx = (page: number, pages: number) => ({ page, pages, settings: s, fileName: tab.displayName, userName: this.prefs.author });
+    const render = (kind: 'header' | 'footer') => (page: number, pages: number) => {
+      let hf = s[kind];
+      if (s.differentFirst && page === 1) hf = kind === 'header' ? s.firstHeader : s.firstFooter;
+      else if (s.differentOddEven && page % 2 === 0) hf = kind === 'header' ? s.evenHeader : s.evenFooter;
+      const c = hfCtx(page, pages);
+      const part = (t: string) => expandTokens(esc(t || ''), c).replace(/\n/g, '<br>');
+      if (!hf.left && !hf.center && !hf.right) return '';
+      return `<span class="qf-hf-l">${part(hf.left)}</span><span class="qf-hf-c">${part(hf.center)}</span><span class="qf-hf-r">${part(hf.right)}</span>`;
+    };
+    return {
+      enabled,
+      widthPt: w,
+      heightPt: h,
+      margin: { ...s.page.margin, left: s.page.margin.left + (s.page.gutter || 0) },
+      gapPx: 24,
+      header: render('header'),
+      footer: render('footer'),
+      footnotesAtPageBottom: s.footnoteFormat.placement === 'page',
+      footnoteNumber: (pos) => footnoteLabel(tab.view.state, pos),
+      footnoteHtml: (node, num) => `<span class="qf-fn-item"><sup>${esc(num)}</sup> ${esc(node.attrs.text)}</span>`,
+    };
+  }
+
+  setViewMode(mode: ViewMode, tab = this.active): void {
+    tab.viewMode = mode;
+    this.applyViewMode(tab);
+    this.refresh();
+  }
+
+  applyViewMode(tab: DocTab): void {
+    const modes: ViewMode[] = ['print', 'web', 'mobile', 'read', 'outline', 'draft', 'focus'];
+    for (const m of modes) tab.el.classList.toggle('qf-mode-' + m, tab.viewMode === m);
+    tab.view.setProps({});
+    const focusMode = tab.viewMode === 'focus' ? (this.prefs.focus === 'off' ? 'paragraph' : this.prefs.focus) : this.prefs.focus;
+    tab.view.dispatch(tab.view.state.tr.setMeta(focusKey, { mode: focusMode }).setMeta('addToHistory', false));
+    this.applyZoom(tab);
+    repaginate(tab.view, 0);
+  }
+
+  applyZoom(tab = this.active): void {
+    const s = tab.settings;
+    const { w, h } = pageDims(s.page);
+    let z = tab.zoom;
+    const avail = tab.el.clientWidth - 24;
+    if (tab.viewMode === 'print' || tab.viewMode === 'read') {
+      if (tab.zoomMode === 'pageWidth' && avail > 0) z = Math.min(2, avail / (w * 4 / 3));
+      if (tab.zoomMode === 'onePage' && avail > 0) z = Math.min(avail / (w * 4 / 3), (tab.el.clientHeight - 24) / (h * 4 / 3));
+    } else if (tab.zoomMode !== 'fixed') z = 1;
+    z = Math.max(0.1, Math.min(5, z));
+    tab.zoom = z;
+    tab.page.style.zoom = String(z);
+    this.ui.refresh();
+  }
+
+  setZoom(z: number, mode: DocTab['zoomMode'] = 'fixed'): void {
+    this.active.zoom = z;
+    this.active.zoomMode = mode;
+    this.applyZoom();
+    repaginate(this.view, 50);
+  }
+
+  typewriterScroll(tab: DocTab): void {
+    const view = tab.view;
+    try {
+      const c = view.coordsAtPos(view.state.selection.head);
+      const r = tab.el.getBoundingClientRect();
+      const target = r.top + r.height * 0.45;
+      tab.el.scrollTop += c.top - target;
+    } catch { /* */ }
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Fields
+
+  updateFields(tab = this.active, range?: { from: number; to: number }): void {
+    const s = tab.settings;
+    const info = pageInfo(tab.view.state);
+    const merge = s.mergeData && s.mergePreview != null ? Object.fromEntries(s.mergeData.fields.map((f, i) => [f, s.mergeData!.rows[s.mergePreview!]?.[i] ?? ''])) : null;
+    const updates = computeFields({
+      settings: s, fileName: tab.displayName, userName: this.prefs.author, userInitials: this.prefs.initials,
+      pageOf: (pos) => { let p = 1; info.starts.forEach((st, i) => { if (st <= pos) p = i + 1; }); return p; },
+      pages: info.pages, created: tab.created, saved: tab.saved, mergeRecord: merge, mergeIndex: s.mergePreview ?? undefined, doc: tab.view.state.doc,
+    }, range);
+    if (!updates.length) return;
+    const tr = applyFieldValues(tab.view.state.tr, updates).setMeta('trackSkip', true).setMeta('addToHistory', false).setMeta('allowProtected', true);
+    tab.view.dispatch(tr);
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Clipboard history (multi-item clipboard pane)
+
+  rememberClipboard(): void {
+    const { state } = this.view;
+    if (state.selection.empty) return;
+    const slice = state.selection.content();
+    const div = document.createElement('div');
+    const ser = (window as any).__qfSerializer;
+    if (ser) div.appendChild(ser.serializeFragment(slice.content));
+    const text = state.doc.textBetween(state.selection.from, state.selection.to, '\n', ' ');
+    this.clipboard.unshift({ html: div.innerHTML, text, time: Date.now() });
+    this.clipboard.splice(this.prefs.clipboardHistory);
+    this.refresh();
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Autosave and drafts
+
+  scheduleAutosave(): void {
+    if (!this.prefs.autosave) return;
+    clearTimeout(this.autosaveTimer);
+    this.autosaveTimer = setTimeout(() => this.saveDrafts(), Math.max(3, this.prefs.autosaveSeconds) * 1000);
+  }
+
+  async saveDrafts(): Promise<void> {
+    for (const tab of this.docs) {
+      if (!tab.dirty) continue;
+      await kvSet('draft:' + tab.id, {
+        id: tab.id, json: tab.view.state.doc.toJSON(), title: tab.title, fileName: tab.fileName, format: tab.format, uri: tab.uri, time: Date.now(),
+      });
+    }
+    this.ui.status?.('Draft saved');
+  }
+
+  followLink(href: string): void {
+    if (href.startsWith('#')) { this.exec('nav.gotoAnchor', href.slice(1)); return; }
+    window.open(href, '_blank', 'noopener');
+  }
+
+  focus(): void {
+    try { this.view.focus(); } catch { /* */ }
+  }
+
+  selectPos(pos: number): void {
+    const view = this.view;
+    const p = Math.max(0, Math.min(pos, view.state.doc.content.size));
+    view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(p))).scrollIntoView());
+    view.focus();
+  }
+}
