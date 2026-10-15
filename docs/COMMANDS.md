@@ -1,8 +1,8 @@
 # QuillForge Command Reference
 
-QuillForge ships **746 commands**. Every one can be placed on the Quick Access Bar, added to a custom tab, bound to a keyboard shortcut, recorded in a macro, or found with command search (Alt+Q).
+QuillForge ships **817 commands**. Every one can be placed on the Quick Access Bar, added to a custom tab, bound to a keyboard shortcut, recorded in a macro, or found with command search (Alt+Q).
 
-431 of them are "Commands Not in the Tabs" — reachable through the Quick Access Bar chooser, Customize Tabs, the command search, or menus — mirroring how desktop suites expose their full command library.
+435 of them are "Commands Not in the Tabs" — reachable through the Quick Access Bar chooser, Customize Tabs, the command search, or menus — mirroring how desktop suites expose their full command library.
 
 This file is generated from the source by `npm run catalog`.
 
@@ -18,13 +18,14 @@ This file is generated from the source by `npm run catalog`.
 - **Review**: Proofing · Speech · Accessibility · Language · Comments · Tracking · Changes · Compare · Protect · Ink
 - **View**: Views · Immersive · Show · Zoom · Writing · Window · Macros
 - **Tools**: Clean Up · Typography · Text · Analyze
+- **AI**: Assistant · Write · Rewrite · Length & Structure · Proofing · Summarize & Analyze · Translate · Research · Review · Pictures · Creative
 - **Developer**: Code · Controls · Protect · Templates
 - **Help**: Help
 - **Table Design** (contextual): Table Style Options · Table Styles · Borders
 - **Table Layout** (contextual): Table · Rows & Columns · Merge · Cell Size · Alignment · Data
 - **Picture Format** (contextual): Adjust · Picture Styles · Accessibility · Arrange · Size
 
-## File (44)
+## File (48)
 
 | Command | Group | Shortcut | ID | Notes |
 |---|---|---|---|---|
@@ -51,9 +52,13 @@ This file is generated from the source by `npm run catalog`.
 | New Document | New | Ctrl+n | `file.new` |  |
 | New from Template… | New |  | `file.newFromTemplate` | not in tabs |
 | Clear Unpinned Recent Documents | Open |  | `file.clearRecent` | not in tabs |
+| Manual Recovery Options | Open |  | `file.recoveryHelp` | not in tabs |
+| Open and Repair… | Open |  | `file.openRepair` | not in tabs |
 | Open Encrypted Document… | Open |  | `file.openEncrypted` | not in tabs |
 | Open Recent | Open |  | `file.openRecent` | has options menu; not in tabs |
 | Open… | Open | Ctrl+o, Ctrl+F12 | `file.open` |  |
+| Recover Text from Any File… | Open |  | `file.recoverText` | not in tabs |
+| Recovery Report | Open |  | `file.recoveryReport` | not in tabs |
 | AutoCorrect Options… | Options |  | `file.autocorrectOptions` | not in tabs |
 | Custom Dictionary… | Options |  | `file.customDictionary` | not in tabs |
 | Customize Keyboard… | Options |  | `file.customizeKeyboard` | not in tabs |
@@ -732,6 +737,78 @@ This file is generated from the source by `npm run catalog`.
 | Fix Dashes and Ellipses | Typography |  | `tools.dashes` |  |
 | Non-Breaking Spaces Before Units/Numbers | Typography |  | `tools.nbspUnits` | not in tabs |
 | Typographic Clean-Up (All) | Typography |  | `tools.typographer` | inspired by Publishing typography |
+
+## AI (67)
+
+| Command | Group | Shortcut | ID | Notes |
+|---|---|---|---|---|
+| Action Items | Analyze |  | `ai.actionItems` |  |
+| Analyze Text | Analyze |  | `ai.analyze` |  |
+| Explain | Analyze |  | `ai.explain` |  |
+| Extract Names, Dates & Places | Analyze |  | `ai.extractData` |  |
+| Generate FAQ | Analyze |  | `ai.faq` |  |
+| Insert Summary at Top | Analyze |  | `ai.summaryTop` |  |
+| Summarize | Analyze | Ctrl+Alt+Shift+u | `ai.summarize` | has options menu |
+| Active AI | Assistant |  | `ai.chooseProvider` | has options menu |
+| AI & Privacy | Assistant |  | `ai.privacy` |  |
+| AI Pane | Assistant | Ctrl+Alt+a | `ai.chat` |  |
+| AI Settings… | Assistant |  | `ai.settings` |  |
+| Ask About Document… | Assistant | Ctrl+Alt+q | `ai.ask` |  |
+| Delete Downloaded Models | Assistant |  | `ai.clearLocal` |  |
+| My Prompts | Assistant |  | `ai.runPrompt` | has options menu |
+| Prompt Library… | Assistant |  | `ai.prompts` |  |
+| Providers & Models… | Assistant |  | `ai.providers` |  |
+| Set Up AI… | Assistant |  | `ai.setup` |  |
+| Stop AI | Assistant |  | `ai.stop` |  |
+| Describe (Sensory Detail) | Creative |  | `ai.describe` |  |
+| Name Generator… | Creative |  | `ai.names` |  |
+| Polish Dialogue | Creative |  | `ai.dialogue` |  |
+| Story Notes… | Creative |  | `ai.storyNotes` |  |
+| Add Detail | Length |  | `ai.addDetail` | has options menu |
+| Add Headings | Length |  | `ai.headings` |  |
+| Convert to Table | Length |  | `ai.table` |  |
+| Expand | Length |  | `ai.expand` |  |
+| Key Points | Length |  | `ai.keyPoints` |  |
+| Make Bulleted List | Length |  | `ai.bullets` |  |
+| Shorten | Length |  | `ai.shorten` |  |
+| Describe Picture | Media |  | `ai.describeImage` |  |
+| Generate Alt Text | Media |  | `ai.altText` |  |
+| Generate Image… | Media |  | `ai.generateImage` |  |
+| Image to Text (OCR) | Media |  | `ai.imageToText` |  |
+| Check Against Style Guide | Proof |  | `ai.styleGuide` |  |
+| Clarity Suggestions | Proof |  | `ai.clarity` |  |
+| Fix OCR Errors | Proof |  | `ai.ocrFix` |  |
+| Proofread with AI | Proof | Ctrl+Alt+p | `ai.proofread` |  |
+| Flag Claims to Verify | Research |  | `ai.flagClaims` |  |
+| Format Citation… | Research |  | `ai.citation` | has options menu |
+| Suggest Sources | Research |  | `ai.findSources` |  |
+| Draft Comment Reply | Review |  | `ai.draftReply` |  |
+| Feedback as Comments | Review |  | `ai.feedback` |  |
+| Grade Against Rubric… | Review |  | `ai.grade` |  |
+| Manuscript Critique | Review |  | `ai.critique` |  |
+| Reader Reaction | Review |  | `ai.readerView` | has options menu |
+| Review AI Edits | Review |  | `ai.reviewEdits` |  |
+| Summarize Comments | Review |  | `ai.summarizeComments` |  |
+| Change Style | Rewrite |  | `ai.style` | has options menu |
+| Change Tone | Rewrite |  | `ai.tone` | has options menu |
+| Edit with Instruction… | Rewrite | Ctrl+Alt+e | `ai.edit` |  |
+| Improve Writing | Rewrite |  | `ai.improve` |  |
+| Make It Sound Natural | Rewrite |  | `ai.natural` |  |
+| Match My Voice | Rewrite |  | `ai.matchVoice` |  |
+| Rewrite | Rewrite | Ctrl+Alt+Shift+r | `ai.rewrite` |  |
+| Simplify | Rewrite |  | `ai.simplify` |  |
+| Detect Language | Translate |  | `ai.detectLanguage` |  |
+| Side-by-Side Translation | Translate |  | `ai.bilingual` | has options menu |
+| Translate Document | Translate |  | `ai.translateDoc` | has options menu |
+| Translate Selection | Translate |  | `ai.translate` | has options menu |
+| Brainstorm Ideas… | Write |  | `ai.brainstorm` |  |
+| Continue Writing | Write | Ctrl+Alt+Shift+. | `ai.continue` |  |
+| Create Document from Brief… | Write |  | `ai.createDocument` |  |
+| Draft from Template | Write |  | `ai.fromTemplate` | has options menu |
+| Draft with AI… | Write | Ctrl+Alt+j | `ai.draft` |  |
+| Generate Outline… | Write |  | `ai.outline` |  |
+| Inline AI Command… | Write | Ctrl+Alt+Shift+i | `ai.command` |  |
+| Suggest Titles | Write |  | `ai.titles` |  |
 
 ## Developer (24)
 

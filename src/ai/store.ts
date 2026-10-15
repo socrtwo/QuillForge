@@ -96,10 +96,15 @@ export function reloadAiSettings(): void {
   listeners.forEach((f) => f());
 }
 
-try {
-  const bc = new BroadcastChannel('quillforge-ai');
-  bc.onmessage = () => reloadAiSettings();
-} catch { /* unsupported */ }
+// Settings changed in another tab (e.g. the OAuth callback tab): reload. Browser only, and unref'd so
+// tooling that imports this module under Node can exit.
+if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
+  try {
+    const bc = new BroadcastChannel('quillforge-ai');
+    bc.onmessage = () => reloadAiSettings();
+    (bc as unknown as { unref?: () => void }).unref?.();
+  } catch { /* unsupported */ }
+}
 
 // ------------------------------------------------------------------------------------------
 // Keys

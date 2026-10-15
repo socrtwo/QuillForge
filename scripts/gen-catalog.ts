@@ -6,7 +6,9 @@ import { DEFAULT_TABS, idsInTabs } from '../src/ui/ribbonLayout';
 
 const cmds = allCommands();
 const inTabs = idsInTabs();
-const order = ['Backstage', 'Home', 'Insert', 'Draw', 'Design', 'Layout', 'References', 'Mailings', 'Review', 'View', 'Tools', 'Developer', 'Help', 'Table', 'Picture'];
+const order = ['Backstage', 'Home', 'Insert', 'Draw', 'Design', 'Layout', 'References', 'Mailings', 'Review', 'View', 'Tools', 'AI', 'Developer', 'Help', 'Table', 'Picture'];
+// Any tab not listed above still gets a section, so new tabs never vanish from the catalog.
+for (const t of new Set(cmds.map((c) => c.tab))) if (t && !order.includes(t)) order.push(t);
 const tabName = (t: string) => (t === 'Backstage' ? 'File' : t === 'Table' ? 'Table Tools (contextual)' : t === 'Picture' ? 'Picture Format (contextual)' : t);
 const key = (k: string) => k.replace(/Mod/g, 'Ctrl').replace(/-/g, '+').replace(/\+\+$/, '+-');
 const lines: string[] = [];
