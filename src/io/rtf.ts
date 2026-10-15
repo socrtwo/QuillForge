@@ -854,7 +854,8 @@ class RtfReader {
     if (c.v) out.push(M.hidden.create());
     const f = this.fonts.get(c.f ?? this.deff);
     if (f && f.name && !/^(symbol|wingdings|webdings)/i.test(f.name)) out.push(M.font.create({ family: f.name }));
-    if (c.fs != null && c.fs > 0) out.push(M.size.create({ pt: c.fs / 2 }));
+    const fs = c.fs != null && c.fs > 0 ? c.fs : 24; // RTF default: 12pt
+    out.push(M.size.create({ pt: fs / 2 }));
     if (c.cf > 0 && this.colors[c.cf] && !(linkLook && /^#(0563c1|0000ff|0000ee|1155cc|0066cc)$/.test(this.colors[c.cf] || ''))) out.push(M.color.create({ color: this.colors[c.cf] }));
     if (c.hl > 0 && this.colors[c.hl]) out.push(M.highlight.create({ color: this.colors[c.hl] }));
     if (c.shade > 0 && this.colors[c.shade] && this.colors[c.shade] !== '#ffffff') out.push(M.shading.create({ color: this.colors[c.shade] }));
@@ -1454,7 +1455,7 @@ class RtfReader {
       case 'outlinelevel': pa.outline = p; return;
       case 's': pa.s = p; return;
       case 'intbl': pa.intbl = true; return;
-      case 'itap': pa.intbl = p > 0; return;
+      case 'itap': if (p > 0) pa.intbl = true; return;
       case 'ls': pa.ls = p; return;
       case 'ilvl': pa.ilvl = p; return;
       case 'cbpat': pa.cbpat = p; return;

@@ -18,7 +18,7 @@ import { stylesCss } from '../editor/styles';
 import type { ExportOptions } from './index';
 import {
   baseCss, canonicalStyleName, collectFootnotes, docSettings, docTitle, escapeHtml, finishDoc, makeBlob, markerFormat,
-  newSettings, prepareDoc, renderHtml, toHexColor, utf8Encode, bytesToBase64,
+  newSettings, normalizeImportedFormatting, prepareDoc, renderHtml, toHexColor, utf8Encode, bytesToBase64,
 } from './serialize';
 
 // ---------------------------------------------------------------------------------------------
@@ -631,7 +631,7 @@ export async function importHtml(data: ArrayBuffer, name: string): Promise<PMNod
     const lang = d.documentElement.getAttribute('lang');
     if (lang) settings.language = lang;
     cleanHtmlDom(d.body);
-    blocks = domToBlocks(d.body);
+    blocks = normalizeImportedFormatting(domToBlocks(d.body), settings, null);
   } catch { /* fall through with what we have */ }
   void name;
   return finishDoc(blocks, settings);

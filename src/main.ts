@@ -12,6 +12,7 @@ import { wordAt } from './editor/ops';
 import { launchFile, onFileOpened, onBackButton, isNative } from './platform/native';
 import { closeMenus, inDialog, toast } from './ui/dialog';
 import { kvKeys } from './util/store';
+import { allCommands, getCommand } from './commands/registry';
 
 installFonts();
 (window as any).__qfSerializer = DOMSerializer.fromSchema(schema);
@@ -23,6 +24,9 @@ app.ui = new Shell(app);
 app.rebuildKeyIndex();
 app.createTab();
 (window as any).qf = app;
+(window as any).__qfAllIds = allCommands().map((c) => c.id);
+(window as any).__qfGetCommand = getCommand;
+(window as any).__qfIO = () => import('./io');
 
 async function start() {
   const { openBuffer } = await import('./commands/file');

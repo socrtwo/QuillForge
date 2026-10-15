@@ -37,13 +37,12 @@ await run('desktop-home', { width: 1280, height: 800 }, async (page) => {
 await run('desktop-commands', { width: 1280, height: 800 }, async (page) => {
   const res = await page.evaluate(async () => {
     const app = window.qf;
-    const { allCommands } = await import('/src/commands/registry.ts').catch(() => ({ allCommands: null }));
     app.view.dispatch(app.state.tr.insertText('Sample text for formatting. '.repeat(40)));
     const out = [];
     for (const id of ['fmt.bold', 'fmt.italic', 'para.align.center', 'list.bullets', 'list.numbering', 'insert.pageBreak', 'insert.hr', 'review.trackChanges', 'view.print', 'view.mobile', 'view.web', 'view.outline', 'view.print', 'refs.updateToc', 'edit.selectAll', 'fmt.clear', 'view.formattingMarks', 'view.formattingMarks']) {
       try { app.exec(id); } catch (e) { out.push(id + ': ' + e.message); }
     }
-    return { out, count: document.querySelectorAll('[data-cmd]').length, hasAll: !!allCommands };
+    return { out, count: document.querySelectorAll('[data-cmd]').length };
   });
   if (res.out.length) throw new Error(res.out.join('; '));
   await page.waitForTimeout(800);

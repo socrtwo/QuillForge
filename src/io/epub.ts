@@ -18,7 +18,7 @@ import { stylesCss } from '../editor/styles';
 import type { ExportOptions } from './index';
 import { cleanHtmlDom, domToBlocks, parseHtmlDocument } from './html';
 import {
-  baseCss, collectFootnotes, docSettings, docTitle, escapeXml, extForMime, finishDoc, isoNow, makeBlob, mimeForName, newSettings,
+  baseCss, collectFootnotes, normalizeImportedFormatting, docSettings, docTitle, escapeXml, extForMime, finishDoc, isoNow, makeBlob, mimeForName, newSettings,
   parseDataUrl, prepareDoc, renderHtml, sniffImageMime, toDataUrl, toXhtml, uuid,
 } from './serialize';
 
@@ -338,7 +338,7 @@ export async function importEpub(data: ArrayBuffer, name: string): Promise<PMNod
     cleanHtmlDom(merged.body);
     // Remove EPUB navigation leftovers (page-list, landmarks) that may live in content documents.
     merged.body.querySelectorAll('nav').forEach((n) => n.remove());
-    return finishDoc(domToBlocks(merged.body), settings);
+    return finishDoc(normalizeImportedFormatting(domToBlocks(merged.body), settings, null), settings);
   } catch {
     return finishDoc([], settings);
   }

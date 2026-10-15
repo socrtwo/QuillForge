@@ -120,7 +120,17 @@ def([
     id: 'file.new', label: 'New Document', icon: 'note_add', tab: 'Backstage', group: 'New', keys: ['Mod-n'], popular: true, noRecord: true,
     run: (app, arg) => {
       const t = TEMPLATES.find((x) => x.id === arg);
-      if (t && t.id !== 'blank') { const tab = app.createTab(t.build(app.prefs.author), { title: t.name }); app.setViewMode(app.defaultViewMode(), tab); app.updateFields(tab); return; }
+      const prev = app.tab && isPristine(app.tab) ? app.tab : null;
+      if (t && t.id !== 'blank') {
+        const tab = app.createTab(t.build(app.prefs.author), { title: t.name });
+        app.updateFields(tab);
+        app.exec('refs.updateGenerated');
+        if (prev) app.closeTab(prev);
+        app.activate(tab);
+        app.ui.hideBackstage();
+        return;
+      }
+      if (prev) { app.ui.hideBackstage(); app.focus(); return; }
       const tab = app.createTab();
       try { const d = JSON.parse(localStorage.getItem('quillforge.defaultDesign') || 'null'); if (d) app.updateSettings((s) => { s.styleSet = d.styleSet; s.theme = d.theme; s.styles = d.styles; }, tab); } catch { /* */ }
       app.ui.hideBackstage();

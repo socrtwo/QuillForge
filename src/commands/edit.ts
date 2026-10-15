@@ -278,11 +278,15 @@ def([
       const blocks = textblocks(st.doc.cut(from, to)).filter((b) => b.node.type === N.paragraph);
       if (blocks.length < 2 && st.selection.empty) {
         const $h = st.selection.$head; const after = $h.after();
-        if (after < st.doc.content.size) { app.view.dispatch(st.tr.join(after).insertText(' ', after - 1)); }
+        const next = st.doc.resolve(after).nodeAfter;
+        if (after < st.doc.content.size && next && next.type === N.paragraph && $h.parent.type === N.paragraph) { app.view.dispatch(st.tr.join(after).insertText(' ', after - 1)); }
+        else toast('The next block is not a plain paragraph.');
         return;
       }
       const paras: PMNode[] = [];
-      st.doc.nodesBetween(from, to, (n) => { if (n.type === N.paragraph) { paras.push(n); return false; } return true; });
+      let nonPara = false;
+      st.doc.nodesBetween(from, to, (n) => { if (n.type === N.paragraph) { paras.push(n); return false; } if (n.isBlock && n.type !== N.paragraph) nonPara = true; return false; });
+      if (nonPara || paras.length < 2) { toast('Select two or more plain paragraphs to join.'); return; }
       const content: PMNode[] = [];
       paras.forEach((p, i) => { if (i) content.push(schema.text(' ')); p.content.forEach((c) => content.push(c)); });
       app.view.dispatch(st.tr.replaceWith(from, to, N.paragraph.create(paras[0].attrs, content)));
