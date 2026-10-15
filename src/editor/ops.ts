@@ -1,5 +1,5 @@
 /** Reusable editing operations used by commands. */
-import { EditorState, TextSelection, NodeSelection, AllSelection, type Transaction } from 'prosemirror-state';
+import { EditorState, Selection, TextSelection, NodeSelection, AllSelection, type Transaction } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { Fragment, Slice, type Mark, type MarkType, type Node as PMNode, type NodeType, type ResolvedPos } from 'prosemirror-model';
 import { toggleMark as pmToggleMark, setBlockType, wrapIn, lift } from 'prosemirror-commands';
@@ -107,7 +107,8 @@ export function clearCharFormatting(view: EditorView): void {
 
 export function clearAllFormatting(view: EditorView): void {
   clearCharFormatting(view);
-  setParaAttrs(view, () => ({ ...PARA_DEFAULTS, id: undefined }) as any);
+  // Keep the paragraph id: TOC entries and cross-references link to it.
+  setParaAttrs(view, (a) => ({ ...PARA_DEFAULTS, id: a.id }));
 }
 
 // --------------------------------------------------------------------------------------------
@@ -115,11 +116,15 @@ export function clearAllFormatting(view: EditorView): void {
 
 export function selectedParagraphs(state: EditorState): { node: PMNode; pos: number }[] {
   const out: { node: PMNode; pos: number }[] = [];
-  const { from, to } = state.selection;
-  state.doc.nodesBetween(from, to, (node, pos) => {
-    if (node.type === S.nodes.paragraph) { out.push({ node, pos }); return false; }
-    return true;
-  });
+  const seen = new Set<number>();
+  // Every range, so a CellSelection (Select Column/Table) covers all of its cells.
+  for (const r of state.selection.ranges) {
+    state.doc.nodesBetween(r.$from.pos, r.$to.pos, (node, pos) => {
+      if (node.type === S.nodes.paragraph) { if (!seen.has(pos)) { seen.add(pos); out.push({ node, pos }); } return false; }
+      return true;
+    });
+  }
+  out.sort((a, b) => a.pos - b.pos);
   if (!out.length) {
     const $f = state.selection.$from;
     for (let d = $f.depth; d >= 0; d--) {
@@ -269,12 +274,11 @@ export function insertBlock(view: EditorView, node: PMNode | PMNode[]): void {
     const after = start + nodes.reduce((a, n) => a + n.nodeSize, 0);
     if (after >= tr.doc.content.size || !tr.doc.resolve(after).nodeAfter) tr.insert(after, S.nodes.paragraph.create());
     tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(after + 1, tr.doc.content.size))));
+  } else if (nodes.length === 1) {
+    tr = tr.replaceSelectionWith(nodes[0]);
   } else {
-    tr = tr.replaceSelectionWith(nodes.length === 1 ? nodes[0] : nodes[0]);
-    if (nodes.length > 1) {
-      let p = tr.mapping.map(state.selection.to);
-      for (const n of nodes.slice(1)) { tr.insert(p, n); p += n.nodeSize; }
-    }
+    // Insert all blocks as one slice so the paragraph is split only once (no stray empty paragraphs).
+    tr = tr.replaceRange(state.selection.from, state.selection.to, new Slice(Fragment.fromArray(nodes), 0, 0));
   }
   view.dispatch(tr.scrollIntoView());
 }
@@ -305,45 +309,53 @@ export function transformCase(text: string, mode: CaseMode): string {
 /** Apply a text transform to every text node in the selection, preserving marks. */
 export function mapSelectedText(view: EditorView, fn: (text: string) => string, wholeRange = false): boolean {
   const { state } = view;
-  let { from, to } = state.selection;
-  if (from === to) {
-    const w = wordAt(state.selection.$from);
+  const sel = state.selection;
+  // Every selected range (one per cell for a CellSelection); a collapsed cursor means the word at it.
+  let ranges = sel.ranges.map((r) => ({ from: r.$from.pos, to: r.$to.pos })).filter((r) => r.to > r.from);
+  if (sel.empty) {
+    const w = wordAt(sel.$from);
     if (!w) return false;
-    from = w.from; to = w.to;
+    ranges = [{ from: w.from, to: w.to }];
   }
-  const tr = state.tr;
-  if (wholeRange) {
-    // Transform the selection as one string (needed for sentence/title case context).
-    const pieces: { pos: number; len: number; node: PMNode }[] = [];
-    state.doc.nodesBetween(from, to, (n, pos) => { if (n.isText) pieces.push({ pos, len: n.nodeSize, node: n }); });
-    const segs = pieces.map((p) => {
-      const s = Math.max(from, p.pos), e = Math.min(to, p.pos + p.len);
-      return { s, e, text: p.node.text!.slice(s - p.pos, e - p.pos), marks: p.node.marks };
-    });
-    const joined = segs.map((s) => s.text).join('\u0000');
-    const outText = fn(joined).split('\u0000');
-    for (let i = segs.length - 1; i >= 0; i--) {
-      const seg = segs[i];
-      if (outText[i] !== undefined && outText[i] !== seg.text && outText[i].length > 0) tr.replaceWith(seg.s, seg.e, S.text(outText[i], seg.marks));
-    }
-  } else {
-    const segs: { s: number; e: number; text: string; marks: readonly Mark[] }[] = [];
+  type Seg = { s: number; e: number; text: string; marks: readonly Mark[] };
+  const edits: { seg: Seg; text: string }[] = [];
+  const seen = new Set<number>();
+  for (const { from, to } of ranges) {
+    const segs: Seg[] = [];
     state.doc.nodesBetween(from, to, (n, pos) => {
       if (!n.isText) return;
       const s = Math.max(from, pos), e = Math.min(to, pos + n.nodeSize);
+      if (e <= s || seen.has(s)) return;
+      seen.add(s);
       segs.push({ s, e, text: n.text!.slice(s - pos, e - pos), marks: n.marks });
     });
-    for (let i = segs.length - 1; i >= 0; i--) {
-      const seg = segs[i];
-      const t = fn(seg.text);
-      if (t !== seg.text) {
-        if (t.length) tr.replaceWith(seg.s, seg.e, S.text(t, seg.marks)); else tr.delete(seg.s, seg.e);
-      }
+    let outs: string[] | null = null;
+    if (wholeRange) {
+      // Transform the range as one string (needed for sentence/title case context) and slice the
+      // result back by the original segment offsets. Adjacent text nodes join directly, so a word
+      // split by formatting stays one word; separate blocks, breaks and atoms join with a newline.
+      let joined = '';
+      const offs = segs.map((sg, i) => {
+        if (i && segs[i - 1].e !== sg.s) joined += '\n';
+        const off = joined.length;
+        joined += sg.text;
+        return off;
+      });
+      const whole = fn(joined);
+      if (whole.length === joined.length) outs = segs.map((sg, i) => whole.slice(offs[i], offs[i] + sg.text.length));
     }
+    if (!outs) outs = segs.map((sg) => fn(sg.text));
+    segs.forEach((seg, i) => { if (outs![i] !== seg.text) edits.push({ seg, text: outs![i] }); });
+  }
+  const tr = state.tr;
+  for (const { seg, text } of edits.sort((a, b) => b.seg.s - a.seg.s)) {
+    if (text.length) tr.replaceWith(seg.s, seg.e, S.text(text, seg.marks)); else tr.delete(seg.s, seg.e);
   }
   if (!tr.docChanged) return false;
-  const nf = tr.mapping.map(from, -1), nt = tr.mapping.map(to, 1);
-  tr.setSelection(TextSelection.create(tr.doc, nf, nt));
+  if (sel.empty || sel instanceof TextSelection) {
+    const nf = tr.mapping.map(ranges[0].from, -1), nt = tr.mapping.map(ranges[ranges.length - 1].to, 1);
+    tr.setSelection(TextSelection.create(tr.doc, nf, nt));
+  } // Other selections (cell, node, all) are mapped by the transaction and stay intact.
   view.dispatch(tr);
   return true;
 }
@@ -393,7 +405,9 @@ export function selectAll(view: EditorView): void {
 /** Top-level block index range covered by the selection. */
 export function topLevelRange(state: EditorState): { start: number; end: number; from: number; to: number } {
   const { $from, $to } = state.selection;
-  const start = $from.index(0), end = $to.index(0);
+  const start = $from.index(0);
+  // A position between top-level blocks (the end of a NodeSelection) closes the block before it.
+  const end = $to.depth === 0 && $to.pos > $from.pos ? $to.index(0) - 1 : $to.index(0);
   const from = $from.depth === 0 ? $from.pos : $from.before(1);
   const to = $to.depth === 0 ? $to.pos : $to.after(1);
   return { start, end, from, to };
@@ -414,18 +428,23 @@ export function moveBlocks(view: EditorView, dir: -1 | 1): boolean {
     const target = from - prev.nodeSize;
     tr.delete(from, to);
     tr.insert(target, slice.content);
-    const shift = -prev.nodeSize;
-    tr.setSelection(TextSelection.create(tr.doc, sel.from + shift, sel.to + shift));
+    restoreMoved(tr, sel, -prev.nodeSize);
   } else {
     const next = doc.child(end + 1);
     tr.delete(from, to);
     const target = from + next.nodeSize;
     tr.insert(target, slice.content);
-    const shift = next.nodeSize;
-    tr.setSelection(TextSelection.create(tr.doc, sel.from + shift, sel.to + shift));
+    restoreMoved(tr, sel, next.nodeSize);
   }
   view.dispatch(tr.scrollIntoView());
   return true;
+}
+
+/** Re-create the selection (text, node, cell...) shifted along with the blocks it was in. */
+function restoreMoved(tr: Transaction, sel: Selection, shift: number): void {
+  const json = sel.toJSON();
+  for (const k of ['anchor', 'head', 'pos']) if (typeof json[k] === 'number') json[k] += shift;
+  try { tr.setSelection(Selection.fromJSON(tr.doc, json)); } catch { tr.setSelection(TextSelection.create(tr.doc, sel.anchor + shift, sel.head + shift)); }
 }
 
 export function duplicateBlocks(view: EditorView): void {

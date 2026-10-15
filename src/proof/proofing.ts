@@ -5,15 +5,27 @@ import { schema } from '../editor/schema';
 import { proofKey, type ProofIssue } from '../editor/plugins/decorations';
 
 let worker: Worker | null = null;
+let workerFailures = 0;
 let reqId = 0;
 const pending = new Map<number, (v: any) => void>();
+const EMPTY = { bad: [], suggestions: [] };
 
 function getWorker(): Worker | null {
   if (worker) return worker;
+  if (workerFailures >= 3) return null;
   try {
-    worker = new Worker(new URL('./spell.worker.ts', import.meta.url), { type: 'module' });
-    worker.onmessage = (e) => { const cb = pending.get(e.data.id); if (cb) { pending.delete(e.data.id); cb(e.data); } };
-    worker.onerror = () => { worker = null; };
+    const w = new Worker(new URL('./spell.worker.ts', import.meta.url), { type: 'module' });
+    w.onmessage = (e) => { const cb = pending.get(e.data.id); if (cb) { pending.delete(e.data.id); cb(e.data); } };
+    w.onerror = () => {
+      // A crashed or unloadable worker never answers: settle every waiting request with empty
+      // results so the proofing run finishes (and clears its running flag) instead of hanging.
+      workerFailures++;
+      if (worker === w) worker = null;
+      try { w.terminate(); } catch { /* */ }
+      for (const cb of pending.values()) cb(EMPTY);
+      pending.clear();
+    };
+    worker = w;
   } catch {
     worker = null;
   }
@@ -22,7 +34,7 @@ function getWorker(): Worker | null {
 
 function call(msg: Record<string, any>): Promise<any> {
   const w = getWorker();
-  if (!w) return Promise.resolve({ bad: [], suggestions: [] });
+  if (!w) return Promise.resolve(EMPTY);
   const id = ++reqId;
   return new Promise((res) => { pending.set(id, res); w.postMessage({ ...msg, id }); });
 }
@@ -61,7 +73,7 @@ const GRAMMAR_RULES: { re: RegExp; msg: string; fix?: (m: RegExpExecArray) => st
   { re: / {2,}(?=\S)/g, msg: 'Extra spaces between words', fix: () => [' '], rule: 'spaces' },
   { re: /\s+([,.;:!?])(?!\w)/g, msg: 'Space before punctuation', fix: (m) => [m[1]], rule: 'spacepunct' },
   { re: /\b(a)\s+([aeiou]\w+)/gi, msg: 'Use "an" before a vowel sound', fix: (m) => [`${m[1] === 'A' ? 'An' : 'an'} ${m[2]}`], rule: 'a-an' },
-  { re: /\b(an)\s+([bcdfgjklmnpqrstvwxyz]\w+)/gi, msg: 'Use "a" before a consonant sound', fix: (m) => [`${m[1] === 'An' ? 'A' : 'a'} ${m[2]}`], rule: 'a-an' },
+  { re: /\b(an)\s+([bcdfghjklmnpqrstvwxyz]\w+)/gi, msg: 'Use "a" before a consonant sound', fix: (m) => [`${m[1] === 'An' ? 'A' : 'a'} ${m[2]}`], rule: 'a-an' },
   { re: /\b(could|should|would|must|might) of\b/gi, msg: 'Did you mean "have"?', fix: (m) => [`${m[1]} have`], rule: 'of-have' },
   { re: /\b(alot)\b/gi, msg: '"A lot" is two words', fix: () => ['a lot'], rule: 'alot' },
   { re: /\b(irregardless)\b/gi, msg: 'Nonstandard; use "regardless"', fix: () => ['regardless'], rule: 'irregardless' },
@@ -82,6 +94,8 @@ export class Proofer {
   constructor(private app: App) {}
 
   schedule(tab: DocTab = this.app.active, delay = 1200) {
+    // Closed tabs and destroyed views are never proofed (or rescheduled) again.
+    if (!tab?.view || (tab.view as any).isDestroyed || !this.app.docs.includes(tab)) return;
     if (!this.app.prefs.spellcheck && !this.app.prefs.grammar) {
       if ((proofKey.getState(tab.view.state)?.issues.length || 0) > 0) tab.view.dispatch(tab.view.state.tr.setMeta(proofKey, []).setMeta('addToHistory', false));
       return;
@@ -131,7 +145,7 @@ export class Proofer {
               if (r.rule === 'repeat' && /^(had|that|is|do|very|bye|no|so|ha|go)$/i.test(m[1])) continue;
               if (r.rule === 'cap' && /\b(e\.g|i\.e|etc|vs|cf|al)\.\s+[a-z]$/i.test(s.text.slice(Math.max(0, m.index - 8), m.index + m[0].length))) continue;
               if (r.rule === 'a-an' && /^(uni|use|usu|one|eu|ur)/i.test(m[2])) continue;
-              if (r.rule === 'an' && /^h(our|onest|onor|eir)/i.test(m[2])) continue;
+              if (r.rule === 'a-an' && /^an$/i.test(m[1]) && /^h(our|onest|onor|eir)/i.test(m[2])) continue;
               const start = m.index + (r.rule === 'cap' ? m[0].length - 1 : 0);
               const end = m.index + m[0].length;
               if (s.noProof.has(start)) continue;

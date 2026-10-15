@@ -2,6 +2,7 @@
 import { isSafeExternalUrl } from './util/sanitize';
 import { normalizeTables } from './editor/normalize';
 import { EditorState, TextSelection, type Transaction } from 'prosemirror-state';
+import { DocAttrStep } from 'prosemirror-transform';
 import { EditorView } from 'prosemirror-view';
 import type { Node as PMNode } from 'prosemirror-model';
 import { schema, emptyDoc } from './editor/schema';
@@ -241,11 +242,15 @@ export class App {
   dispatch(tab: DocTab, tr: Transaction): void {
     const view = tab.view;
     const old = view.state;
-    if (tr.docChanged && !tr.getMeta('trackSkip') && !tr.getMeta('allowProtected')) {
+    // Protection applies to every content change (trackSkip only means "do not track this"), except
+    // explicitly allowed ones (field updates, Restrict Editing) and settings-only changes that leave
+    // the protection itself alone.
+    if (tr.docChanged && !tr.getMeta('allowProtected') && !this.isSettingsOnly(tab, tr)) {
       const s = tab.settings;
       if (s.protection.mode === 'readonly' || s.markedFinal) { this.blocked('This document is read-only. Use Review ▸ Restrict Editing to change protection.'); return; }
       if (s.protection.mode === 'comments' && !tr.getMeta('comment')) { this.blocked('Only comments are allowed in this document.'); return; }
       if (s.protection.mode === 'forms' && !tr.getMeta('form')) { this.blocked('Only form fields can be filled in.'); return; }
+      if (s.protection.mode === 'tracked' && tr.getMeta('trackSkip') && !tr.getMeta('comment')) { this.blocked('Only tracked changes are allowed in this document.'); return; }
     }
     const t = trackTransaction(tr, old, tab.settings.protection.mode === 'tracked');
     const next = old.apply(t);
@@ -255,13 +260,23 @@ export class App {
       const lastPos = this.editPositions[this.editPositions.length - 1];
       if (lastPos == null || Math.abs(t.mapping.map(lastPos) - head) > 200) { this.editPositions.push(head); if (this.editPositions.length > 20) this.editPositions.shift(); }
       else this.editPositions[this.editPositions.length - 1] = head;
-      if (!tab.dirty) { tab.dirty = true; this.ui.tabsChanged(); document.title = `${tab.displayName} • – QuillForge`; }
-      this.scheduleAutosave();
+      // noDirty: derived updates (field values refreshed on open) are not user edits.
+      if (!tr.getMeta('noDirty')) {
+        if (!tab.dirty) { tab.dirty = true; this.ui.tabsChanged(); document.title = `${tab.displayName} • – QuillForge`; }
+        this.scheduleAutosave();
+      }
       this.proofer.schedule(tab);
     }
     if (old.doc.attrs.settings !== next.doc.attrs.settings) this.applySettingsToDom(tab);
     if (t.docChanged || t.selectionSet || t.storedMarksSet || t.getMeta('refresh')) this.refresh();
     if (this.prefs.typewriter && (t.docChanged || t.selectionSet)) this.typewriterScroll(tab);
+  }
+
+  /** A transaction that only changes document settings without touching protection. */
+  private isSettingsOnly(tab: DocTab, tr: Transaction): boolean {
+    if (!tr.steps.every((st) => st instanceof DocAttrStep)) return false;
+    const before = tab.settings, after = normalizeSettings(tr.doc.attrs.settings);
+    return JSON.stringify(before.protection) === JSON.stringify(after.protection) && before.markedFinal === after.markedFinal;
   }
 
   private blocked(msg: string): void {
@@ -457,7 +472,7 @@ export class App {
       pages: info.pages, created: tab.created, saved: tab.saved, mergeRecord: merge, mergeIndex: s.mergePreview ?? undefined, doc: tab.view.state.doc,
     }, range);
     if (!updates.length) return;
-    const tr = applyFieldValues(tab.view.state.tr, updates).setMeta('trackSkip', true).setMeta('addToHistory', false).setMeta('allowProtected', true);
+    const tr = applyFieldValues(tab.view.state.tr, updates).setMeta('trackSkip', true).setMeta('addToHistory', false).setMeta('allowProtected', true).setMeta('noDirty', true);
     tab.view.dispatch(tr);
   }
 
@@ -481,9 +496,9 @@ export class App {
   // Autosave and drafts
 
   scheduleAutosave(): void {
-    if (!this.prefs.autosave) return;
-    clearTimeout(this.autosaveTimer);
-    this.autosaveTimer = setTimeout(() => this.saveDrafts(), Math.max(3, this.prefs.autosaveSeconds) * 1000);
+    // Throttle, not debounce: continuous typing must still save every few seconds.
+    if (!this.prefs.autosave || this.autosaveTimer) return;
+    this.autosaveTimer = setTimeout(() => { this.autosaveTimer = null; void this.saveDrafts(); }, Math.max(3, this.prefs.autosaveSeconds) * 1000);
   }
 
   async saveDrafts(): Promise<void> {

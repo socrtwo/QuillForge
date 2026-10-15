@@ -1,5 +1,5 @@
 /** Legal-blackline style document comparison producing tracked changes. */
-import type { Node as PMNode, Mark } from 'prosemirror-model';
+import { Fragment, type Node as PMNode, type Mark } from 'prosemirror-model';
 import { schema } from './schema';
 
 function lcsTable<T>(a: T[], b: T[], eq: (x: T, y: T) => boolean): Uint32Array[] {
@@ -35,14 +35,22 @@ export function diff<T>(a: T[], b: T[], eq: (x: T, y: T) => boolean): Op<T>[] {
   return out;
 }
 
-function tokens(node: PMNode): { text: string; marks: readonly Mark[] }[] {
-  const out: { text: string; marks: readonly Mark[] }[] = [];
+type Token = { text: string; marks: readonly Mark[]; node?: PMNode };
+
+function tokens(node: PMNode): Token[] {
+  const out: Token[] = [];
   node.forEach((c) => {
     if (c.isText) for (const t of c.text!.match(/\s+|[\p{L}\p{N}'’]+|[^\s\p{L}\p{N}]/gu) || []) out.push({ text: t, marks: c.marks });
-    else out.push({ text: '￼', marks: c.marks });
+    else out.push({ text: '￼', marks: c.marks, node: c });
   });
   return out;
 }
+
+/** Inline atoms (images, footnotes, fields...) are equal when they match apart from their marks. */
+const sameToken = (x: Token, y: Token) => x.text === y.text && (x.node ? !!y.node && x.node.mark([]).eq(y.node.mark([])) : !y.node);
+
+/** Whether a node's content can carry insertion/deletion marks (code blocks cannot). */
+const canMark = (node: PMNode, mark: Mark) => node.type.allowsMarkType(mark.type);
 
 /** Compare two documents; returns the revised document with insertions and deletions marked. */
 export function compareDocs(original: PMNode, revised: PMNode, author: string): PMNode {
@@ -57,30 +65,41 @@ export function compareDocs(original: PMNode, revised: PMNode, author: string): 
     const o = ops[k];
     if (o.op === 'eq') { out.push(o.b!); continue; }
     // Pair a deleted paragraph with a following inserted paragraph for a word-level diff.
-    if (o.op === 'del' && ops[k + 1]?.op === 'ins' && o.a!.isTextblock && ops[k + 1].b!.isTextblock) {
-      const a = o.a!, b = ops[k + 1].b!;
+    const nb = ops[k + 1]?.op === 'ins' ? ops[k + 1].b! : null;
+    if (o.op === 'del' && nb && o.a!.isTextblock && nb.isTextblock && canMark(nb, ins) && canMark(nb, del)) {
+      const a = o.a!, b = nb;
       const ta = tokens(a), tb = tokens(b);
-      const wops = diff(ta, tb, (x, y) => x.text === y.text);
+      const wops = diff(ta, tb, sameToken);
       const content: PMNode[] = [];
       for (const w of wops) {
         const t = w.op === 'del' ? w.a! : w.b!;
-        if (t.text === '￼') continue;
-        const marks = w.op === 'eq' ? t.marks : w.op === 'del' ? del.addToSet(t.marks) : ins.addToSet(t.marks);
+        const change = w.op === 'del' ? del : w.op === 'ins' ? ins : null;
+        // Keep inline atoms (images, footnotes...) as nodes, marked like the text around them.
+        if (t.node) { content.push(change ? t.node.mark(change.addToSet(t.node.marks)) : t.node); continue; }
+        const marks = change ? change.addToSet(t.marks) : t.marks;
         const last = content[content.length - 1];
         if (last && last.isText && last.marks.length === marks.length && last.marks.every((m, i) => m.eq(marks[i]))) content[content.length - 1] = schema.text(last.text! + t.text, marks);
         else content.push(schema.text(t.text, marks));
       }
-      out.push(b.type.create(b.attrs, content));
-      k++;
-      continue;
+      if (b.type.validContent(Fragment.from(content))) {
+        out.push(b.type.create(b.attrs, content));
+        k++;
+        continue;
+      }
     }
-    if (o.op === 'del') { out.push(o.a!.isTextblock ? markText(o.a!, del) : o.a!); continue; }
-    out.push(o.b!.isTextblock ? markText(o.b!, ins) : markText(o.b!, ins));
+    if (o.op === 'del') { out.push(markText(o.a!, del)); continue; }
+    out.push(markText(o.b!, ins));
   }
   return schema.node('doc', revised.attrs, out.length ? out : [schema.nodes.paragraph.create()]);
 }
 
 function markText(node: PMNode, mark: Mark): PMNode {
+  if (node.isTextblock && !canMark(node, mark)) {
+    // Code blocks cannot hold revision marks: an insertion stays as is, a deletion is shown as a
+    // struck-through paragraph so the old text is visible and Accept All removes it.
+    if (mark.type !== schema.marks.deletion) return node;
+    node = schema.nodes.paragraph.create(null, node.content);
+  }
   if (node.isTextblock) {
     const kids: PMNode[] = [];
     node.forEach((c) => kids.push(c.mark(mark.addToSet(c.marks))));

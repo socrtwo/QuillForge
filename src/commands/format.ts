@@ -231,7 +231,7 @@ const CASES: [CaseMode, string, string][] = [
 def({
   id: 'fmt.changeCase', label: 'Change Case', icon: 'match_case', tab: 'Home', group: 'Font', kind: 'menu', edits: true, keys: ['Shift-F3'],
   run: (app, arg) => {
-    if (arg) { mapSelectedText(v(app), (t) => transformCase(t, arg), arg === 'sentence' || arg === 'title'); return; }
+    if (arg) { mapSelectedText(v(app), (t) => transformCase(t, arg), arg === 'sentence' || arg === 'title' || arg === 'capitalize' || arg === 'toggle'); return; }
     // Cycle: lower → upper → capitalize (Shift+F3 behaviour)
     const t = app.state.doc.textBetween(app.state.selection.from, app.state.selection.to);
     const mode: CaseMode = t === t.toUpperCase() ? 'lower' : t === t.toLowerCase() ? 'capitalize' : 'upper';

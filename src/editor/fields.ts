@@ -184,6 +184,10 @@ function bookmarkInfo(doc: PMNode, name: string): { pos: number; text: string } 
   return out;
 }
 
+function ownValue(obj: object | null | undefined, key: string | null | undefined): unknown {
+  return obj && key != null && Object.hasOwn(obj, key) ? (obj as Record<string, unknown>)[key] : undefined;
+}
+
 /** Compute display values for every field in the document in one pass (SEQ needs order). */
 export function computeFields(ctx: FieldContext, onlyRange?: { from: number; to: number }): { pos: number; value: string }[] {
   const out: { pos: number; value: string }[] = [];
@@ -222,8 +226,9 @@ export function computeFields(ctx: FieldContext, onlyRange?: { from: number; to:
         case 'KEYWORDS': v = s.properties.keywords || ''; break;
         case 'COMMENTS': v = s.properties.comments || ''; break;
         case 'FILENAME': v = ctx.fileName; break;
-        case 'DOCPROPERTY': v = (s.properties as any)[arg?.toLowerCase()] ?? s.customProps[arg] ?? ''; break;
-        case 'DOCVARIABLE': v = s.variables[arg] ?? ''; break;
+        // Own keys only, so names like "constructor" or "__proto__" do not reach Object.prototype.
+        case 'DOCPROPERTY': v = String(ownValue(s.properties, arg?.toLowerCase()) ?? ownValue(s.customProps, arg) ?? ''); break;
+        case 'DOCVARIABLE': v = String(ownValue(s.variables, arg) ?? ''); break;
         case 'USERNAME': v = ctx.userName; break;
         case 'USERINITIALS': v = ctx.userInitials; break;
         case 'REF': v = bookmarkInfo(ctx.doc, arg)?.text ?? 'Error! Reference source not found.'; break;

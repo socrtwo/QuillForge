@@ -7,11 +7,12 @@ import { splitListItem, liftListItem, sinkListItem } from 'prosemirror-schema-li
 import { dropCursor } from 'prosemirror-dropcursor';
 import { gapCursor } from 'prosemirror-gapcursor';
 import { columnResizing, tableEditing, goToNextCell, fixTables, addRowAfter, isInTable } from 'prosemirror-tables';
+import { Fragment } from 'prosemirror-model';
 import { schema, PARA_DEFAULTS } from './schema';
 import { buildInputRules, autocorrectPlugin, type AutoFormatPrefs } from './autoformat';
 import { trackPlugin } from './plugins/trackChanges';
 import { paginationPlugin, type PageConfig } from './plugins/pagination';
-import { decoPlugins } from './plugins/decorations';
+import { decoPlugins, completeKey } from './plugins/decorations';
 import { resolveStyles } from './styles';
 import { normalizeSettings } from './settings';
 
@@ -63,11 +64,14 @@ function borderLineOnEnter(prefs: () => AutoFormatPrefs): PMCommand {
     const t = $from.parent.textContent;
     const map: Record<string, string> = { '---': 'solid', '***': 'dotted', '___': 'thick', '===': 'double', '~~~': 'wavy', '###': 'triple' };
     if (!(t in map) || $from.parentOffset !== t.length) return false;
+    const style = map[t];
+    const start = $from.before(), end = $from.after();
+    const hr = S.nodes.horizontal_rule.create({ style: style === 'thick' ? 'solid' : style === 'triple' ? 'double' : style, weight: style === 'thick' ? 3 : style === 'double' || style === 'triple' ? 3 : 1 });
+    const content = Fragment.from([hr, S.nodes.paragraph.create()]);
+    // Only where a rule can replace the paragraph as is (not as the first paragraph of a list item).
+    if (!$from.node(-1).canReplace($from.index(-1), $from.index(-1) + 1, content)) return false;
     if (dispatch) {
-      const style = map[t];
-      const start = $from.before(), end = $from.after();
-      const hr = S.nodes.horizontal_rule.create({ style: style === 'thick' ? 'solid' : style === 'triple' ? 'double' : style, weight: style === 'thick' ? 3 : style === 'double' || style === 'triple' ? 3 : 1 });
-      const tr = state.tr.replaceWith(start, end, [hr, S.nodes.paragraph.create()]);
+      const tr = state.tr.replaceWith(start, end, content);
       tr.setSelection(TextSelection.near(tr.doc.resolve(start + hr.nodeSize + 1)));
       dispatch(tr.scrollIntoView());
     }
@@ -175,8 +179,14 @@ export function buildPlugins(hooks: SetupHooks): Plugin[] {
     },
   });
 
+  const decos = decoPlugins({ wordCompletion: hooks.wordCompletion });
+  // Word completion accepts with Tab/Enter, so it must see keys before the keymaps (it passes
+  // every key through when no suggestion is showing).
+  const completion = decos.filter((p) => p.spec.key === completeKey);
+
   return [
     commandKeys,
+    ...completion,
     buildInputRules(hooks.autoformat),
     autocorrectPlugin(hooks.autoformat, hooks.replacements, hooks.onAutocorrect),
     slash,
@@ -190,7 +200,7 @@ export function buildPlugins(hooks: SetupHooks): Plugin[] {
     tableFix,
     trackPlugin({ author: hooks.author() }),
     paginationPlugin(hooks.pageConfig),
-    ...decoPlugins({ wordCompletion: hooks.wordCompletion }),
+    ...decos.filter((p) => !completion.includes(p)),
   ];
 }
 
@@ -207,9 +217,10 @@ export function keyName(e: KeyboardEvent): string | null {
   if (e.code === 'Equal') base = '=';
   if (e.code === 'Minus') base = '-';
   const parts: string[] = [];
-  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
-  if (e.ctrlKey && (!mac || !e.metaKey)) parts.push(mac ? 'Ctrl' : 'Mod');
+  const mac = isMac();
+  // On macOS Cmd is Mod and Ctrl stays a separate modifier (Ctrl+A/E/K are native line-editing keys).
   if (e.metaKey && mac) parts.push('Mod');
+  if (e.ctrlKey) parts.push(mac ? 'Ctrl' : 'Mod');
   if (e.altKey) parts.push('Alt');
   if (e.shiftKey) parts.push('Shift');
   parts.push(base);
@@ -217,19 +228,25 @@ export function keyName(e: KeyboardEvent): string | null {
   return parts.join('-');
 }
 
+function isMac(): boolean {
+  return typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+}
+
 export function canonicalKey(k: string): string {
   const parts = k.split('-');
   const base = parts.pop()!;
-  const mods = new Set(parts.map((p) => (p === 'Ctrl' || p === 'Cmd' || p === 'Meta' ? 'Mod' : p)));
+  // Ctrl means Mod everywhere except macOS, where it is its own modifier.
+  const mac = isMac();
+  const mods = new Set(parts.map((p) => (p === 'Cmd' || p === 'Meta' || (p === 'Ctrl' && !mac) ? 'Mod' : p)));
   const out: string[] = [];
-  for (const m of ['Mod', 'Alt', 'Shift']) if (mods.has(m)) out.push(m);
+  for (const m of ['Mod', 'Ctrl', 'Alt', 'Shift']) if (mods.has(m)) out.push(m);
   out.push(base.length === 1 ? base.toLowerCase() : base);
   return out.join('-');
 }
 
 export function prettyKey(k: string): string {
-  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
-  return k.split('-').map((p) => (p === 'Mod' ? (mac ? '⌘' : 'Ctrl') : p === 'Alt' ? (mac ? '⌥' : 'Alt') : p === 'Shift' ? (mac ? '⇧' : 'Shift') : p.length === 1 ? p.toUpperCase() : p)).join(mac ? '' : '+');
+  const mac = isMac();
+  return k.split('-').map((p) => (p === 'Mod' ? (mac ? '⌘' : 'Ctrl') : p === 'Ctrl' && mac ? '⌃' : p === 'Alt' ? (mac ? '⌥' : 'Alt') : p === 'Shift' ? (mac ? '⇧' : 'Shift') : p.length === 1 ? p.toUpperCase() : p)).join(mac ? '' : '+');
 }
 
 export { keydownHandler };
