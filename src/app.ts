@@ -45,6 +45,8 @@ export class DocTab {
   styleEl!: HTMLStyleElement;
   lastSettings: any = null;
   mergeIndex: number | null = null;
+  /** How this document was recovered from a damaged file, if it was. */
+  recovery: import('./io/recover').RecoveryReport | null = null;
   constructor(public app: App) {}
 
   get state(): EditorState { return this.view.state; }

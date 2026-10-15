@@ -59,6 +59,9 @@ export function renderBackstage(app: App, root: HTMLElement, page: string): void
       body.append(h('h1', null, 'Open'),
         card('Browse…', 'Open a file from this device, Drive, or any document provider', 'folder_open', () => app.exec('file.open')),
         card('Encrypted document…', 'Open a password-protected .qfde file', 'lock_open', () => app.exec('file.openEncrypted')),
+        card('Open and Repair…', 'Rebuild a damaged .docx, .doc or .odt and show what was recovered', 'healing', () => app.exec('file.openRepair')),
+        card('Recover Text from Any File…', 'Pull readable text out of any file, however damaged', 'text_snippet', () => app.exec('file.recoverText')),
+        card('Manual recovery options', 'AutoRecover folders, version history and other ways to find a lost document', 'support', () => app.exec('file.recoveryHelp')),
         card('Recover unsaved documents', 'Drafts saved automatically before a crash or close', 'restore_page', () => app.exec('file.recover')),
         h('h2', null, 'Recent'));
       recentList(app, body, true);

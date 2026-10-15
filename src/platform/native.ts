@@ -161,9 +161,10 @@ export async function onBackButton(cb: () => boolean): Promise<void> {
   App.addListener('backButton', () => { if (!cb()) App.minimizeApp(); });
 }
 
-export const OPEN_ACCEPT = '.docx,.docm,.dotx,.odt,.ott,.fodt,.rtf,.html,.htm,.md,.markdown,.txt,.epub,.qfd,.json';
+export const OPEN_ACCEPT = '.docx,.docm,.dotx,.dotm,.doc,.dot,.wbk,.asd,.odt,.ott,.fodt,.rtf,.html,.htm,.md,.markdown,.txt,.epub,.qfd,.json';
 export const OPEN_MIMES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.oasis.opendocument.text',
+  'application/msword', 'application/vnd.ms-word.document.macroEnabled.12',
   'application/rtf', 'text/rtf', 'text/html', 'text/markdown', 'text/plain', 'application/epub+zip', 'application/json', 'application/octet-stream', '*/*',
 ];

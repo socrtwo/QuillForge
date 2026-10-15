@@ -30,6 +30,8 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
                 <data android:mimeType="application/vnd.oasis.opendocument.text" />
+                <data android:mimeType="application/msword" />
+                <data android:mimeType="application/vnd.ms-word.document.macroEnabled.12" />
                 <data android:mimeType="application/rtf" />
                 <data android:mimeType="text/rtf" />
                 <data android:mimeType="text/plain" />
@@ -52,6 +54,9 @@
                 <data android:pathPattern=".*\\.docx" />
                 <data android:pathPattern=".*\\..*\\.docx" />
                 <data android:pathPattern=".*\\..*\\..*\\.docx" />
+                <data android:pathPattern=".*\\.doc" />
+                <data android:pathPattern=".*\\..*\\.doc" />
+                <data android:pathPattern=".*\\..*\\..*\\.doc" />
                 <data android:pathPattern=".*\\.odt" />
                 <data android:pathPattern=".*\\..*\\.odt" />
                 <data android:pathPattern=".*\\..*\\..*\\.odt" />

@@ -6,6 +6,7 @@
  *   export:  (doc: PMNode, opts: ExportOptions) => Promise<Blob>
  */
 import type { Node as PMNode } from 'prosemirror-model';
+import type { RecoveryReport } from './recover';
 
 export interface ExportOptions {
   fileName: string;
@@ -33,6 +34,11 @@ export const FORMATS: FormatDef[] = [
     id: 'docx', label: 'Word Document (.docx)', ext: ['docx', 'docm', 'dotx', 'dotm'], mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', canImport: true, canExport: true,
     import: async (d, n) => (await import('./docx-import')).importDocx(d, n),
     export: async (doc, o) => (await import('./docx-export')).exportDocx(doc, o),
+  },
+  {
+    id: 'doc', label: 'Word 97-2003 Document (.doc)', ext: ['doc', 'dot', 'wbk', 'asd'], mime: 'application/msword', canImport: true, canExport: false,
+    import: async (d, n) => (await import('./recover')).importDoc97(d, n),
+    note: 'Opens text and paragraph structure; save as .docx to keep it',
   },
   {
     id: 'odt', label: 'OpenDocument Text (.odt)', ext: ['odt', 'ott'], mime: 'application/vnd.oasis.opendocument.text', canImport: true, canExport: true,
@@ -91,6 +97,7 @@ export function formatById(id: string): FormatDef | undefined {
 export function sniffFormat(data: ArrayBuffer, name: string): FormatDef | undefined {
   const u8 = new Uint8Array(data.slice(0, 64));
   const head = String.fromCharCode(...u8);
+  if (u8[0] === 0xd0 && u8[1] === 0xcf && u8[2] === 0x11 && u8[3] === 0xe0) return formatById('doc');
   if (head.startsWith('PK')) {
     const byName = formatForName(name);
     if (byName && ['docx', 'odt', 'epub'].includes(byName.id)) return byName;
@@ -107,11 +114,52 @@ export function sniffFormat(data: ArrayBuffer, name: string): FormatDef | undefi
   return formatForName(name) || formatById('txt');
 }
 
-export async function importFile(data: ArrayBuffer, name: string): Promise<{ doc: PMNode; format: FormatDef }> {
+export interface ImportResult {
+  doc: PMNode;
+  format: FormatDef;
+  /** Present when the file was damaged and had to be recovered (or Open and Repair was used). */
+  recovery?: RecoveryReport;
+}
+
+/** Formats whose damaged files go through the recovery pipeline instead of failing. */
+const RECOVERABLE = ['docx', 'doc', 'odt', 'rtf', 'epub', 'fodt'];
+
+export async function importFile(data: ArrayBuffer, name: string, opts: { repair?: boolean; textOnly?: boolean } = {}): Promise<ImportResult> {
   const fmt = sniffFormat(data, name);
-  if (!fmt || !fmt.import) throw new Error(`Unsupported file type: ${name}`);
-  const doc = await fmt.import(data, name);
+  const recover = async (cause: unknown, force: boolean) => {
+    const { recoverDocument } = await import('./recover');
+    const report = await recoverDocument(data, name, { force, textOnly: opts.textOnly });
+    if (!report.doc) {
+      const why = report.notes.join(' ') || 'No recoverable content was found.';
+      throw new Error(cause instanceof Error ? `${cause.message}. ${why}` : why);
+    }
+    if (cause instanceof Error) report.notes.unshift(`Normal open failed: ${cause.message}`);
+    const kind = report.repaired?.kind || (fmt && RECOVERABLE.includes(fmt.id) ? fmt.id : 'docx');
+    return { doc: report.doc, format: formatById(kind) || formatById('docx')!, recovery: report };
+  };
+  if (opts.repair || opts.textOnly) return recover(null, true);
+  if (!fmt || !fmt.import) return recover(new Error(`Unsupported file type: ${name}`), false);
+  let doc: PMNode;
+  try {
+    doc = await fmt.import(data, name);
+  } catch (e) {
+    if (!RECOVERABLE.includes(fmt.id)) throw e;
+    return recover(e, false);
+  }
+  // A package that "opens" but yields nothing from a sizeable file is usually damaged inside.
+  if (RECOVERABLE.includes(fmt.id) && data.byteLength > 4096 && !doc.textContent.trim() && !hasAtoms(doc)) {
+    try {
+      const r = await recover(null, true);
+      if (r.doc.textContent.trim()) return r;
+    } catch { /* keep the empty document */ }
+  }
   return { doc, format: fmt };
+}
+
+function hasAtoms(doc: PMNode): boolean {
+  let found = false;
+  doc.descendants((n) => { if (found) return false; if (n.isAtom && n.type.name !== 'hard_break') found = true; return !found; });
+  return found;
 }
 
 export async function exportFile(doc: PMNode, formatId: string, opts: ExportOptions): Promise<Blob> {

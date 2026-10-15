@@ -14,6 +14,7 @@ import { listChanges, resolveChanges } from '../editor/plugins/trackChanges';
 import { DEFAULT_AUTOFORMAT, DEFAULT_REPLACEMENTS } from '../editor/autoformat';
 import { commandCount } from './registry';
 import { h } from '../ui/dom';
+import { showRecoveryReport, showManualRecovery, recoverySummary } from '../ui/recovery';
 
 const N = schema.nodes;
 
@@ -26,11 +27,28 @@ function isPristine(tab: DocTab): boolean {
   return !tab.dirty && !tab.uri && d.childCount === 1 && d.firstChild!.content.size === 0;
 }
 
-export async function openBuffer(app: App, data: ArrayBuffer, name: string, uri: string | null): Promise<DocTab | null> {
+async function openRecoveredText(app: App, text: string, name: string): Promise<void> {
+  const { textToDoc } = await import('../io/recover');
+  const base = name.replace(/\.[^.]+$/, '');
+  const tab = app.createTab(textToDoc(text, base), { title: `${base} (Recovered text)`, fileName: `${base} (Recovered text).docx`, format: 'docx', uri: null });
+  tab.dirty = true;
+  app.activate(tab);
+}
+
+export async function openBuffer(app: App, data: ArrayBuffer, name: string, uri: string | null, opts: { repair?: boolean; textOnly?: boolean } = {}): Promise<DocTab | null> {
   try {
-    const { doc, format } = await importFile(data, name);
+    if (opts.repair || opts.textOnly) toast(opts.textOnly ? `Recovering text from ${name}…` : `Repairing ${name}…`);
+    const { doc, format, recovery } = await importFile(data, name, opts);
+    if (recovery && recovery.mode === 'text' && recovery.bestKey === 'strings' && !opts.textOnly) {
+      const go = await confirmDialog('Only Text Fragments Recovered', `${name} is too badly damaged to open normally. Only loose text fragments (${recovery.bestText.length.toLocaleString()} characters) could be recovered. Open them in a new document?`, 'Open fragments', 'Cancel');
+      if (!go) { void showRecoveryReport(recovery); return null; }
+    }
     const cur = app.tab;
-    const meta = { title: name.replace(/\.[^.]+$/, ''), fileName: name, format: format.id, uri };
+    const base = name.replace(/\.[^.]+$/, '');
+    // A recovered document never writes back over the damaged original: Save asks for a new name.
+    const meta = recovery
+      ? { title: `${base} (Recovered)`, fileName: `${base} (Recovered).${format.ext[0] === 'doc' ? 'docx' : format.ext[0]}`, format: format.canExport ? format.id : 'docx', uri: null }
+      : { title: base, fileName: name, format: format.id, uri };
     let tab: DocTab;
     if (cur && isPristine(cur)) {
       Object.assign(cur, meta);
@@ -39,10 +57,17 @@ export async function openBuffer(app: App, data: ArrayBuffer, name: string, uri:
       tab = cur;
       app.ui.tabsChanged();
     } else tab = app.createTab(doc, meta);
-    addRecent(app, tab);
-    await kvSet('file:' + docKey(tab), { name, data, uri, when: Date.now() });
+    tab.recovery = recovery || null;
+    if (recovery) tab.dirty = true;
+    else {
+      addRecent(app, tab);
+      await kvSet('file:' + docKey(tab), { name, data, uri, when: Date.now() });
+    }
     app.activate(tab);
-    toast(`Opened ${name}`);
+    if (recovery) {
+      toast(`${name} was damaged. ${recoverySummary(recovery)}`, { action: 'Details', onAction: () => app.exec('file.recoveryReport'), ms: 9000 });
+    } else if (format.id === 'doc') toast(`Opened ${name}. Word 97-2003 files open as text and paragraphs; save as .docx to keep them.`, { ms: 6000 });
+    else toast(`Opened ${name}`);
     return tab;
   } catch (e: any) {
     console.error(e);
@@ -146,6 +171,41 @@ def([
       app.ui.hideBackstage();
     },
   },
+  {
+    id: 'file.openRepair', label: 'Open and Repair…', icon: 'healing', tab: 'Backstage', group: 'Open', noRecord: true,
+    tip: 'Open a damaged document: rebuild its package from raw bytes, repair its XML, and show what was recovered',
+    keywords: 'corrupt damaged recover fix broken',
+    run: async (app) => {
+      const f = await openDocument('*/*', ['*/*']);
+      if (!f) return;
+      const tab = await openBuffer(app, f.data, f.name, f.uri, { repair: true });
+      app.ui.hideBackstage();
+      if (tab?.recovery) await showRecoveryReport(tab.recovery, { openText: (t) => openRecoveredText(app, t, f.name) });
+    },
+  },
+  {
+    id: 'file.recoverText', label: 'Recover Text from Any File…', icon: 'text_snippet', tab: 'Backstage', group: 'Open', noRecord: true,
+    tip: 'Extract readable text from any file: damaged documents, .doc/.wbk/.asd/.tmp files, or unknown data',
+    keywords: 'corrupt salvage strings extract',
+    run: async (app) => {
+      const f = await openDocument('*/*', ['*/*']);
+      if (!f) return;
+      const tab = await openBuffer(app, f.data, f.name, null, { textOnly: true });
+      app.ui.hideBackstage();
+      if (tab?.recovery) toast(recoverySummary(tab.recovery), { action: 'Details', onAction: () => app.exec('file.recoveryReport') });
+    },
+  },
+  {
+    id: 'file.recoveryReport', label: 'Recovery Report', icon: 'fact_check', tab: 'Backstage', group: 'Open', noRecord: true,
+    tip: 'Show how the current document was recovered',
+    isEnabled: (app) => !!app.tab?.recovery,
+    run: async (app) => {
+      const r = app.tab?.recovery;
+      if (!r) { toast('This document was not recovered from a damaged file.'); return; }
+      await showRecoveryReport(r, { openText: (t) => openRecoveredText(app, t, r.fileName) });
+    },
+  },
+  { id: 'file.recoveryHelp', label: 'Manual Recovery Options', icon: 'support', tab: 'Backstage', group: 'Open', noRecord: true, tip: 'AutoRecover locations, version history, and other ways to get a lost document back', run: () => showManualRecovery() },
   {
     id: 'file.openRecent', label: 'Open Recent', icon: 'history', tab: 'Backstage', group: 'Open', kind: 'menu', noRecord: true,
     run: async (app, key) => {
