@@ -44,6 +44,9 @@ export class Shell {
   pane: { def: PaneDef; el: HTMLElement; opts: any } | null = null;
   statusMsg = '';
   private statusTimer: any;
+  private statsDoc: PMNode | null = null;
+  private statsWords = 0;
+  private statsChanges = 0;
 
   constructor(public app: App) {
     this.root = app.host;
@@ -380,7 +383,8 @@ export class Shell {
     clear(this.statusEl);
     const info = pageInfo(st);
     const paged = tab.viewMode === 'print';
-    const words = countWords(docText(st.doc));
+    if (this.statsDoc !== st.doc) { this.statsDoc = st.doc; this.statsWords = countWords(docText(st.doc)); this.statsChanges = listChanges(st.doc).length; }
+    const words = this.statsWords;
     const selWords = st.selection.empty ? 0 : countWords(selectedText(st));
     if (tab.sessionStartWords < 0) tab.sessionStartWords = words;
     const item = (text: string, onclick?: () => void, title?: string, cls = '') => h('button', { class: 'qf-status-item ' + cls, onclick, title: title || text, type: 'button' }, text);
@@ -397,7 +401,7 @@ export class Shell {
     const issues = proofKey.getState(st)?.issues.length || 0;
     if (app.prefs.spellcheck || app.prefs.grammar) this.statusEl.appendChild(item(issues ? `⚠ ${issues}` : '✓', () => app.exec('review.spelling'), issues ? `${issues} proofing issue(s)` : 'No proofing errors'));
     const tracking = trackKey.getState(st)?.enabled || app.settings.protection.mode === 'tracked';
-    const nChanges = listChanges(st.doc).length;
+    const nChanges = this.statsChanges;
     if (tracking || nChanges) this.statusEl.appendChild(item(tracking ? `Track Changes: On${nChanges ? ` (${nChanges})` : ''}` : `${nChanges} change(s)`, () => app.exec('review.trackChanges'), 'Toggle Track Changes', tracking ? 'qf-status-track' : ''));
     if (app.recording) this.statusEl.appendChild(item(app.recordingPaused ? '⏸ Paused' : '● REC', () => app.exec('dev.stopRecording'), 'Stop recording macro', 'qf-status-rec'));
     if (app.settings.protection.mode !== 'none' || app.settings.markedFinal) this.statusEl.appendChild(item('🔒', () => app.exec('review.restrictEditing'), 'Protection'));
