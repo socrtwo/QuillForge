@@ -128,14 +128,14 @@ export const PROVIDERS: ProviderDef[] = [
   // ---------------------------------------------------------------- local servers (free)
   {
     id: 'ollama', name: 'Ollama (local server)', kind: 'openai', baseUrl: 'http://localhost:11434/v1', needsKey: false,
-    fields: [{ key: 'baseUrl', label: 'Server address', placeholder: 'http://localhost:11434/v1', help: 'On another computer on your network: start Ollama with OLLAMA_HOST=0.0.0.0 and OLLAMA_ORIGINS=https://localhost (for this app) and use http://<computer-ip>:11434/v1.' }],
+    fields: [{ key: 'baseUrl', label: 'Server address', placeholder: 'http://localhost:11434/v1', help: 'Plain http:// works only for a server on this device (in the Android app: on the phone itself, for example in Termux). In a browser, also start Ollama with OLLAMA_ORIGINS set to this page\'s address (the Android and desktop apps are allowed by default). A server on another computer must be reached over https:// (for example behind a reverse proxy).' }],
     links: { download: 'https://ollama.com/download', docs: 'https://github.com/ollama/ollama/blob/main/docs/faq.md', free: 'https://ollama.com/library' },
     free: 'local', freeNote: 'Free open models on your own computer. Run "ollama pull qwen3" (or any model) first.',
     keyViewable: true, models: { fast: 'llama3.2', quality: 'qwen3' }, cors: 'local',
   },
   {
     id: 'lmstudio', name: 'LM Studio (local server)', kind: 'openai', baseUrl: 'http://localhost:1234/v1', needsKey: false,
-    fields: [{ key: 'baseUrl', label: 'Server address', placeholder: 'http://localhost:1234/v1', help: 'Turn on "Enable CORS" in LM Studio\'s server settings (or run: lms server start --cors).' }],
+    fields: [{ key: 'baseUrl', label: 'Server address', placeholder: 'http://localhost:1234/v1', help: 'Turn on "Enable CORS" in LM Studio\'s server settings (or run: lms server start --cors). Plain http:// works only for a server on this device; a server on another computer must be reached over https://.' }],
     links: { download: 'https://lmstudio.ai/', docs: 'https://lmstudio.ai/docs/app/api' },
     free: 'local', freeNote: 'Free open models on your own computer.',
     keyViewable: true, models: { fast: 'local-model', quality: 'local-model' }, cors: 'local',

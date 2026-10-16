@@ -93,6 +93,13 @@ export function compareDocs(original: PMNode, revised: PMNode, author: string): 
   return schema.node('doc', revised.attrs, out.length ? out : [schema.nodes.paragraph.create()]);
 }
 
+/** Block-level objects (rules, breaks, equations, generated blocks) record the change as an attribute. */
+function markLeaf(node: PMNode, mark: Mark): PMNode {
+  if (!node.type.spec.attrs?.change || node.isInline) return node;
+  const kind = mark.type === schema.marks.deletion ? 'deletion' : 'insertion';
+  return node.type.create({ ...node.attrs, change: { kind, author: mark.attrs.author, date: mark.attrs.date, id: mark.attrs.id } }, node.content, node.marks);
+}
+
 function markText(node: PMNode, mark: Mark): PMNode {
   if (node.isTextblock && !canMark(node, mark)) {
     // Code blocks cannot hold revision marks: an insertion stays as is, a deletion is shown as a
@@ -105,7 +112,7 @@ function markText(node: PMNode, mark: Mark): PMNode {
     node.forEach((c) => kids.push(c.mark(mark.addToSet(c.marks))));
     return node.type.create(node.attrs, kids, node.marks);
   }
-  if (node.isLeaf) return node;
+  if (node.isLeaf) return markLeaf(node, mark);
   const kids: PMNode[] = [];
   node.forEach((c) => kids.push(markText(c, mark)));
   return node.type.create(node.attrs, kids, node.marks);

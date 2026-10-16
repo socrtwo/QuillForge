@@ -4,6 +4,19 @@ import type { EditorView, NodeView, NodeViewConstructor } from 'prosemirror-view
 import { NodeSelection } from 'prosemirror-state';
 import katex from 'katex';
 import { sanitizeGeneratedHtml, escHtml } from '../util/sanitize';
+import { blockChangeDom } from './schema';
+
+/** Show a block-level tracked change (Compare) on a node view's own DOM. */
+function showChange(dom: HTMLElement, node: PMNode): void {
+  const c = node.attrs.change;
+  dom.classList.toggle('qf-chg-ins', c?.kind === 'insertion');
+  dom.classList.toggle('qf-chg-del', c?.kind === 'deletion');
+  if (!c) { dom.removeAttribute('data-change'); dom.removeAttribute('style'); return; }
+  const a = blockChangeDom(c);
+  dom.setAttribute('data-change', a['data-change']);
+  dom.setAttribute('style', a.style);
+  dom.title = a.title;
+}
 
 export interface NodeViewHooks {
   editMath: (view: EditorView, pos: number, node: PMNode) => void;
@@ -33,6 +46,7 @@ class MathView implements NodeView {
     this.dom.innerHTML = renderLatex(this.node.attrs.latex, this.display);
     this.dom.setAttribute('data-latex', this.node.attrs.latex);
     this.dom.title = 'Double-tap to edit equation';
+    if (this.display) showChange(this.dom, this.node);
   }
   update(node: PMNode) {
     if (node.type !== this.node.type) return false;
@@ -117,7 +131,9 @@ class ImageView implements NodeView {
       if (pos == null) return;
       const wpt = Math.round(this.img.offsetWidth * 0.75 * 10) / 10;
       const hpt = Math.round(this.img.offsetHeight * 0.75 * 10) / 10;
-      this.view.dispatch(this.view.state.tr.setNodeMarkup(pos, undefined, { ...this.node.attrs, width: wpt, height: hpt }).setSelection(NodeSelection.create(this.view.state.doc, pos)));
+      const tr = this.view.state.tr.setNodeMarkup(pos, undefined, { ...this.node.attrs, width: wpt, height: hpt });
+      // The selection must point into the changed document, not the one before the resize.
+      this.view.dispatch(tr.setSelection(NodeSelection.create(tr.doc, pos)));
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -206,6 +222,7 @@ class GenBlockView implements NodeView {
   }
   render() {
     this.dom.dataset.kind = this.node.attrs.kind;
+    showChange(this.dom, this.node);
     const label = escHtml(labelFor(this.node.attrs.kind));
     this.dom.innerHTML = (sanitizeGeneratedHtml(this.node.attrs.cache) || `<p class="qf-gen-empty">${label} — tap Update to generate</p>`) +
       `<div class="qf-gen-bar"><button type="button" data-act="update">↻ Update ${label}</button></div>`;

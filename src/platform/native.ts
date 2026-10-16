@@ -39,8 +39,8 @@ interface QuillNativePlugin {
   /** ClipboardManager text (foreground app only; Android 12+ shows a "pasted" notice). */
   readClipboard(): Promise<{ text?: string | null }>;
   writeClipboard(opts: { text: string; sensitive?: boolean }): Promise<void>;
-  /** One-shot http://127.0.0.1:<port>/ listener for OAuth redirects (OpenRouter PKCE). */
-  startLoopback(opts: { timeoutMs: number; successHtml?: string }): Promise<{ port: number }>;
+  /** One-shot http://127.0.0.1:<port>/ listener for OAuth redirects (OpenRouter PKCE); only requests for `path` count. */
+  startLoopback(opts: { timeoutMs: number; successHtml?: string; path?: string }): Promise<{ port: number }>;
   stopLoopback(): Promise<void>;
 }
 
@@ -74,6 +74,18 @@ async function iosWrite(blob: Blob, name: string): Promise<string> {
   const safe = name.replace(/[\\/:*?"<>|]/g, '_') || 'document';
   await Filesystem.writeFile({ path: safe, data: b64FromBuffer(await blob.arrayBuffer()), directory: Directory.Documents });
   return safe;
+}
+/** Save As on iOS has no picker: never replace another document's file, use "Name (2).ext" instead. */
+async function iosFreeName(name: string): Promise<string> {
+  const { Filesystem, Directory } = await import('@capacitor/filesystem');
+  const safe = name.replace(/[\\/:*?"<>|]/g, '_') || 'document';
+  const dot = safe.lastIndexOf('.');
+  const base = dot > 0 ? safe.slice(0, dot) : safe, ext = dot > 0 ? safe.slice(dot) : '';
+  for (let i = 1; i < 500; i++) {
+    const candidate = i === 1 ? safe : `${base} (${i})${ext}`;
+    try { await Filesystem.stat({ path: candidate, directory: Directory.Documents }); } catch { return candidate; }
+  }
+  return `${base} (${Date.now()})${ext}`;
 }
 
 export function b64FromBuffer(buf: ArrayBuffer): string {
@@ -113,7 +125,7 @@ export async function saveAs(blob: Blob, name: string): Promise<{ uri: string | 
     return { uri: r.uri || null, name: r.name || name };
   }
   if (isIOS()) {
-    const n = await iosWrite(blob, name);
+    const n = await iosWrite(blob, await iosFreeName(name));
     toastSaved(n);
     return { uri: IOS_PREFIX + n, name: n };
   }
@@ -124,8 +136,7 @@ export async function saveAs(blob: Blob, name: string): Promise<{ uri: string | 
       const w = await handle.createWritable();
       await w.write(blob);
       await w.close();
-      handles.set(handle.name, handle);
-      return { uri: 'fsa:' + handle.name, name: handle.name };
+      return { uri: 'fsa:' + (await handleId(handle)), name: handle.name };
     } catch (e: any) {
       if (e?.name === 'AbortError') return null;
     }
@@ -134,7 +145,19 @@ export async function saveAs(blob: Blob, name: string): Promise<{ uri: string | 
   return { uri: null, name };
 }
 
+/** File System Access handles by id. Names alone are not unique: two folders can hold "Report.docx". */
 const handles = new Map<string, any>();
+let handleSeq = 0;
+async function handleId(handle: any): Promise<string> {
+  // The same file saved again keeps its id (and so its recent-files and version-history entries).
+  for (const [id, h] of handles) {
+    try { if (await h.isSameEntry?.(handle)) { handles.set(id, handle); return id; } } catch { /* stale handle */ }
+  }
+  // Unique across sessions too: the uri also keys recent files and saved versions.
+  const id = `${Date.now().toString(36)}${(++handleSeq).toString(36)}:${handle.name}`;
+  handles.set(id, handle);
+  return id;
+}
 
 export async function writeBack(uri: string, blob: Blob): Promise<boolean> {
   if (uri.startsWith('fsa:')) {
@@ -268,8 +291,8 @@ export async function writeClipboardText(text: string, sensitive = false): Promi
   } catch { return false; }
 }
 
-export async function startOAuthLoopback(timeoutMs: number, successHtml?: string): Promise<number> {
-  return (await Native.startLoopback({ timeoutMs, successHtml })).port;
+export async function startOAuthLoopback(timeoutMs: number, successHtml?: string, path?: string): Promise<number> {
+  return (await Native.startLoopback({ timeoutMs, successHtml, path })).port;
 }
 export async function stopOAuthLoopback(): Promise<void> {
   try { await Native.stopLoopback(); } catch { /* not running */ }

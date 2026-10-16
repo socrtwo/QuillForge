@@ -27,7 +27,12 @@ export interface ChatRequest {
   provider?: string;
 }
 
-export interface ChatResult { text: string; model: string; provider: string; providerName: string; usage?: { in: number; out: number } }
+/** `truncated`: the answer stopped early (length limit, content filter), so it is not the whole text asked for. */
+export interface ChatResult { text: string; model: string; provider: string; providerName: string; usage?: { in: number; out: number }; truncated?: boolean }
+
+/** Finish reasons (OpenAI, Anthropic, Gemini) meaning the model did not end the answer itself. */
+const CUT = new Set(['length', 'content_filter', 'max_tokens', 'refusal', 'model_context_window_exceeded', 'MAX_TOKENS', 'SAFETY', 'RECITATION', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII', 'LANGUAGE']);
+const cutShort = (reason: unknown) => typeof reason === 'string' && CUT.has(reason);
 
 export class AiError extends Error {
   constructor(message: string, public code: 'no-provider' | 'auth' | 'quota' | 'model' | 'network' | 'cors' | 'aborted' | 'unsupported' | 'other' = 'other', public status?: number) { super(message); }
@@ -42,31 +47,58 @@ const isNativeApp = () => Capacitor.isNativePlatform() || !!desktopHttp;
 interface HttpReq { url: string; method?: 'GET' | 'POST'; headers: Record<string, string>; body?: unknown; signal?: AbortSignal }
 interface HttpRes { status: number; text: string }
 
-async function viaNative(r: HttpReq): Promise<HttpRes> {
-  if (desktopHttp) return desktopHttp({ url: r.url, method: r.method || 'GET', headers: r.headers, data: r.body });
-  const res = await CapacitorHttp.request({ url: r.url, method: r.method || 'GET', headers: r.headers, data: r.body, responseType: 'text', connectTimeout: 30000, readTimeout: 180000 });
-  return { status: res.status, text: typeof res.data === 'string' ? res.data : JSON.stringify(res.data) };
+/** Native requests cannot be canceled: Stop stops waiting for them, and the late answer is dropped. */
+function abortable<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return p;
+  if (signal.aborted) return Promise.reject(new AiError('Stopped', 'aborted'));
+  return new Promise<T>((resolve, reject) => {
+    const stop = () => reject(new AiError('Stopped', 'aborted'));
+    signal.addEventListener('abort', stop, { once: true });
+    p.then((v) => { signal.removeEventListener('abort', stop); resolve(v); }, (e) => { signal.removeEventListener('abort', stop); reject(e); });
+  });
+}
+
+async function viaNative(def: ProviderDef, r: HttpReq): Promise<HttpRes> {
+  if (r.signal?.aborted) throw new AiError('Stopped', 'aborted');
+  const req = desktopHttp
+    ? desktopHttp({ url: r.url, method: r.method || 'GET', headers: r.headers, data: r.body })
+    : CapacitorHttp.request({ url: r.url, method: r.method || 'GET', headers: r.headers, data: r.body, responseType: 'text', connectTimeout: 30000, readTimeout: 180000 })
+      .then((res) => ({ status: res.status, text: typeof res.data === 'string' ? res.data : JSON.stringify(res.data) }));
+  try {
+    return await abortable(req, r.signal);
+  } catch (e) {
+    if (e instanceof AiError) throw e;
+    throw networkError(def, e, r.url, true);
+  }
 }
 
 /** Plain request. Falls back to native HTTP in the app when the browser layer refuses. */
 async function http(def: ProviderDef, r: HttpReq): Promise<HttpRes> {
-  if (isNativeApp() && def.cors === 'no') return viaNative(r);
+  if (isNativeApp() && def.cors === 'no') return viaNative(def, r);
   try {
     const res = await fetch(r.url, { method: r.method || 'GET', headers: r.headers, body: r.body == null ? undefined : JSON.stringify(r.body), signal: r.signal });
     return { status: res.status, text: await res.text() };
   } catch (e: any) {
     if (e?.name === 'AbortError') throw new AiError('Stopped', 'aborted');
-    if (isNativeApp()) return viaNative(r);
-    throw networkError(def, e);
+    // The desktop bridge only makes https requests: for a local http server keep the real error.
+    if (isNativeApp() && !(desktopHttp && /^http:\/\//i.test(r.url))) return viaNative(def, r);
+    throw networkError(def, e, r.url);
   }
 }
 
-function networkError(def: ProviderDef, e: unknown): AiError {
-  if (def.cors === 'no') return new AiError(`${def.name} cannot be called from a web browser (it does not allow cross-origin requests). Use the Android, iOS or desktop app, or another provider.`, 'cors');
-  if (def.kind === 'openai' && /localhost|127\.0\.0\.1|192\.168\.|10\./.test(def.baseUrl)) {
-    return new AiError(`Could not reach the local server. Is it running, and is cross-origin access enabled? (${String((e as Error)?.message || e)})`, 'network');
+function networkError(def: ProviderDef, e: unknown, url = def.baseUrl, native = false): AiError {
+  const why = String((e as Error)?.message || e);
+  if (def.cors === 'no' && !native) return new AiError(`${def.name} cannot be called from a web browser (it does not allow cross-origin requests). Use the Android, iOS or desktop app, or another provider.`, 'cors');
+  // The apps and https pages can use plain http only for a server on this device (Android
+  // cleartext policy, mixed content, the desktop content policy).
+  const httpPage = typeof location !== 'undefined' && location.protocol === 'http:';
+  if (/^http:\/\//i.test(url) && !/^http:\/\/(localhost|127\.0\.0\.1|10\.0\.2\.2|\[::1\])([:/]|$)/i.test(url) && !httpPage) {
+    return new AiError(`Could not reach ${url}: QuillForge can use plain http:// only for a server on this device (localhost). Serve the other computer's AI server over https instead. (${why})`, 'network');
   }
-  return new AiError(`Could not reach ${def.name}: ${String((e as Error)?.message || e)}. Check the connection.`, 'network');
+  if (def.kind === 'openai' && /localhost|127\.0\.0\.1|192\.168\.|10\./.test(url)) {
+    return new AiError(`Could not reach the local server. Is it running, and is cross-origin access enabled? (${why})`, 'network');
+  }
+  return new AiError(`Could not reach ${def.name}: ${why}. Check the connection.`, 'network');
 }
 
 /** Streaming SSE request; returns null if streaming is unavailable here (caller retries without). */
@@ -78,7 +110,7 @@ async function sse(def: ProviderDef, r: HttpReq, onEvent: (data: string, event: 
   } catch (e: any) {
     if (e?.name === 'AbortError') throw new AiError('Stopped', 'aborted');
     if (isNativeApp()) return null;
-    throw networkError(def, e);
+    throw networkError(def, e, r.url);
   }
   if (!res.ok || !res.body) return { status: res.status, text: await res.text() };
   const reader = res.body.getReader();
@@ -104,6 +136,7 @@ async function sse(def: ProviderDef, r: HttpReq, onEvent: (data: string, event: 
     }
   } catch (e: any) {
     if (e?.name === 'AbortError') throw new AiError('Stopped', 'aborted');
+    void reader.cancel().catch(() => undefined);
     throw e;
   }
   return { status: 200, text: '' };
@@ -144,18 +177,22 @@ async function openaiChat(rp: ResolvedProvider, model: string, req: ChatRequest)
 
   for (let attempt = 0; attempt < 3; attempt++) {
     let full = '';
+    let finish: unknown = null;
     let usage: { in: number; out: number } | undefined;
     if (req.onToken) {
       const r = await sse(def, { url, headers, body: { ...params, stream: true }, signal: req.signal }, (data) => {
         if (data === '[DONE]') return;
-        try {
-          const j = JSON.parse(data);
-          const d = j.choices?.[0]?.delta?.content;
-          if (typeof d === 'string' && d) { full += d; req.onToken!(d, full); }
-          if (j.usage) usage = { in: j.usage.prompt_tokens || 0, out: j.usage.completion_tokens || 0 };
-        } catch { /* keep-alive or partial */ }
+        let j: any;
+        try { j = JSON.parse(data); } catch { return; /* keep-alive or partial */ }
+        // Gateways (OpenRouter...) report failures inside a 200 stream.
+        if (j?.error) throw new AiError(`${def.name}: ${j.error.message || j.error.code || 'the answer failed'}`);
+        const c = j?.choices?.[0];
+        const d = c?.delta?.content;
+        if (typeof d === 'string' && d) { full += d; req.onToken!(d, full); }
+        if (c?.finish_reason) finish = c.finish_reason;
+        if (j?.usage) usage = { in: j.usage.prompt_tokens || 0, out: j.usage.completion_tokens || 0 };
       });
-      if (r && r.status === 200) return { text: full, model, provider: def.id, providerName: def.name, usage };
+      if (r && r.status === 200) return { text: full, model, provider: def.id, providerName: def.name, usage, truncated: cutShort(finish) };
       if (r) {
         const retry = adjustParams(params, r.text);
         if (retry) continue;
@@ -165,11 +202,12 @@ async function openaiChat(rp: ResolvedProvider, model: string, req: ChatRequest)
     const r = await http(def, { url, method: 'POST', headers, body: { ...params, stream: false }, signal: req.signal });
     if (r.status >= 200 && r.status < 300) {
       const j = JSON.parse(r.text);
+      if (j.error && !j.choices) throw new AiError(`${def.name}: ${j.error.message || j.error.code || 'the answer failed'}`);
       const msg = j.choices?.[0]?.message;
       const text = typeof msg?.content === 'string' ? msg.content : Array.isArray(msg?.content) ? msg.content.map((p: any) => p.text || '').join('') : '';
       if (j.usage) usage = { in: j.usage.prompt_tokens || 0, out: j.usage.completion_tokens || 0 };
       req.onToken?.(text, text);
-      return { text, model, provider: def.id, providerName: def.name, usage };
+      return { text, model, provider: def.id, providerName: def.name, usage, truncated: cutShort(j.choices?.[0]?.finish_reason) };
     }
     if (adjustParams(params, r.text)) continue;
     throw httpError(def, r.status, r.text, model);
@@ -204,6 +242,7 @@ async function anthropicChat(rp: ResolvedProvider, model: string, req: ChatReque
   if (req.temperature != null) body.temperature = req.temperature;
   const url = `${baseUrl}/messages`;
   let full = '';
+  let stop: unknown = null;
   let usage = { in: 0, out: 0 };
   if (req.onToken) {
     const r = await sse(def, { url, headers, body: { ...body, stream: true }, signal: req.signal }, (data) => {
@@ -212,10 +251,11 @@ async function anthropicChat(rp: ResolvedProvider, model: string, req: ChatReque
         if (j.type === 'content_block_delta' && j.delta?.type === 'text_delta') { full += j.delta.text; req.onToken!(j.delta.text, full); }
         if (j.type === 'message_start' && j.message?.usage) usage.in = j.message.usage.input_tokens || 0;
         if (j.type === 'message_delta' && j.usage) usage.out = j.usage.output_tokens || 0;
+        if (j.type === 'message_delta' && j.delta?.stop_reason) stop = j.delta.stop_reason;
         if (j.type === 'error') throw new AiError(`${def.name}: ${j.error?.message || 'stream error'}`);
       } catch (e) { if (e instanceof AiError) throw e; }
     });
-    if (r && r.status === 200) return { text: full, model, provider: def.id, providerName: def.name, usage };
+    if (r && r.status === 200) return { text: full, model, provider: def.id, providerName: def.name, usage, truncated: cutShort(stop) };
     if (r) throw httpError(def, r.status, r.text, model);
   }
   const r = await http(def, { url, method: 'POST', headers, body, signal: req.signal });
@@ -223,7 +263,7 @@ async function anthropicChat(rp: ResolvedProvider, model: string, req: ChatReque
   const j = JSON.parse(r.text);
   const text = (j.content || []).filter((c: any) => c.type === 'text').map((c: any) => c.text).join('');
   req.onToken?.(text, text);
-  return { text, model, provider: def.id, providerName: def.name, usage: { in: j.usage?.input_tokens || 0, out: j.usage?.output_tokens || 0 } };
+  return { text, model, provider: def.id, providerName: def.name, usage: { in: j.usage?.input_tokens || 0, out: j.usage?.output_tokens || 0 }, truncated: cutShort(j.stop_reason) };
 }
 
 async function geminiChat(rp: ResolvedProvider, model: string, req: ChatRequest): Promise<ChatResult> {
@@ -246,25 +286,33 @@ async function geminiChat(rp: ResolvedProvider, model: string, req: ChatRequest)
   if (Object.keys(gen).length) body.generationConfig = gen;
   const m = encodeURIComponent(model.replace(/^models\//, ''));
   let full = '';
+  let finish: unknown = null;
   let usage: { in: number; out: number } | undefined;
   const take = (j: any) => {
-    const parts = j.candidates?.[0]?.content?.parts || [];
+    if (j?.error) throw new AiError(`${def.name}: ${j.error.message || 'the answer failed'}`);
+    if (j?.promptFeedback?.blockReason) throw new AiError(`${def.name} blocked the request (${j.promptFeedback.blockReason}).`);
+    const c = j?.candidates?.[0];
+    const parts = c?.content?.parts || [];
     const t = parts.filter((p: any) => !p.thought).map((p: any) => p.text || '').join('');
-    if (j.usageMetadata) usage = { in: j.usageMetadata.promptTokenCount || 0, out: j.usageMetadata.candidatesTokenCount || 0 };
+    if (c?.finishReason) finish = c.finishReason;
+    if (j?.usageMetadata) usage = { in: j.usageMetadata.promptTokenCount || 0, out: j.usageMetadata.candidatesTokenCount || 0 };
     return t;
   };
   if (req.onToken) {
     const r = await sse(def, { url: `${baseUrl}/models/${m}:streamGenerateContent?alt=sse`, headers, body, signal: req.signal }, (data) => {
-      try { const t = take(JSON.parse(data)); if (t) { full += t; req.onToken!(t, full); } } catch { /* partial */ }
+      let j: any;
+      try { j = JSON.parse(data); } catch { return; /* partial */ }
+      const t = take(j);
+      if (t) { full += t; req.onToken!(t, full); }
     });
-    if (r && r.status === 200) return { text: full, model, provider: def.id, providerName: def.name, usage };
+    if (r && r.status === 200) return { text: full, model, provider: def.id, providerName: def.name, usage, truncated: cutShort(finish) };
     if (r) throw httpError(def, r.status, r.text, model);
   }
   const r = await http(def, { url: `${baseUrl}/models/${m}:generateContent`, method: 'POST', headers, body, signal: req.signal });
   if (r.status < 200 || r.status >= 300) throw httpError(def, r.status, r.text, model);
   const text = take(JSON.parse(r.text));
   req.onToken?.(text, text);
-  return { text, model, provider: def.id, providerName: def.name, usage };
+  return { text, model, provider: def.id, providerName: def.name, usage, truncated: cutShort(finish) };
 }
 
 async function builtinChat(model: string, req: ChatRequest): Promise<ChatResult> {
@@ -318,6 +366,8 @@ export async function chat(req: ChatRequest): Promise<ChatResult> {
     res = await localChat(model, req);
   } else res = await openaiChat(rp, model, req);
   recordUsage(res.usage?.in || 0, res.usage?.out || 0);
+  // An answer that arrives after Stop (a request that could not be canceled) is dropped.
+  if (req.signal?.aborted) throw new AiError('Stopped', 'aborted');
   return res;
 }
 

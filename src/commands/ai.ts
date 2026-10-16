@@ -11,7 +11,8 @@ import { dialectFor } from '../proof/proofing';
 import { aiSettings, saveAiSettings, resolveProvider } from '../ai/store';
 import { providerById } from '../ai/providers';
 import { chat, AiError, type ChatMessage, type ContentPart } from '../ai/client';
-import { selectionOrParagraph, documentText, textBefore, rangeText, cleanOutput, splitAlternatives, replaceRange, insertBelow, insertAtCursor, addComments, blocksFromText, dispatchAiEdit, diffText } from '../ai/apply';
+import { selectionOrParagraph, documentText, textBefore, rangeText, cleanOutput, splitAlternatives, replaceRange, insertBelow, insertAtCursor, addComments, blocksFromText, anchorSelection, anchorBelow, anchorRange, resolveRange, resolveSelection, findNode } from '../ai/apply';
+import type { Node as PMNode } from 'prosemirror-model';
 import { openDialog, toast, promptDialog, confirmDialog } from '../ui/dialog';
 import { selectedImage } from './picture';
 import { docKey } from './file';
@@ -113,7 +114,9 @@ export async function runFeature(app: App, f: AiFeature, arg?: string): Promise<
   if (!(await ensureProvider(app, `“${f.label.replace(/…$/, '')}” needs an AI provider. Choose one below; free options are at the top.`))) return;
   if (!(await privacyCheck())) return;
   const s = aiSettings();
-  const st = app.state;
+  // The answer goes to this document, even if another one is active when it arrives.
+  const tab = app.tab;
+  const st = tab.view.state;
 
   // Option menus (tone, language…) when run without an argument (palette, QAT, shortcut).
   if (f.options && arg == null) {
@@ -187,6 +190,12 @@ export async function runFeature(app: App, f: AiFeature, arg?: string): Promise<
   const { aiBusy, aiIdle, showAiPreview, paneResult, aiAuthor } = await import('../ui/aiPane');
   const author = aiAuthor();
   const track = s.trackAsRevisions;
+  // Where the answer goes, remembered by the blocks holding it: the user may type meanwhile.
+  const at = anchorSelection(tab.view.state), below = anchorBelow(tab.view.state);
+  const rangeAt = range ? anchorRange(tab.view.state.doc, range) : null;
+  const cutNote = () => toast('The answer was cut off (length limit or content filter); check its end.', { ms: 7000 });
+  /** The document changed where the answer was to go (or was closed): show it in the AI pane. */
+  const toPane = (text: string) => { paneResult(app, f.label.replace(/…$/, ''), true).done(text); toast('The text changed while the AI was working, so the answer is shown in the AI pane instead.', { ms: 7000 }); };
 
   try {
     switch (f.output) {
@@ -200,9 +209,14 @@ export async function runFeature(app: App, f: AiFeature, arg?: string): Promise<
           markdown: f.markdown,
           generate: async (onToken, signal) => {
             const r = await chat({ ...base, signal, onToken: (_d, full) => onToken(f.alternatives ? full.split(/\n\s*-{3,}\s*\n/)[0] : full) });
+            if (r.truncated) cutNote();
             return f.alternatives ? splitAlternatives(r.text) : [r.text];
           },
-          refine: async (current, instruction) => (await chat({ ...base, messages: [...messages, { role: 'assistant', content: current }, { role: 'user', content: `Revise that: ${instruction}. Return only the revised text.` }] })).text,
+          refine: async (current, instruction) => {
+            const r = await chat({ ...base, messages: [...messages, { role: 'assistant', content: current }, { role: 'user', content: `Revise that: ${instruction}. Return only the revised text.` }] });
+            if (r.truncated) cutNote();
+            return r.text;
+          },
         });
         return;
       }
@@ -212,6 +226,7 @@ export async function runFeature(app: App, f: AiFeature, arg?: string): Promise<
         try {
           const r = await chat({ ...base, signal: ctl.signal, onToken: (_d, full) => out.update(full) });
           out.done(cleanOutput(r.text, { keepMarkdown: true }));
+          if (r.truncated) cutNote();
         } finally { aiIdle(ctl); }
         return;
       }
@@ -224,8 +239,10 @@ export async function runFeature(app: App, f: AiFeature, arg?: string): Promise<
         try { r = await chat({ ...base, signal: ctl.signal }); } finally { aiIdle(ctl); }
         const result = cleanOutput(r.text, { keepMarkdown: !!f.markdown || f.output === 'comments' });
         if (!result) { toast('The AI returned nothing.'); return; }
-        if (f.output === 'insertBelow') await insertBelow(app, result, { track, author, markdown: f.markdown, heading: f.id === 'ai.keyPoints' ? 'Key points' : undefined });
-        else if (f.output === 'cursor') await insertAtCursor(app, result, { track, author, markdown: f.markdown });
+        if (r.truncated) cutNote();
+        const open = app.docs.includes(tab);
+        if (f.output === 'insertBelow') { if (!open || !(await insertBelow(app, result, { track, author, markdown: f.markdown, heading: f.id === 'ai.keyPoints' ? 'Key points' : undefined, tab, below }))) toPane(result); }
+        else if (f.output === 'cursor') { if (!open || !(await insertAtCursor(app, result, { track, author, markdown: f.markdown, tab, at }))) toPane(result); }
         else if (f.output === 'newDoc') {
           const blocks = await blocksFromText(result, true);
           const title = `${f.label.replace(/…$/, '')}${arg ? ` (${arg})` : ''}`;
@@ -236,7 +253,8 @@ export async function runFeature(app: App, f: AiFeature, arg?: string): Promise<
         } else {
           const items = parseCommentJson(result);
           if (!items.length) { const p = paneResult(app, f.label, true); p.done(result); toast('The notes could not be matched to the text; they are shown in the AI pane.'); return; }
-          const placed = addComments(app, items, author);
+          if (!open) { toPane(result); return; }
+          const placed = addComments(app, items, author, tab);
           toast(`${placed} comment${placed === 1 ? '' : 's'} added${placed < items.length ? ` (${items.length - placed} could not be matched to the text)` : ''}`);
           if (placed) app.ui.openPane('comments');
         }
@@ -250,7 +268,12 @@ export async function runFeature(app: App, f: AiFeature, arg?: string): Promise<
         const ctl = aiBusy(`${f.label}…`);
         let r;
         try { r = await chat({ ...base, signal: ctl.signal }); } finally { aiIdle(ctl); }
-        if (range) await replaceRange(app, range, cleanOutput(r.text, { keepMarkdown: f.markdown }), { track, author, markdown: f.markdown });
+        const out = cleanOutput(r.text, { keepMarkdown: f.markdown });
+        // A cut-off answer would replace the whole range with part of it: show it instead.
+        const where = rangeAt && !r.truncated && app.docs.includes(tab) ? resolveRange(tab.view.state.doc, rangeAt) : null;
+        if (where) await replaceRange(app, where, out, { track, author, markdown: f.markdown, tab });
+        else if (r.truncated) { paneResult(app, f.label.replace(/…$/, ''), true).done(out); cutNote(); }
+        else if (range) toPane(out);
         return;
       }
     }
@@ -259,36 +282,46 @@ export async function runFeature(app: App, f: AiFeature, arg?: string): Promise<
   }
 }
 
-/** Proofread/OCR fixes: per paragraph batches, applied as minimal tracked edits by "AI (model)". */
-async function trackedEdit(app: App, f: AiFeature, system: string, range?: { from: number; to: number }): Promise<void> {
+/**
+ * Proofread/OCR fixes: per paragraph batches, applied as minimal tracked edits by "AI (model)".
+ * Each paragraph is found again by identity when its answer arrives (earlier corrections and the
+ * user's typing move it); a paragraph edited in the meantime is skipped.
+ */
+export async function trackedEdit(app: App, f: AiFeature, system: string, range?: { from: number; to: number }): Promise<void> {
   const { aiBusy, aiIdle, aiAuthor } = await import('../ui/aiPane');
-  const st = app.state;
+  const tab = app.tab;
+  const st = tab.view.state;
+  const v = variety(app);
   const from = range?.from ?? 0, to = range?.to ?? st.doc.content.size;
-  const blocks: { pos: number; text: string }[] = [];
+  type Para = { pos: number; node: PMNode; text: string };
+  const blocks: Para[] = [];
   st.doc.nodesBetween(from, to, (n, pos) => {
-    if (n.isTextblock) { const t = n.textBetween(0, n.content.size, '', (x) => (x.type === N.hard_break ? ' ' : '')); if (t.trim()) blocks.push({ pos, text: t }); return false; }
+    // Line breaks travel as \n (the prompt keeps them), so a correction never turns them into spaces.
+    if (n.isTextblock) { const t = n.textBetween(0, n.content.size, '', (x) => (x.type === N.hard_break ? '\n' : '')); if (t.trim()) blocks.push({ pos, node: n, text: t }); return false; }
     return true;
   });
   if (!blocks.length) { toast('Nothing to check.'); return; }
-  const batches: { pos: number; text: string }[][] = [];
-  let cur: { pos: number; text: string }[] = [], size = 0;
+  const batches: Para[][] = [];
+  let cur: Para[] = [], size = 0;
   for (const b of blocks) { if (size + b.text.length > 3500 && cur.length) { batches.push(cur); cur = []; size = 0; } cur.push(b); size += b.text.length; }
   if (cur.length) batches.push(cur);
   const ctl = aiBusy(`${f.label}… 0 of ${blocks.length} paragraphs`);
   const author = aiAuthor();
-  let changed = 0, done = 0;
+  const ask = (text: string, maxTokens: number) => chat({ messages: [{ role: 'system', content: system }, { role: 'user', content: f.prompt({ text, lang: 'auto', n: 1, variety: v }) }], tier: f.tier, temperature: 0, signal: ctl.signal, maxTokens });
+  let changed = 0, done = 0, skipped = 0, stopped = false;
   try {
     for (const batch of batches) {
       if (ctl.signal.aborted) break;
       const joined = batch.map((b) => b.text).join('\n\n');
-      const r = await chat({ messages: [{ role: 'system', content: system }, { role: 'user', content: f.prompt({ text: joined, lang: 'auto', n: 1, variety: variety(app) }) }], tier: f.tier, temperature: 0, signal: ctl.signal, maxTokens: Math.max(512, Math.ceil(joined.length / 2)) });
+      const r = await ask(joined, Math.max(512, Math.ceil(joined.length / 2)));
       let outs = cleanOutput(r.text).split(/\n\s*\n/);
-      if (outs.length !== batch.length) {
-        // Paragraph count changed: fall back to one request per paragraph for this batch.
+      if (r.truncated || outs.length !== batch.length) {
+        // Cut off, or the paragraph count changed: one request per paragraph for this batch. A
+        // paragraph whose answer is cut off is left alone (its missing end is not a correction).
         outs = [];
         for (const b of batch) {
-          const one = await chat({ messages: [{ role: 'system', content: system }, { role: 'user', content: f.prompt({ text: b.text, lang: 'auto', n: 1, variety: variety(app) }) }], tier: f.tier, temperature: 0, signal: ctl.signal, maxTokens: Math.max(256, b.text.length) });
-          outs.push(cleanOutput(one.text).replace(/\n+/g, ' '));
+          const one = await ask(b.text, Math.max(256, b.text.length));
+          outs.push(one.truncated ? '' : cleanOutput(one.text));
         }
       }
       // Apply from the last paragraph backward so earlier positions stay valid.
@@ -296,11 +329,9 @@ async function trackedEdit(app: App, f: AiFeature, system: string, range?: { fro
         const b = batch[k];
         const fixed = outs[k]?.trim();
         if (!fixed || fixed === b.text.trim()) continue;
-        const edits = diffText(b.text, fixed);
-        if (!edits || !edits.length) continue;
-        const node = app.state.doc.nodeAt(b.pos);
-        if (!node || !node.isTextblock) continue;
-        const ok = await replaceRange(app, { from: b.pos + 1, to: b.pos + 1 + node.content.size }, fixed, { track: true, author });
+        const at = app.docs.includes(tab) ? findNode(tab.view.state.doc, b.node, b.pos) : null;
+        if (at == null) { skipped++; continue; }
+        const ok = await replaceRange(app, { from: at + 1, to: at + 1 + b.node.content.size }, fixed, { track: true, author, tab, inBlock: true });
         if (ok) changed++;
       }
       done += batch.length;
@@ -308,13 +339,16 @@ async function trackedEdit(app: App, f: AiFeature, system: string, range?: { fro
       if (label) label.textContent = `${f.label}… ${done} of ${blocks.length} paragraphs`;
     }
   } catch (e) {
+    stopped = true;
     fail(e, app);
   } finally {
     aiIdle(ctl);
   }
-  toast(changed ? `${changed} paragraph${changed === 1 ? '' : 's'} corrected as tracked changes. Review them with Review ▸ Next Change.` : 'No corrections were needed.', { ms: 7000 });
+  const extra = skipped ? ` ${skipped} paragraph${skipped === 1 ? ' was' : 's were'} edited while checking and left alone.` : '';
+  if (changed) toast(`${changed} paragraph${changed === 1 ? '' : 's'} corrected as tracked changes. Review them with Review ▸ Next Change.${extra}`, { ms: 7000 });
+  else if (ctl.signal.aborted) { if (!stopped) toast('Stopped'); }
+  else if (!stopped) toast(`No corrections were needed.${extra}`, { ms: 7000 });
   if (changed) app.ui.openPane('revisions');
-  void dispatchAiEdit;
 }
 
 // ------------------------------------------------------------------------------------------
@@ -496,6 +530,7 @@ async function generateImage(app: App): Promise<void> {
   const prompt = await promptDialog('Generate Image', 'Describe the picture', '', { type: 'textarea', rows: 3 } as any);
   if (!prompt?.trim()) return;
   const { aiBusy, aiIdle } = await import('../ui/aiPane');
+  const tab = app.tab, at = anchorSelection(tab.view.state);
   const ctl = aiBusy('Generating image…');
   try {
     const res = await fetch(`${rp.baseUrl}/images/generations`, {
@@ -511,7 +546,12 @@ async function generateImage(app: App): Promise<void> {
     if (!url) throw new AiError('No image was returned.');
     const src = url.startsWith('data:') ? url : await imageDataUrl(url);
     const node = N.image.create({ src, alt: prompt.trim().slice(0, 200), width: 400 });
-    app.tab.view.dispatch(app.state.tr.replaceSelectionWith(node).scrollIntoView());
+    if (ctl.signal.aborted) return;
+    // Into the document it was asked for, where the caret was (or is now, if that text changed).
+    if (!app.docs.includes(tab)) { toast('The document was closed before the picture arrived.'); return; }
+    const view = tab.view;
+    const sel = resolveSelection(view.state.doc, at) || view.state.selection;
+    view.dispatch(view.state.tr.setSelection(sel).replaceSelectionWith(node).scrollIntoView());
   } catch (e) {
     fail(e, app);
   } finally {

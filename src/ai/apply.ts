@@ -5,11 +5,16 @@
  * words that did not change survives, inline objects (images, footnotes, fields) are never
  * deleted, and tracked changes show individual edits instead of one large replacement.
  * Multi-paragraph and structured output (lists, tables, headings) is parsed as Markdown.
+ *
+ * Answers arrive after a network wait, while the user may keep typing or switch documents, so
+ * edits go to the tab the command started in, at positions found again by the blocks that held
+ * them (see Anchor); when such a block was edited meanwhile, the edit is not applied.
  */
-import { Fragment, Slice, type Node as PMNode } from 'prosemirror-model';
-import { TextSelection, type Transaction } from 'prosemirror-state';
-import type { App } from '../app';
+import { Fragment, Slice, type Mark, type Node as PMNode } from 'prosemirror-model';
+import { NodeSelection, TextSelection, type EditorState, type Selection, type Transaction } from 'prosemirror-state';
+import type { App, DocTab } from '../app';
 import { schema } from '../editor/schema';
+import { normalizeSettings } from '../editor/settings';
 import { trackKey } from '../editor/plugins/trackChanges';
 
 const S = schema;
@@ -102,11 +107,100 @@ export async function blocksFromText(text: string, markdown: boolean): Promise<P
 }
 
 // ------------------------------------------------------------------------------------------
+// Where answers go
+
+export interface AiEditOpts {
+  track: boolean; author: string; markdown?: boolean;
+  /** Default: the active tab. */
+  tab?: DocTab;
+  /** The text is one paragraph's new text (line breaks are its line breaks): never split blocks. */
+  inBlock?: boolean;
+}
+
+const viewOf = (app: App, tab?: DocTab) => (tab || app.tab).view;
+
+/** A position remembered by the block that holds it, so it can be found again after edits elsewhere. */
+export interface Anchor { doc: PMNode; pos: number; node: PMNode | null; nodePos: number }
+
+/** Remember `pos`, held by the node at `depth` (default: its parent textblock). */
+export function anchorAt(doc: PMNode, pos: number, depth?: number): Anchor {
+  const $p = doc.resolve(pos);
+  const d = depth ?? $p.depth;
+  return d > 0 ? { doc, pos, node: $p.node(d), nodePos: $p.before(d) } : { doc, pos, node: null, nodePos: 0 };
+}
+
+/** Position of `node` (by identity) in `doc`, the occurrence nearest `near` when it appears twice. */
+export function findNode(doc: PMNode, node: PMNode, near = 0): number | null {
+  let best: number | null = null;
+  doc.descendants((n, pos) => {
+    if (n === node) { if (best == null || Math.abs(pos - near) < Math.abs(best - near)) best = pos; return false; }
+    return !n.isTextblock && !n.isLeaf;
+  });
+  return best;
+}
+
+/**
+ * The anchor's position in `doc`, or null when the block holding it was edited or removed since.
+ * Unchanged nodes keep their identity across transactions, so no step mapping is needed.
+ */
+export function resolveAnchor(doc: PMNode, a: Anchor): number | null {
+  if (doc === a.doc) return a.pos;
+  if (!a.node) return null;
+  const at = findNode(doc, a.node, a.nodePos);
+  return at == null ? null : at + (a.pos - a.nodePos);
+}
+
+/** A selection to apply an answer at later, wherever the caret is by then. */
+export interface SelectionAnchor { sel: Selection; from: Anchor; to: Anchor }
+
+export function anchorSelection(state: EditorState): SelectionAnchor {
+  const sel = state.selection, doc = state.doc;
+  if (sel instanceof NodeSelection && !sel.node.isInline) {
+    const a: Anchor = { doc, pos: sel.from, node: sel.node, nodePos: sel.from };
+    return { sel, from: a, to: { ...a, pos: sel.to } };
+  }
+  return { sel, from: anchorAt(doc, sel.from), to: anchorAt(doc, sel.to) };
+}
+
+export function resolveSelection(doc: PMNode, s: SelectionAnchor): Selection | null {
+  if (doc === s.sel.$from.doc) return s.sel;
+  const f = resolveAnchor(doc, s.from), t = resolveAnchor(doc, s.to);
+  if (f == null || t == null) return null;
+  try {
+    if (s.sel instanceof NodeSelection) return NodeSelection.create(doc, f);
+    if (s.sel instanceof TextSelection) return TextSelection.create(doc, s.sel.anchor === s.sel.from ? f : t, s.sel.anchor === s.sel.from ? t : f);
+  } catch { /* no longer a valid place */ }
+  return null;
+}
+
+/** A range remembered with its content: found again only while that content is unchanged. */
+export interface RangeAnchor { doc: PMNode; from: Anchor; to: Anchor; content: Fragment }
+
+export function anchorRange(doc: PMNode, range: { from: number; to: number }): RangeAnchor {
+  return { doc, from: anchorAt(doc, range.from), to: anchorAt(doc, range.to), content: doc.slice(range.from, range.to).content };
+}
+
+export function resolveRange(doc: PMNode, a: RangeAnchor): { from: number; to: number } | null {
+  const f = resolveAnchor(doc, a.from), t = resolveAnchor(doc, a.to);
+  if (f == null || t == null || t < f) return null;
+  return doc === a.doc || doc.slice(f, t).content.eq(a.content) ? { from: f, to: t } : null;
+}
+
+/** The top-level block holding the selection end, to insert below it later. */
+export function anchorBelow(state: EditorState): Anchor {
+  const { $to } = state.selection;
+  const doc = state.doc;
+  if ($to.depth >= 1) return { doc, pos: $to.after(1), node: $to.node(1), nodePos: $to.before(1) };
+  const before = $to.nodeBefore;
+  return before ? { doc, pos: $to.pos, node: before, nodePos: $to.pos - before.nodeSize } : { doc, pos: doc.content.size, node: null, nodePos: 0 };
+}
+
+// ------------------------------------------------------------------------------------------
 // Tracked AI edits
 
 /** Run a document change attributed to "AI (model)" as a tracked change, then restore tracking. */
-export function dispatchAiEdit(app: App, build: (tr: Transaction) => Transaction | null, opts: { track: boolean; author: string }): boolean {
-  const view = app.tab.view;
+export function dispatchAiEdit(app: App, build: (tr: Transaction) => Transaction | null, opts: { track: boolean; author: string; tab?: DocTab }): boolean {
+  const view = viewOf(app, opts.tab);
   const prev = trackKey.getState(view.state);
   if (opts.track) view.dispatch(view.state.tr.setMeta(trackKey, { enabled: true, author: opts.author }).setMeta('addToHistory', false));
   let ok = false;
@@ -126,24 +220,33 @@ const tokenize = (s: string) => s.match(/\s+|[\p{L}\p{N}_'’-]+|[^\s\p{L}\p{N}]
 
 interface Edit { from: number; to: number; insert: string }
 
-/** Minimal token edits turning a into b (LCS). Offsets are character offsets into a. */
-export function diffText(a: string, b: string): Edit[] | null {
+/**
+ * Minimal token edits turning a into b (LCS). Offsets are character offsets into a. When the
+ * changed middle is too large for a word diff, it becomes one edit (never a whole-text swap).
+ */
+export function diffText(a: string, b: string): Edit[] {
   const A = tokenize(a), B = tokenize(b);
-  if (A.length * B.length > 4_000_000) return null;
-  const n = A.length, m = B.length;
+  let pre = 0, off = 0;
+  while (pre < A.length && pre < B.length && A[pre] === B[pre]) off += A[pre++].length;
+  let suf = 0;
+  while (suf < A.length - pre && suf < B.length - pre && A[A.length - 1 - suf] === B[B.length - 1 - suf]) suf++;
+  const Am = A.slice(pre, A.length - suf), Bm = B.slice(pre, B.length - suf);
+  if (!Am.length && !Bm.length) return [];
+  const n = Am.length, m = Bm.length;
+  if (n * m > 4_000_000) return [{ from: off, to: off + Am.join('').length, insert: Bm.join('') }];
   const dp = new Uint32Array((n + 1) * (m + 1));
   for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) {
-    dp[i * (m + 1) + j] = A[i] === B[j] ? dp[(i + 1) * (m + 1) + j + 1] + 1 : Math.max(dp[(i + 1) * (m + 1) + j], dp[i * (m + 1) + j + 1]);
+    dp[i * (m + 1) + j] = Am[i] === Bm[j] ? dp[(i + 1) * (m + 1) + j + 1] + 1 : Math.max(dp[(i + 1) * (m + 1) + j], dp[i * (m + 1) + j + 1]);
   }
   const edits: Edit[] = [];
-  let i = 0, j = 0, off = 0;
+  let i = 0, j = 0;
   let cur: Edit | null = null;
   const flush = () => { if (cur && (cur.to > cur.from || cur.insert)) edits.push(cur); cur = null; };
   while (i < n || j < m) {
-    if (i < n && j < m && A[i] === B[j]) { flush(); off += A[i].length; i++; j++; continue; }
+    if (i < n && j < m && Am[i] === Bm[j]) { flush(); off += Am[i].length; i++; j++; continue; }
     if (!cur) cur = { from: off, to: off, insert: '' };
-    if (j < m && (i >= n || dp[i * (m + 1) + j + 1] >= dp[(i + 1) * (m + 1) + j])) { cur.insert += B[j]; j++; }
-    else { off += A[i].length; cur.to = off; i++; }
+    if (j < m && (i >= n || dp[i * (m + 1) + j + 1] >= dp[(i + 1) * (m + 1) + j])) { cur.insert += Bm[j]; j++; }
+    else { off += Am[i].length; cur.to = off; i++; }
   }
   flush();
   return edits;
@@ -163,13 +266,21 @@ function blockIndex(block: PMNode, start: number): { text: string; pos: (o: numb
   return { text, pos: (o) => (o < starts.length ? starts[o] : end), atomAt };
 }
 
-/** Replace a single textblock's range text with new text via minimal edits. */
-function applyDiffInBlock(tr: Transaction, blockPos: number, block: PMNode, fromOff: number, toOff: number, newText: string): boolean {
-  const idx = blockIndex(block, blockPos + 1);
+/** Text with line breaks as hard_break nodes. */
+function inlineContent(s: string, marks: readonly Mark[]): PMNode[] {
+  const out: PMNode[] = [];
+  s.split('\n').forEach((part, i) => { if (i) out.push(S.nodes.hard_break.create(null, null, marks)); if (part) out.push(S.text(part, marks)); });
+  return out;
+}
+
+/** Edits turning a textblock range's text into newText; offsets are into the atom-free text. */
+function blockEdits(idx: ReturnType<typeof blockIndex>, fromOff: number, toOff: number, newText: string): Edit[] {
+  return diffText(idx.text.slice(fromOff, toOff).replace(new RegExp(ATOM, 'g'), ''), newText);
+}
+
+/** Apply blockEdits() to a textblock range via minimal steps that keep inline objects. */
+function applyDiffInBlock(tr: Transaction, idx: ReturnType<typeof blockIndex>, fromOff: number, toOff: number, edits: Edit[]): void {
   const oldText = idx.text.slice(fromOff, toOff);
-  const target = newText.replace(/\n+/g, ' ');
-  const edits = diffText(oldText.replace(new RegExp(ATOM, 'g'), ''), target);
-  if (!edits) return false;
   // Offsets above are into the atom-free text; translate back to block offsets, preserving atoms.
   const map: number[] = [];
   for (let k = 0; k < oldText.length; k++) if (oldText[k] !== ATOM) map.push(fromOff + k);
@@ -186,34 +297,35 @@ function applyDiffInBlock(tr: Transaction, blockPos: number, block: PMNode, from
     if (ed.insert) {
       const marks = tr.doc.resolve(fromPos).marks().filter((m) => !['insertion', 'deletion', 'comment'].includes(m.type.name));
       const firstPiece = pieces.shift();
-      if (firstPiece) tr.replaceWith(tr.mapping.map(idx.pos(firstPiece[0])), tr.mapping.map(idx.pos(firstPiece[1])), S.text(ed.insert, marks));
-      else tr.insert(fromPos, S.text(ed.insert, marks));
+      if (firstPiece) tr.replaceWith(tr.mapping.map(idx.pos(firstPiece[0])), tr.mapping.map(idx.pos(firstPiece[1])), inlineContent(ed.insert, marks));
+      else tr.insert(fromPos, inlineContent(ed.insert, marks));
     }
     for (const [x, y] of pieces.reverse()) tr.delete(tr.mapping.map(idx.pos(x)), tr.mapping.map(idx.pos(y)));
   }
-  return true;
 }
 
 /**
- * Replace a range with AI text. Within one paragraph: minimal word edits. Otherwise the range
- * is replaced with parsed blocks (Markdown when the text has structure).
+ * Replace a range with AI text. Within one paragraph: minimal word edits (an answer equal to the
+ * text changes nothing). Otherwise the range is replaced with parsed blocks (Markdown when the
+ * text has structure). Returns whether the document changed.
  */
-export async function replaceRange(app: App, range: { from: number; to: number }, text: string, opts: { track: boolean; author: string; markdown?: boolean }): Promise<boolean> {
-  const st = app.state;
+export async function replaceRange(app: App, range: { from: number; to: number }, text: string, opts: AiEditOpts): Promise<boolean> {
+  const view = viewOf(app, opts.tab);
+  const st = view.state;
   const $a = st.doc.resolve(range.from), $b = st.doc.resolve(range.to);
   const sameBlock = $a.parent === $b.parent && $a.parent.isTextblock;
-  const multiPara = /\n{2,}/.test(text.trim()) || (opts.markdown && looksLikeMarkdown(text));
+  const multiPara = !opts.inBlock && (/\n{2,}/.test(text.trim()) || (opts.markdown && looksLikeMarkdown(text)));
   if (sameBlock && !multiPara) {
-    const depth = $a.depth;
-    const blockPos = $a.before(depth);
-    const block = $a.parent;
-    const idx = blockIndex(block, blockPos + 1);
+    const idx = blockIndex($a.parent, $a.start());
     const toOff = (o: number) => { let k = 0; while (k < idx.text.length && idx.pos(k) < o) k++; return k; };
     const fromOff = toOff(range.from), endOff = toOff(range.to);
-    const done = dispatchAiEdit(app, (tr) => (applyDiffInBlock(tr, blockPos, block, fromOff, endOff, text.trim()) ? tr : null), opts);
-    if (done) return true;
+    const edits = blockEdits(idx, fromOff, endOff, text.trim());
+    if (!edits.length) return false;
+    return dispatchAiEdit(app, (tr) => { applyDiffInBlock(tr, idx, fromOff, endOff, edits); return tr; }, opts);
   }
   const blocks = await blocksFromText(text.trim(), opts.markdown !== false);
+  // The range belongs to the document as it was before the wait for the Markdown parser.
+  if (view.state.doc !== st.doc) return false;
   return dispatchAiEdit(app, (tr) => {
     if (sameBlock && blocks.length === 1 && blocks[0].type === S.nodes.paragraph) {
       tr.replaceWith(range.from, range.to, blocks[0].content);
@@ -227,13 +339,15 @@ export async function replaceRange(app: App, range: { from: number; to: number }
   }, opts);
 }
 
-/** Insert AI blocks after the top-level block holding the selection end. */
-export async function insertBelow(app: App, text: string, opts: { track: boolean; author: string; markdown?: boolean; heading?: string }): Promise<boolean> {
-  const st = app.state;
-  const $to = st.selection.$to;
-  const pos = $to.depth >= 1 ? $to.after(1) : st.doc.content.size;
+/** Insert AI blocks after the top-level block holding the selection end (or `below`, from anchorBelow()). */
+export async function insertBelow(app: App, text: string, opts: AiEditOpts & { heading?: string; below?: Anchor }): Promise<boolean> {
   let blocks = await blocksFromText(text.trim(), opts.markdown !== false);
   if (opts.heading) blocks = [S.nodes.paragraph.create({ style: 'Heading 3' }, S.text(opts.heading)), ...blocks];
+  const view = viewOf(app, opts.tab);
+  const a = opts.below || anchorBelow(view.state);
+  const at = a.node ? findNode(view.state.doc, a.node, a.nodePos) : null;
+  if (a.node && at == null) return false;
+  const pos = at != null ? at + a.node!.nodeSize : view.state.doc.content.size;
   return dispatchAiEdit(app, (tr) => {
     tr.insert(pos, blocks);
     const sel = TextSelection.near(tr.doc.resolve(Math.min(pos + 1, tr.doc.content.size)));
@@ -241,26 +355,32 @@ export async function insertBelow(app: App, text: string, opts: { track: boolean
   }, opts);
 }
 
-/** Insert at the cursor (inline when the text is a single paragraph). */
-export async function insertAtCursor(app: App, text: string, opts: { track: boolean; author: string; markdown?: boolean }): Promise<boolean> {
+/** Insert at the cursor, or at `at` (from anchorSelection()); inline when the text is a single paragraph. */
+export async function insertAtCursor(app: App, text: string, opts: AiEditOpts & { at?: SelectionAnchor }): Promise<boolean> {
   const t = text.trim();
-  const st = app.state;
-  if (!/\n/.test(t) && !(opts.markdown && looksLikeMarkdown(t)) && st.selection.$from.parent.isTextblock) {
-    return dispatchAiEdit(app, (tr) => tr.insertText(t, st.selection.from, st.selection.to), opts);
-  }
-  const blocks = await blocksFromText(t, opts.markdown !== false);
+  const inline = !/\n/.test(t) && !(opts.markdown && looksLikeMarkdown(t));
+  const blocks = inline ? [] : await blocksFromText(t, opts.markdown !== false);
+  const view = viewOf(app, opts.tab);
+  const sel = opts.at ? resolveSelection(view.state.doc, opts.at) : view.state.selection;
+  if (!sel) return false;
+  if (inline && sel.$from.parent.isTextblock) return dispatchAiEdit(app, (tr) => tr.insertText(t, sel.from, sel.to), opts);
+  const content = inline ? await blocksFromText(t, opts.markdown !== false) : blocks;
+  if (view.state.doc !== sel.$from.doc) return false;
   // Paragraph edges merge into the current paragraph; tables, lists and headings stay whole.
   const open = (n?: PMNode) => (n && n.type === S.nodes.paragraph && !n.attrs.style ? 1 : 0);
-  return dispatchAiEdit(app, (tr) => tr.replaceSelection(new Slice(Fragment.fromArray(blocks), open(blocks[0]), open(blocks[blocks.length - 1]))), opts);
+  return dispatchAiEdit(app, (tr) => tr.setSelection(sel).replaceSelection(new Slice(Fragment.fromArray(content), open(content[0]), open(content[content.length - 1]))), opts);
 }
 
 // ------------------------------------------------------------------------------------------
 // Comments
 
-/** Attach comments to the first occurrence of each quoted excerpt. Returns how many were placed. */
-export function addComments(app: App, items: { quote: string; comment: string }[], author: string): number {
-  const st = app.state;
-  const s = JSON.parse(JSON.stringify(app.settings));
+const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Attach comments to the first unused occurrence of each quoted excerpt. Returns how many were placed. */
+export function addComments(app: App, items: { quote: string; comment: string }[], author: string, tab?: DocTab): number {
+  const view = viewOf(app, tab);
+  const st = view.state;
+  const s = JSON.parse(JSON.stringify(normalizeSettings(st.doc.attrs.settings)));
   const tr = st.tr.setMeta('comment', true).setMeta('trackSkip', true);
   let placed = 0;
   const blocks: { pos: number; node: PMNode }[] = [];
@@ -269,25 +389,29 @@ export function addComments(app: App, items: { quote: string; comment: string }[
   for (const it of items) {
     const q = (it.quote || '').trim().replace(/\s+/g, ' ');
     if (!q || !it.comment) continue;
-    for (const b of blocks) {
-      const idx = blockIndex(b.node, b.pos + 1);
-      const flat = idx.text.replace(/\s+/g, ' ');
-      let at = flat.indexOf(q);
-      if (at < 0) at = flat.toLowerCase().indexOf(q.toLowerCase());
-      if (at < 0 || flat.length !== idx.text.length) {
-        if (at < 0) continue;
+    // Spaces in the quote match any run of whitespace (double spaces, tabs, line breaks) in the text.
+    const src = q.split(' ').map(escRe).join('\\s+');
+    let hit: { b: { pos: number; node: PMNode }; idx: ReturnType<typeof blockIndex>; at: number; len: number } | null = null;
+    for (const flags of ['gu', 'giu']) {
+      for (const b of blocks) {
+        const idx = blockIndex(b.node, b.pos + 1);
+        const re = new RegExp(src, flags);
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(idx.text))) {
+          if (!used.has(`${b.pos}:${m.index}`)) { hit = { b, idx, at: m.index, len: m[0].length }; break; }
+        }
+        if (hit) break;
       }
-      const key = `${b.pos}:${at}`;
-      if (used.has(key)) continue;
-      used.add(key);
-      const from = idx.pos(at), to = idx.pos(Math.min(idx.text.length, at + q.length - 1)) + 1;
-      const id = `cm${Date.now().toString(36)}${placed}`;
-      s.comments[id] = { id, author, date: Date.now(), text: it.comment, resolved: false, replies: [] };
-      tr.addMark(from, to, S.marks.comment.create({ id }));
-      placed++;
-      break;
+      if (hit) break;
     }
+    if (!hit) continue;
+    used.add(`${hit.b.pos}:${hit.at}`);
+    const from = hit.idx.pos(hit.at), to = hit.idx.pos(hit.at + hit.len - 1) + 1;
+    const id = `cm${Date.now().toString(36)}${placed}`;
+    s.comments[id] = { id, author, date: Date.now(), text: it.comment, resolved: false, replies: [] };
+    tr.addMark(from, to, S.marks.comment.create({ id }));
+    placed++;
   }
-  if (placed) app.tab.view.dispatch(tr.setDocAttribute('settings', s));
+  if (placed) view.dispatch(tr.setDocAttribute('settings', s));
   return placed;
 }

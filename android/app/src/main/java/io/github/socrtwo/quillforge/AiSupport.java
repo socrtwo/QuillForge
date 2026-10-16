@@ -102,14 +102,20 @@ final class AiSupport {
         private final ServerSocket server;
         private final long deadline;
         private final String html;
+        private final String expectedPath;
         private final UrlCallback callback;
         private volatile boolean running = true;
 
-        Loopback(long timeoutMs, String html, UrlCallback callback) throws Exception {
+        /**
+         * @param expectedPath the nonce path of this sign-in ("/callback/{nonce}"); other requests to
+         *     the port get a 404 and the listener keeps waiting, so another app cannot end the sign-in.
+         */
+        Loopback(long timeoutMs, String html, String expectedPath, UrlCallback callback) throws Exception {
             this.server = new ServerSocket(0, 4, InetAddress.getByName("127.0.0.1"));
             this.server.setSoTimeout(1000);
             this.deadline = System.currentTimeMillis() + Math.max(10_000L, timeoutMs);
             this.html = html != null ? html : "<!doctype html><body><p>You can return to QuillForge.</p></body>";
+            this.expectedPath = expectedPath;
             this.callback = callback;
         }
 
@@ -160,7 +166,9 @@ final class AiSupport {
                 }
                 String[] parts = line.split(" ");
                 String path = parts.length > 1 ? parts[1] : "/";
-                boolean isRedirect = path.contains("?") && (path.contains("code=") || path.contains("error="));
+                int q = path.indexOf('?');
+                boolean ours = expectedPath == null || (q >= 0 ? path.substring(0, q) : path).equals(expectedPath);
+                boolean isRedirect = ours && q >= 0 && (path.contains("code=") || path.contains("error="));
                 byte[] body = (isRedirect ? html : "").getBytes(StandardCharsets.UTF_8);
                 String head = (isRedirect ? "HTTP/1.1 200 OK" : "HTTP/1.1 404 Not Found") + "\r\n"
                     + "Content-Type: text/html; charset=utf-8\r\n"

@@ -60,7 +60,7 @@ import java.util.concurrent.Executors;
  *   <li>event "fileOpened" -> same payload as getLaunchFile, for files opened while running</li>
  *   <li>secureSet({key, value}) / secureGet({key}) -> {value} / secureRemove({key}): Keystore-encrypted secrets</li>
  *   <li>readClipboard() -> {text} / writeClipboard({text, sensitive})</li>
- *   <li>startLoopback({timeoutMs, successHtml}) -> {port}; event "oauthCallback" {url}; stopLoopback()</li>
+ *   <li>startLoopback({timeoutMs, successHtml, path}) -> {port}; event "oauthCallback" {url} (requests for path only); stopLoopback()</li>
  * </ul>
  */
 @CapacitorPlugin(name = "QuillNative")
@@ -198,12 +198,13 @@ public class QuillNativePlugin extends Plugin {
     public void startLoopback(PluginCall call) {
         long timeoutMs = call.getLong("timeoutMs", 600_000L);
         String html = call.getString("successHtml");
+        String path = call.getString("path");
         synchronized (this) {
             if (loopback != null) {
                 loopback.stop();
             }
             try {
-                loopback = new AiSupport.Loopback(timeoutMs, html, (url) -> {
+                loopback = new AiSupport.Loopback(timeoutMs, html, path, (url) -> {
                     JSObject ev = new JSObject();
                     ev.put("url", url);
                     notifyListeners("oauthCallback", ev, true);

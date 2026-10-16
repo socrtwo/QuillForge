@@ -16,6 +16,7 @@
 import { Schema, type NodeSpec, type MarkSpec, type Node as PMNode, type Mark, type DOMOutputSpec } from 'prosemirror-model';
 import { tableNodes } from 'prosemirror-tables';
 import { sanitizeGeneratedHtml, isScriptUrl } from '../util/sanitize';
+import { cssString } from './styles';
 
 type Attrs = Record<string, any>;
 
@@ -296,6 +297,33 @@ function atomDataset(attrs: Attrs): Attrs {
   return out;
 }
 
+// Tracked insertion or deletion of a block-level object, which cannot carry marks:
+// { kind: 'insertion' | 'deletion', author, date, id } or null. Compare sets it; listChanges()
+// and resolveChanges() in plugins/trackChanges.ts treat it like a revision mark.
+const changeAttr = { change: { default: null } };
+
+export function blockChangeFromDom(el: HTMLElement): Attrs | null {
+  try {
+    const c = JSON.parse(el.getAttribute('data-change') || 'null');
+    return c && (c.kind === 'insertion' || c.kind === 'deletion') ? { kind: c.kind, author: String(c.author ?? ''), date: Number(c.date) || 0, id: String(c.id ?? '') } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** DOM attributes that show a block-level change (outlined, deletions faded). */
+export function blockChangeDom(change: Attrs | null | undefined, attrs: Attrs = {}): Attrs {
+  if (!change) return attrs;
+  const del = change.kind === 'deletion';
+  return {
+    ...attrs,
+    'data-change': JSON.stringify(change),
+    class: [attrs.class, del ? 'qf-chg-del' : 'qf-chg-ins'].filter(Boolean).join(' '),
+    title: `${del ? 'Deleted' : 'Inserted'} by ${change.author}`,
+    style: [attrs.style, `outline:2px ${del ? 'dashed #c62828' : 'solid #2e7d32'};outline-offset:2px${del ? ';opacity:.5' : ''}`].filter(Boolean).join(';'),
+  };
+}
+
 const nodes: Record<string, NodeSpec> = {
   doc: {
     content: 'block+',
@@ -332,37 +360,39 @@ const nodes: Record<string, NodeSpec> = {
 
   horizontal_rule: {
     group: 'block',
-    attrs: { style: { default: 'solid' }, color: { default: null }, weight: { default: 1 } },
-    parseDOM: [{ tag: 'hr', getAttrs: (d) => ({ style: (d as HTMLElement).getAttribute('data-hr-style') || 'solid' }) }],
-    toDOM: (node) => ['hr', { 'data-hr-style': node.attrs.style, style: `border-top-style:${node.attrs.style};border-top-width:${node.attrs.weight}pt;${node.attrs.color ? 'border-color:' + node.attrs.color : ''}` }],
+    attrs: { style: { default: 'solid' }, color: { default: null }, weight: { default: 1 }, ...changeAttr },
+    parseDOM: [{ tag: 'hr', getAttrs: (d) => ({ style: (d as HTMLElement).getAttribute('data-hr-style') || 'solid', change: blockChangeFromDom(d as HTMLElement) }) }],
+    toDOM: (node) => ['hr', blockChangeDom(node.attrs.change, { 'data-hr-style': node.attrs.style, style: `border-top-style:${node.attrs.style};border-top-width:${node.attrs.weight}pt;${node.attrs.color ? 'border-color:' + node.attrs.color : ''}` })],
   },
 
   page_break: {
     group: 'block',
     atom: true,
     selectable: true,
-    parseDOM: [{ tag: 'div.qf-page-break' }],
-    toDOM: () => ['div', { class: 'qf-page-break', contenteditable: 'false' }, ['span', 'Page Break']],
+    attrs: changeAttr,
+    parseDOM: [{ tag: 'div.qf-page-break', getAttrs: (d) => ({ change: blockChangeFromDom(d as HTMLElement) }) }],
+    toDOM: (node) => ['div', blockChangeDom(node.attrs.change, { class: 'qf-page-break', contenteditable: 'false' }), ['span', 'Page Break']],
   },
 
   column_break: {
     group: 'block',
     atom: true,
-    parseDOM: [{ tag: 'div.qf-column-break' }],
-    toDOM: () => ['div', { class: 'qf-column-break', contenteditable: 'false' }, ['span', 'Column Break']],
+    attrs: changeAttr,
+    parseDOM: [{ tag: 'div.qf-column-break', getAttrs: (d) => ({ change: blockChangeFromDom(d as HTMLElement) }) }],
+    toDOM: (node) => ['div', blockChangeDom(node.attrs.change, { class: 'qf-column-break', contenteditable: 'false' }), ['span', 'Column Break']],
   },
 
   section_break: {
     group: 'block',
     atom: true,
-    attrs: { kind: { default: 'nextPage' }, page: { default: null } },
+    attrs: { kind: { default: 'nextPage' }, page: { default: null }, ...changeAttr },
     parseDOM: [{ tag: 'div.qf-section-break', getAttrs: (d) => {
       const el = d as HTMLElement;
       let page = null;
       try { page = JSON.parse(el.getAttribute('data-page') || 'null'); } catch { /* */ }
-      return { kind: el.getAttribute('data-kind') || 'nextPage', page };
+      return { kind: el.getAttribute('data-kind') || 'nextPage', page, change: blockChangeFromDom(el) };
     } }],
-    toDOM: (node) => ['div', { class: 'qf-section-break', 'data-kind': node.attrs.kind, 'data-page': node.attrs.page ? JSON.stringify(node.attrs.page) : null, contenteditable: 'false' },
+    toDOM: (node) => ['div', blockChangeDom(node.attrs.change, { class: 'qf-section-break', 'data-kind': node.attrs.kind, 'data-page': node.attrs.page ? JSON.stringify(node.attrs.page) : null, contenteditable: 'false' }),
       ['span', `Section Break (${({ nextPage: 'Next Page', continuous: 'Continuous', evenPage: 'Even Page', oddPage: 'Odd Page' } as Attrs)[node.attrs.kind] || node.attrs.kind})`]],
   },
 
@@ -389,8 +419,9 @@ const nodes: Record<string, NodeSpec> = {
         const el = d as HTMLElement;
         const t = el.getAttribute('type');
         const typeMap: Attrs = { a: 'lower-alpha', A: 'upper-alpha', i: 'lower-roman', I: 'upper-roman', 1: 'decimal' };
+        const start = parseInt(el.getAttribute('start') || '', 10);
         return {
-          order: el.hasAttribute('start') ? parseInt(el.getAttribute('start')!, 10) : 1,
+          order: Number.isFinite(start) ? start : 1,
           format: el.getAttribute('data-format') || (t ? typeMap[t] : null) || el.style.listStyleType || 'decimal',
           outline: el.getAttribute('data-outline') === '1',
         };
@@ -399,7 +430,8 @@ const nodes: Record<string, NodeSpec> = {
     toDOM: (node) => {
       const a = node.attrs;
       const attrs: Attrs = { 'data-format': a.format, style: `list-style-type:${a.outline ? 'none' : a.format}` };
-      if (a.order !== 1) attrs.start = a.order;
+      const order = Number.isFinite(Number(a.order)) ? Math.trunc(Number(a.order)) : 1;
+      if (order !== 1) attrs.start = order;
       if (a.outline) attrs['data-outline'] = '1';
       return ['ol', attrs, 0];
     },
@@ -488,17 +520,17 @@ const nodes: Record<string, NodeSpec> = {
     group: 'block',
     atom: true,
     selectable: true,
-    attrs: { kind: { default: 'toc' }, options: { default: {} }, cache: { default: '' } },
+    attrs: { kind: { default: 'toc' }, options: { default: {} }, cache: { default: '' }, ...changeAttr },
     parseDOM: [{ tag: 'div.qf-gen', getAttrs: (d) => {
       const el = d as HTMLElement;
       let options = {};
       try { options = JSON.parse(el.getAttribute('data-options') || '{}'); } catch { /* */ }
       const kind = el.getAttribute('data-kind') || 'toc';
-      return { kind: /^[a-z]{2,16}$/.test(kind) ? kind : 'toc', options, cache: sanitizeGeneratedHtml(el.innerHTML) };
+      return { kind: /^[a-z]{2,16}$/.test(kind) ? kind : 'toc', options, cache: sanitizeGeneratedHtml(el.innerHTML), change: blockChangeFromDom(el) };
     } }],
     toDOM: (node) => {
       const div = document.createElement('div');
-      div.className = 'qf-gen';
+      for (const [k, v] of Object.entries(blockChangeDom(node.attrs.change, { class: 'qf-gen' }))) div.setAttribute(k, String(v));
       div.setAttribute('data-kind', node.attrs.kind);
       div.setAttribute('data-options', JSON.stringify(node.attrs.options || {}));
       div.contentEditable = 'false';
@@ -511,9 +543,9 @@ const nodes: Record<string, NodeSpec> = {
   math_block: {
     group: 'block',
     atom: true,
-    attrs: { latex: { default: '' }, numbered: { default: false } },
-    parseDOM: [{ tag: 'div.qf-math', getAttrs: (d) => ({ latex: (d as HTMLElement).getAttribute('data-latex') || '' }) }],
-    toDOM: (node) => ['div', { class: 'qf-math', 'data-latex': node.attrs.latex, contenteditable: 'false' }, node.attrs.latex],
+    attrs: { latex: { default: '' }, numbered: { default: false }, ...changeAttr },
+    parseDOM: [{ tag: 'div.qf-math', getAttrs: (d) => ({ latex: (d as HTMLElement).getAttribute('data-latex') || '', change: blockChangeFromDom(d as HTMLElement) }) }],
+    toDOM: (node) => ['div', blockChangeDom(node.attrs.change, { class: 'qf-math', 'data-latex': node.attrs.latex, contenteditable: 'false' }), node.attrs.latex],
   },
 
   // Inline nodes ---------------------------------------------------------
@@ -743,7 +775,7 @@ const marks: Record<string, MarkSpec> = {
   font: {
     attrs: { family: {} },
     parseDOM: [{ style: 'font-family', getAttrs: (v) => ({ family: (v as string).split(',')[0].replace(/["']/g, '').trim() }) }],
-    toDOM: (m) => ['span', { style: `font-family:"${m.attrs.family}"` }, 0],
+    toDOM: (m) => ['span', { style: `font-family:"${cssString(m.attrs.family)}"` }, 0],
   },
   size: {
     attrs: { pt: {} },
@@ -839,7 +871,9 @@ const marks: Record<string, MarkSpec> = {
   },
   insertion: {
     attrs: { author: { default: '' }, date: { default: 0 }, id: { default: '' } },
-    inclusive: true,
+    // Not inclusive: text typed after a tracked insertion is not part of it (tracked typing gets
+    // its own mark from trackTransaction; untracked typing must stay untracked).
+    inclusive: false,
     excludes: 'deletion insertion',
     parseDOM: [{ tag: 'ins', getAttrs: (d) => ({ author: (d as HTMLElement).getAttribute('data-author') || '', date: num((d as HTMLElement).getAttribute('data-date')) || 0, id: (d as HTMLElement).getAttribute('data-id') || '' }) }],
     toDOM: (m) => ['ins', { class: 'qf-ins', 'data-author': m.attrs.author, 'data-date': m.attrs.date, 'data-id': m.attrs.id, title: `Inserted by ${m.attrs.author}` }, 0],

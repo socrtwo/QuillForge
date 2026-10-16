@@ -149,9 +149,11 @@ function registerIpc() {
   handle('secureRemove', async ({ key }) => { const o = readSecure(); delete o[String(key)]; writeSecure(o); });
   handle('readClipboard', async () => ({ text: clipboard.readText() }));
   handle('writeClipboard', async ({ text }) => { clipboard.writeText(String(text ?? '')); });
-  handle('startLoopback', async ({ timeoutMs, successHtml }) => {
+  handle('startLoopback', async ({ timeoutMs, successHtml, path: want }) => {
     stopLoop();
     const server = http.createServer((req, res) => {
+      // Only this sign-in's nonce path counts: another program probing the port must not end it.
+      if (typeof want === 'string' && want && String(req.url || '').split('?')[0] !== want) { res.writeHead(404); res.end(); return; }
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(typeof successHtml === 'string' ? successHtml : '<p>You can close this tab.</p>');
       const port = server.address().port;

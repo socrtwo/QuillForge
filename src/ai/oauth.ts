@@ -10,6 +10,10 @@
  *    the app.
  * If neither works (for example a browser that blocks the local redirect), the user can paste
  * the address bar URL or the code shown by OpenRouter; parseOAuthInput() accepts both.
+ *
+ * Each sign-in puts a random nonce in the callback address (a path on the loopback, a query
+ * parameter in the browser). Redirects without it are ignored: another app on the device could
+ * otherwise end the sign-in with a bogus code, or hand QuillForge a code for an account of its own.
  */
 import { isNative, openExternal, startOAuthLoopback, stopOAuthLoopback, onOAuthCallback } from '../platform/native';
 
@@ -42,6 +46,11 @@ export async function exchangeCode(code: string, verifier: string): Promise<stri
   return j.key as string;
 }
 
+/** A loopback redirect for this sign-in (its nonce path), not some other request to the port. */
+export function isOurCallback(url: string, path: string): boolean {
+  try { return new URL(url).pathname === path; } catch { return false; }
+}
+
 /** Extract an authorization code from a pasted redirect URL or a bare code. */
 export function parseOAuthInput(s: string): string | null {
   const t = s.trim();
@@ -61,6 +70,7 @@ export interface OAuthSession {
 /** Start sign-in: opens openrouter.ai in the default browser. */
 export async function startOpenRouterSignIn(timeoutMs = 10 * 60 * 1000): Promise<OAuthSession> {
   const { verifier, challenge } = await pkce();
+  const nonce = b64url(crypto.getRandomValues(new Uint8Array(16)));
   let settle!: { resolve: (k: string) => void; reject: (e: Error) => void };
   const key = new Promise<string>((resolve, reject) => { settle = { resolve, reject }; });
   let done = false;
@@ -79,16 +89,24 @@ export async function startOpenRouterSignIn(timeoutMs = 10 * 60 * 1000): Promise
 
   let callback: string;
   if (isNative()) {
-    const port = await startOAuthLoopback(timeoutMs, '<!doctype html><meta name="viewport" content="width=device-width"><body style="font:16px system-ui;padding:24px;text-align:center"><h2>Signed in</h2><p>QuillForge received your OpenRouter key. You can close this tab and return to QuillForge.</p></body>');
-    callback = `http://127.0.0.1:${port}/callback`;
-    const h = await onOAuthCallback((url) => { const c = parseOAuthInput(url); if (c) void finish(c); });
+    const path = `/callback/${nonce}`;
+    const port = await startOAuthLoopback(timeoutMs, '<!doctype html><meta name="viewport" content="width=device-width"><body style="font:16px system-ui;padding:24px;text-align:center"><h2>Signed in</h2><p>QuillForge received your OpenRouter key. You can close this tab and return to QuillForge.</p></body>', path);
+    callback = `http://127.0.0.1:${port}${path}`;
+    const h = await onOAuthCallback((url) => {
+      if (!isOurCallback(url, path)) return;
+      const err = new URL(url).searchParams.get('error');
+      if (err && !done) { done = true; cleanup.forEach((f) => f()); settle.reject(new Error(`OpenRouter sign-in did not complete (${err}).`)); return; }
+      const c = parseOAuthInput(url);
+      if (c) void finish(c);
+    });
     cleanup.push(() => h.remove(), () => void stopOAuthLoopback());
   } else {
     // The callback page is QuillForge itself in a new tab; it finishes the exchange and broadcasts.
-    sessionStorage.setItem(SESSION_KEY, verifier);
-    try { localStorage.setItem(SESSION_KEY, verifier); } catch { /* storage off */ }
+    const session = JSON.stringify({ verifier, nonce });
+    sessionStorage.setItem(SESSION_KEY, session);
+    try { localStorage.setItem(SESSION_KEY, session); } catch { /* storage off */ }
     const u = new URL(location.href);
-    u.search = '?qf-oauth=openrouter';
+    u.search = `?qf-oauth=openrouter&qf-state=${nonce}`;
     u.hash = '';
     callback = u.toString();
     const bc = new BroadcastChannel('quillforge-oauth');
@@ -122,10 +140,13 @@ export async function handleOAuthRedirect(save: (key: string) => Promise<void>):
   const u = new URL(location.href);
   if (u.searchParams.get('qf-oauth') !== 'openrouter') return false;
   const code = u.searchParams.get('code');
-  const verifier = sessionStorage.getItem(SESSION_KEY) || (() => { try { return localStorage.getItem(SESSION_KEY); } catch { return null; } })();
+  const raw = sessionStorage.getItem(SESSION_KEY) || (() => { try { return localStorage.getItem(SESSION_KEY); } catch { return null; } })();
   history.replaceState(null, '', u.pathname);
-  if (!code || !verifier) return false;
-  const key = await exchangeCode(code, verifier);
+  let session: { verifier?: string; nonce?: string } = {};
+  try { session = JSON.parse(raw || '{}'); } catch { /* none */ }
+  // Only the redirect of the sign-in this browser started (another site could open this address).
+  if (!code || !session.verifier || !session.nonce || u.searchParams.get('qf-state') !== session.nonce) return false;
+  const key = await exchangeCode(code, session.verifier);
   await save(key);
   try { new BroadcastChannel('quillforge-oauth').postMessage({ type: 'openrouter-key', key }); } catch { /* */ }
   try { localStorage.removeItem(SESSION_KEY); } catch { /* */ }
