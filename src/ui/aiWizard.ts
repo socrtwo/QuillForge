@@ -352,7 +352,7 @@ export async function openAiSettings(app: App): Promise<void> {
       { key: 'trackAsRevisions', label: 'Insert AI edits as tracked changes (author "AI (model)") so every change can be reviewed', type: 'checkbox', value: s.trackAsRevisions },
       { key: 'confirmDocument', label: 'Ask before sending a whole document to a cloud service', type: 'checkbox', value: s.confirmDocument },
       { key: 'alternatives', label: 'Versions offered by Rewrite', type: 'number', min: 1, max: 5, value: s.alternatives, half: true },
-      { key: 'language', label: 'Language for generated text', type: 'combo', options: ['auto', 'English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch', 'Chinese (Simplified)', 'Japanese', 'Korean'], value: s.language, half: true },
+      { key: 'language', label: 'Language for generated text', type: 'combo', options: ['auto', 'English', 'English (American)', 'English (British)', 'English (Canadian)', 'English (Australian)', 'English (Indian)', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch', 'Chinese (Simplified)', 'Japanese', 'Korean'], value: s.language, half: true },
       { key: 'clipboardWatch', label: 'During setup, look for a copied API key when I return to the app', type: 'checkbox', value: s.clipboardWatch },
       { key: 'clearClipboard', label: 'Remove a recognized key from the clipboard after saving it', type: 'checkbox', value: s.clearClipboard },
       { key: 'voiceProfile', label: 'My writing voice (used by Match My Voice)', type: 'textarea', rows: 3, value: s.voiceProfile, placeholder: 'e.g. Warm, plain-spoken, short sentences, occasional dry humor, American spelling' },

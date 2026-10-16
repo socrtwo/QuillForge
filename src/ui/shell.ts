@@ -656,7 +656,7 @@ export class Shell {
         if (en.id === '__fix') { const { text, issue: i } = en.arg; view.dispatch(view.state.tr.insertText(text, i.from, i.to)); return; }
         if (en.id === '__ignore') { app.prefs.ignoredWords.push(view.state.doc.textBetween(en.arg.from, en.arg.to)); app.savePrefs(); app.proofer.schedule(app.tab, 0); return; }
         if (en.id === '__add') { const w = view.state.doc.textBetween(en.arg.from, en.arg.to); app.prefs.dictionary.push(w); app.savePrefs(); await prof.addWord(w); app.proofer.schedule(app.tab, 0); return; }
-        if (en.id === '__suggest') { const w = view.state.doc.textBetween(en.arg.from, en.arg.to); const sugs = await prof.suggest(w); showMenu(sugs.length ? sugs.map((x) => ({ id: '__fix2', arg: x, label: x })) : [{ label: '(no suggestions)' }], { x: e.clientX, y: e.clientY, onPick: (p) => { if (p.id === '__fix2') view.dispatch(view.state.tr.insertText(p.arg, en.arg.from, en.arg.to)); } }); return; }
+        if (en.id === '__suggest') { const w = view.state.doc.textBetween(en.arg.from, en.arg.to); const sugs = await prof.suggest(w, en.arg.dialect); showMenu(sugs.length ? sugs.map((x) => ({ id: '__fix2', arg: x, label: x })) : [{ label: '(no suggestions)' }], { x: e.clientX, y: e.clientY, onPick: (p) => { if (p.id === '__fix2') view.dispatch(view.state.tr.insertText(p.arg, en.arg.from, en.arg.to)); } }); return; }
         if (en.id) app.exec(en.id, en.arg);
       },
     });

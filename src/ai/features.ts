@@ -31,7 +31,8 @@ export interface AiFeature {
   popular?: boolean;
   keywords?: string;
   /** Build the instruction. `arg` is the chosen option, `extra` the asked text. */
-  prompt: (ctx: { text: string; arg?: string; extra?: string; lang: string; n: number }) => string;
+  /** variety: the English spelling the user chose ("British English"...); empty to keep the text's own. */
+  prompt: (ctx: { text: string; arg?: string; extra?: string; lang: string; n: number; variety?: string }) => string;
   /** Feature-specific system guidance appended to the base system prompt. */
   system?: string;
   maxTokens?: number;
@@ -42,16 +43,25 @@ export const BASE_SYSTEM = [
   'Return only the requested text: no preamble, no explanation, no closing remarks, no surrounding quotation marks, and no code fences.',
   'Keep the language of the input unless asked to translate. Keep names, numbers, dates, quotations and facts unchanged unless asked to change them. Never invent facts, sources, statistics or quotations; where something is needed but unknown, write [placeholder] with a short description.',
   'Use plain paragraphs separated by a blank line. Use Markdown lists, tables or headings only when the task asks for structure.',
+  'Unless told which variety of English to use, keep the author\'s variety (American, British, Canadian, Australian, Irish, Indian, South African, or any other) and its spelling, punctuation and vocabulary conventions; never change a spelling that is correct in the author\'s variety to another variety\'s spelling.',
 ].join(' ');
 
 const langNote = (lang: string) => (lang && lang !== 'auto' ? ` Write in ${lang}.` : '');
 
+/** Name of an English spelling variety for prompts; empty for "all varieties". */
+export function varietyName(d: string): string {
+  return ({ 'en-US': 'American English', 'en-GB': 'British English (Oxford -ize spellings are also correct)', 'en-CA': 'Canadian English', 'en-AU': 'Australian English' } as Record<string, string>)[d] || '';
+}
+
+/** Translating into a named variety of English also converts English text to that variety. */
+const varietyNote = (target?: string) => (target && /^English \(/.test(target) ? ' If the text is already in English, adapt its spelling and vocabulary to that variety and change nothing else.' : '');
+
 export const TONES = ['Professional', 'Formal', 'Casual', 'Friendly', 'Confident', 'Diplomatic', 'Enthusiastic', 'Neutral', 'Persuasive', 'Empathetic', 'Humorous', 'Respectful', 'Direct', 'Warm'];
 export const STYLES = ['Simple', 'Business', 'Academic', 'Technical', 'Fluent', 'Creative', 'Journalistic', 'Legal', 'Plain language', 'Conversational', 'Literary', 'Scientific'];
-export const LANGUAGES = ['English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch', 'Swedish', 'Norwegian', 'Danish', 'Finnish', 'Polish', 'Czech', 'Hungarian', 'Romanian', 'Greek', 'Turkish', 'Russian', 'Ukrainian', 'Hebrew', 'Arabic', 'Persian', 'Hindi', 'Bengali', 'Urdu', 'Chinese (Simplified)', 'Chinese (Traditional)', 'Japanese', 'Korean', 'Vietnamese', 'Thai', 'Indonesian', 'Malay', 'Filipino', 'Swahili', 'Latin', 'Esperanto', 'Irish', 'Welsh', 'Yiddish'];
+export const LANGUAGES = ['English', 'English (American)', 'English (British)', 'English (Canadian)', 'English (Australian)', 'English (New Zealand)', 'English (Irish)', 'English (Indian)', 'English (South African)', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch', 'Swedish', 'Norwegian', 'Danish', 'Finnish', 'Polish', 'Czech', 'Hungarian', 'Romanian', 'Greek', 'Turkish', 'Russian', 'Ukrainian', 'Hebrew', 'Arabic', 'Persian', 'Hindi', 'Bengali', 'Urdu', 'Chinese (Simplified)', 'Chinese (Traditional)', 'Japanese', 'Korean', 'Vietnamese', 'Thai', 'Indonesian', 'Malay', 'Filipino', 'Swahili', 'Latin', 'Esperanto', 'Irish', 'Welsh', 'Yiddish'];
 export const DETAILS = ['Example', 'Counterargument', 'Definition', 'Analogy', 'Supporting evidence placeholder', 'Quotation placeholder', 'Transition', 'Summary sentence', 'Rhetorical question', 'Anecdote'];
 export const READERS = ['General reader', 'Subject expert', 'Copy editor', 'Skeptical reviewer', 'Hiring manager', 'Investor', 'Teacher grading the work', 'Student (age 14)', 'Non-native English speaker', 'Customer', 'Literary agent', 'Peer reviewer (academic)'];
-export const TEMPLATES = ['Business letter', 'Cover letter', 'Memo', 'Email reply', 'Meeting agenda', 'Meeting minutes', 'Press release', 'Blog post', 'Newsletter article', 'Product description', 'Project proposal', 'Executive summary', 'Report outline', 'Résumé summary', 'Thank-you note', 'Complaint letter', 'Grant proposal outline', 'Lesson plan', 'Research abstract', 'Family history narrative', 'Biographical sketch', 'Obituary', 'Speech', 'Social media post', 'FAQ'];
+export const TEMPLATES = ['Business letter', 'Cover letter', 'Memo', 'Email reply', 'Meeting agenda', 'Meeting minutes', 'Press release', 'Blog post', 'Newsletter article', 'Product description', 'Project proposal', 'Executive summary', 'Report outline', 'Résumé or CV summary', 'Thank-you note', 'Complaint letter', 'Grant proposal outline', 'Lesson plan', 'Research abstract', 'Family history narrative', 'Biographical sketch', 'Obituary', 'Speech', 'Social media post', 'FAQ'];
 
 const opt = (xs: string[]) => xs.map((x) => ({ value: x, label: x }));
 
@@ -119,7 +129,7 @@ export const FEATURES: AiFeature[] = [
   },
   {
     id: 'ai.simplify', label: 'Simplify', icon: 'child_care', group: 'Rewrite', tip: 'Rewrite in plain language anyone can read', input: 'selectionOrParagraph', output: 'preview', tier: 'quality', temperature: 0.3,
-    prompt: ({ text }) => `Rewrite in plain language (short sentences, common words, about an 8th-grade reading level), keeping every fact:\n\n${text}`,
+    prompt: ({ text }) => `Rewrite in plain language (short sentences, common words, readable by a typical 13-year-old), keeping every fact:\n\n${text}`,
   },
   {
     id: 'ai.natural', label: 'Make It Sound Natural', icon: 'record_voice_over', group: 'Rewrite', tip: 'Remove stiff or machine-like phrasing', input: 'selectionOrParagraph', output: 'preview', tier: 'quality', temperature: 0.6,
@@ -161,7 +171,7 @@ export const FEATURES: AiFeature[] = [
   // ---------------------------------------------------------------- Proofing
   {
     id: 'ai.proofread', label: 'Proofread with AI', icon: 'spellcheck', group: 'Proof', tip: 'Correct spelling, grammar and punctuation as tracked changes', input: 'selectionOrDocument', output: 'tracked', tier: 'quality', temperature: 0, popular: true, keys: ['Mod-Alt-p'],
-    prompt: ({ text }) => `Correct spelling, grammar, punctuation and obvious typos in the text. Change nothing else: keep wording, style, line breaks and paragraph breaks exactly. Return the full corrected text:\n\n${text}`,
+    prompt: ({ text, variety }) => `Correct spelling, grammar, punctuation and obvious typos in the text, ${variety ? `using ${variety} spelling` : 'following the text\'s own variety of English (do not convert British, American or other spellings to another variety)'}. Change nothing else: keep wording, style, line breaks and paragraph breaks exactly. Return the full corrected text:\n\n${text}`,
   },
   {
     id: 'ai.clarity', label: 'Clarity Suggestions', icon: 'tips_and_updates', group: 'Proof', tip: 'Flag wordiness, passive voice, clichés and unclear sentences as comments', input: 'selectionOrDocument', output: 'comments', tier: 'quality', temperature: 0.2,
@@ -169,7 +179,7 @@ export const FEATURES: AiFeature[] = [
   },
   {
     id: 'ai.styleGuide', label: 'Check Against Style Guide', icon: 'rule', group: 'Proof', tip: 'Flag text that breaks your style guide (set in AI Settings)', input: 'selectionOrDocument', output: 'comments', tier: 'quality', temperature: 0.1,
-    prompt: ({ text, extra }) => `Style guide:\n${extra || '(no style guide set: use the Chicago Manual of Style)'}\n\nFind places in the text that break the style guide. ${COMMENT_JSON}\n\n${text}`,
+    prompt: ({ text, extra }) => `Style guide:\n${extra || '(no style guide set: check for internal consistency only, such as one spelling variety, consistent capitalization, number style and punctuation; do not impose any one country\'s house style)'}\n\nFind places in the text that break the style guide. ${COMMENT_JSON}\n\n${text}`,
   },
   {
     id: 'ai.ocrFix', label: 'Fix OCR Errors', icon: 'document_scanner', group: 'Proof', tip: 'Repair scanning errors (rn→m, broken words, stray symbols) as tracked changes', input: 'selectionOrDocument', output: 'tracked', tier: 'quality', temperature: 0,
@@ -219,11 +229,11 @@ export const FEATURES: AiFeature[] = [
   // ---------------------------------------------------------------- Translate
   {
     id: 'ai.translate', label: 'Translate Selection', icon: 'translate', group: 'Translate', tip: 'Translate the selection into another language', input: 'selectionOrParagraph', output: 'preview', tier: 'quality', temperature: 0.2, options: opt(LANGUAGES), popular: true,
-    prompt: ({ text, arg }) => `Translate this text into ${arg || 'English'}. Keep formatting, names and numbers. Output only the translation:\n\n${text}`,
+    prompt: ({ text, arg }) => `Translate this text into ${arg || 'English'}.${varietyNote(arg)} Keep formatting, names and numbers. Output only the translation:\n\n${text}`,
   },
   {
     id: 'ai.translateDoc', label: 'Translate Document', icon: 'g_translate', group: 'Translate', tip: 'Translate the whole document into a new document', input: 'document', output: 'newDoc', tier: 'quality', temperature: 0.2, options: opt(LANGUAGES), markdown: true, maxTokens: 8000,
-    prompt: ({ text, arg }) => `Translate this document into ${arg || 'English'}. Keep the structure (headings, lists, tables) using Markdown. Output only the translation:\n\n${text}`,
+    prompt: ({ text, arg }) => `Translate this document into ${arg || 'English'}.${varietyNote(arg)} Keep the structure (headings, lists, tables) using Markdown. Output only the translation:\n\n${text}`,
   },
   {
     id: 'ai.bilingual', label: 'Side-by-Side Translation', icon: 'view_column', group: 'Translate', tip: 'New document with the original and the translation in two columns', input: 'selectionOrDocument', output: 'newDoc', tier: 'quality', temperature: 0.2, options: opt(LANGUAGES), markdown: true, maxTokens: 8000,

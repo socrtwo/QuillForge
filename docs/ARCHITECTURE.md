@@ -49,7 +49,8 @@ src/
                           local (Transformers.js worker), oauth (OpenRouter PKCE), features (AI tab as data),
                           apply (word-level diff edits, Markdown blocks, comments, tracked AI edits)
   util/sanitize.ts        HTML/URL sanitizing for document- and clipboard-controlled content
-  proof/                  spelling worker (nspell + SCOWL) and grammar rules
+  proof/                  spelling worker (nspell + SCOWL en_US/en_GB/en_CA/en_AU, loaded on demand; "any variety"
+                          = US or GB accepts) and grammar rules (grammarMatches, pure and unit-tested)
   platform/native.ts      JS side of the QuillNative Capacitor plugin, with browser fallbacks
 android/                  Capacitor project + QuillNativePlugin.java (SAF open/save/write-back, print, share, intents,
                           Keystore secrets, clipboard, OAuth loopback via AiSupport.java)

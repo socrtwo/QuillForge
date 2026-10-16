@@ -6,7 +6,8 @@
 import { def, type MenuEntry } from './registry';
 import type { App } from '../app';
 import { schema } from '../editor/schema';
-import { FEATURES, BASE_SYSTEM, parseCommentJson, type AiFeature } from '../ai/features';
+import { FEATURES, BASE_SYSTEM, parseCommentJson, varietyName, type AiFeature } from '../ai/features';
+import { dialectFor } from '../proof/proofing';
 import { aiSettings, saveAiSettings, resolveProvider } from '../ai/store';
 import { providerById } from '../ai/providers';
 import { chat, AiError, type ChatMessage, type ContentPart } from '../ai/client';
@@ -55,11 +56,18 @@ async function storyNotes(app: App): Promise<string> {
   try { return ((await kvGet('ai:notes:' + docKey(app.tab))) as string) || ''; } catch { return ''; }
 }
 
+/** The English spelling variety the user chose for this document; empty means keep the author's. */
+function variety(app: App): string {
+  return varietyName(dialectFor(app.prefs.spellDialect, app.settings.language));
+}
+
 async function systemPrompt(app: App, f?: AiFeature): Promise<string> {
   const s = aiSettings();
   const parts = [BASE_SYSTEM];
   if (f?.system) parts.push(f.system);
   if (s.language && s.language !== 'auto') parts.push(`Write generated text in ${s.language} unless translating.`);
+  const v = variety(app);
+  if (v) parts.push(`When writing English, use ${v} spelling.`);
   const notes = await storyNotes(app);
   if (notes) parts.push(`Background notes from the author about this document (characters, setting, terminology, style). Respect them:\n${notes}`);
   return parts.join('\n\n');
@@ -172,7 +180,7 @@ export async function runFeature(app: App, f: AiFeature, arg?: string): Promise<
   if (f.id === 'ai.styleGuide') extra = s.styleGuide;
 
   const n = f.alternatives ? Math.max(1, Math.min(5, s.alternatives)) : 1;
-  const userText = f.prompt({ text, arg, extra, lang: s.language, n });
+  const userText = f.prompt({ text, arg, extra, lang: s.language, n, variety: variety(app) });
   const sys = await systemPrompt(app, f);
   const messages: ChatMessage[] = [{ role: 'system', content: sys }, { role: 'user', content: images.length ? [{ type: 'text', text: userText }, ...images] : userText }];
   const base = { messages, tier: f.tier, temperature: f.temperature, maxTokens: f.maxTokens };
@@ -273,13 +281,13 @@ async function trackedEdit(app: App, f: AiFeature, system: string, range?: { fro
     for (const batch of batches) {
       if (ctl.signal.aborted) break;
       const joined = batch.map((b) => b.text).join('\n\n');
-      const r = await chat({ messages: [{ role: 'system', content: system }, { role: 'user', content: f.prompt({ text: joined, lang: 'auto', n: 1 }) }], tier: f.tier, temperature: 0, signal: ctl.signal, maxTokens: Math.max(512, Math.ceil(joined.length / 2)) });
+      const r = await chat({ messages: [{ role: 'system', content: system }, { role: 'user', content: f.prompt({ text: joined, lang: 'auto', n: 1, variety: variety(app) }) }], tier: f.tier, temperature: 0, signal: ctl.signal, maxTokens: Math.max(512, Math.ceil(joined.length / 2)) });
       let outs = cleanOutput(r.text).split(/\n\s*\n/);
       if (outs.length !== batch.length) {
         // Paragraph count changed: fall back to one request per paragraph for this batch.
         outs = [];
         for (const b of batch) {
-          const one = await chat({ messages: [{ role: 'system', content: system }, { role: 'user', content: f.prompt({ text: b.text, lang: 'auto', n: 1 }) }], tier: f.tier, temperature: 0, signal: ctl.signal, maxTokens: Math.max(256, b.text.length) });
+          const one = await chat({ messages: [{ role: 'system', content: system }, { role: 'user', content: f.prompt({ text: b.text, lang: 'auto', n: 1, variety: variety(app) }) }], tier: f.tier, temperature: 0, signal: ctl.signal, maxTokens: Math.max(256, b.text.length) });
           outs.push(cleanOutput(one.text).replace(/\n+/g, ' '));
         }
       }

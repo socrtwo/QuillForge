@@ -9,6 +9,8 @@ let workerFailures = 0;
 let reqId = 0;
 const pending = new Map<number, (v: any) => void>();
 const EMPTY = { bad: [], suggestions: [] };
+/** The answer to every request a failed (or missing) worker leaves unanswered. */
+const FAILED = { ...EMPTY, failed: true };
 
 function getWorker(): Worker | null {
   if (worker) return worker;
@@ -22,7 +24,7 @@ function getWorker(): Worker | null {
       workerFailures++;
       if (worker === w) worker = null;
       try { w.terminate(); } catch { /* */ }
-      for (const cb of pending.values()) cb(EMPTY);
+      for (const cb of pending.values()) cb(FAILED);
       pending.clear();
     };
     worker = w;
@@ -34,35 +36,106 @@ function getWorker(): Worker | null {
 
 function call(msg: Record<string, any>): Promise<any> {
   const w = getWorker();
-  if (!w) return Promise.resolve(EMPTY);
+  if (!w) return Promise.resolve(FAILED);
   const id = ++reqId;
   return new Promise((res) => { pending.set(id, res); w.postMessage({ ...msg, id }); });
 }
 
-export async function suggest(word: string): Promise<string[]> { return (await call({ type: 'suggest', word })).suggestions || []; }
+export type SpellDialect = 'any' | 'document' | 'en-US' | 'en-GB' | 'en-CA' | 'en-AU';
+
+export const SPELL_DIALECTS: { value: SpellDialect; label: string }[] = [
+  { value: 'any', label: 'English — all varieties (accept any standard spelling)' },
+  { value: 'document', label: 'English — follow each document\'s language' },
+  { value: 'en-US', label: 'English (United States)' },
+  { value: 'en-GB', label: 'English (United Kingdom, including Oxford -ize spelling)' },
+  { value: 'en-CA', label: 'English (Canada)' },
+  { value: 'en-AU', label: 'English (Australia)' },
+];
+
+/** The dictionary set for a preference and a document language tag (BCP 47). */
+export function dialectFor(pref: SpellDialect | undefined, docLang: string | undefined): 'any' | 'en-US' | 'en-GB' | 'en-CA' | 'en-AU' {
+  if (pref && pref !== 'document') return pref;
+  // "en_US" and "en-Latn-US" are written "en-us" here.
+  const l = (docLang || '').toLowerCase().replace(/_/g, '-').replace(/^en-[a-z]{4}(?=-|$)/, 'en');
+  if (!l || !isEnglish(l)) return 'any';
+  if (/^en-(us|as|gu|mp|pr|um|vi|ph)\b/.test(l)) return 'en-US';
+  if (/^en-ca\b/.test(l)) return 'en-CA';
+  if (/^en-(au|nz)\b/.test(l)) return 'en-AU';
+  if (l === 'en') return 'any';
+  return 'en-GB'; // GB, IE, IN, ZA, SG, NG, KE, HK, MT, JM... follow British spelling
+}
+
+/** True for an English language tag ("en", "en-GB", "en-IN"...) or no tag. */
+export function isEnglish(lang: string | null | undefined): boolean {
+  return !lang || /^en([-_]|$)/i.test(lang);
+}
+
+export async function suggest(word: string, dialect?: string): Promise<string[]> { return (await call({ type: 'suggest', word, dialect })).suggestions || []; }
 export async function addWord(word: string): Promise<void> { await call({ type: 'add', word }); }
 
-interface Seg { text: string; pos: number[]; base: number; noProof: Set<number> }
+interface Seg { text: string; pos: number[]; base: number; noProof: Set<number>; langs: { from: number; to: number; lang: string }[] }
 
-function segments(doc: PMNode): Seg[] {
+/**
+ * Text blocks as plain text with a position map. Characters that are not proofed: "do not
+ * check" text, code, deletions, links, and text in a language other than English (marked on the
+ * run, or the document's default language when the run has none): there is no dictionary for
+ * it, and the English grammar rules do not apply.
+ */
+function segments(doc: PMNode, docLang: string | undefined): Seg[] {
   const out: Seg[] = [];
+  const docEnglish = isEnglish(docLang);
   doc.descendants((node, pos) => {
     if (!node.isTextblock) return true;
     if (node.type.spec.code) return false;
     let text = '';
     const map: number[] = [];
     const noProof = new Set<number>();
+    const langs: Seg['langs'] = [];
     node.forEach((child, off) => {
       if (child.isText) {
-        const skip = child.marks.some((m) => (m.type === schema.marks.lang && m.attrs.noProof) || m.type === schema.marks.code || m.type === schema.marks.deletion || m.type === schema.marks.link);
+        const lm = child.marks.find((m) => m.type === schema.marks.lang);
+        const lang: string | null = lm?.attrs.lang || null;
+        const skip = !!lm?.attrs.noProof || (lang ? !isEnglish(lang) : !docEnglish) || child.marks.some((m) => m.type === schema.marks.code || m.type === schema.marks.deletion || m.type === schema.marks.link);
+        if (lang && !skip) langs.push({ from: text.length, to: text.length + child.text!.length, lang });
         for (let i = 0; i < child.text!.length; i++) { if (skip) noProof.add(text.length + i); map.push(pos + 1 + off + i); }
         text += child.text;
-      } else { map.push(pos + 1 + off); text += '￼'; }
+      } else { map.push(pos + 1 + off); text += '\ufffc'; }
     });
     map.push(pos + 1 + node.content.size);
-    out.push({ text, pos: map, base: pos + 1, noProof });
+    out.push({ text, pos: map, base: pos + 1, noProof, langs });
     return false;
   });
+  return out;
+}
+
+export interface GrammarMatch { start: number; end: number; rule: string; message: string; suggestions: string[]; kind: 'grammar' | 'style' }
+
+/** Grammar and style matches in one paragraph's text (offsets into the text). */
+export function grammarMatches(text: string): GrammarMatch[] {
+  const out: GrammarMatch[] = [];
+  for (const r of GRAMMAR_RULES) {
+    r.re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = r.re.exec(text))) {
+      if (m[0].length === 0) { r.re.lastIndex++; continue; }
+      if (r.rule === 'repeat' && /^(had|that|is|do|very|bye|no|so|ha|go)$/i.test(m[1])) continue;
+      if (r.rule === 'cap' && /\b(e\.g|i\.e|etc|vs|cf|al)\.\s+[a-z]$/i.test(text.slice(Math.max(0, m.index - 8), m.index + m[0].length))) continue;
+      if (r.rule === 'a-an' && /^(uni|use|usu|one|once\b|eu|ur)/i.test(m[2])) continue;
+      // Initialisms depend on how the letters are said ("an FBI agent", "a NATO base"; "an HR
+      // manager", or "a HR manager" where h is "haitch"), which spelling does not show.
+      if (r.rule === 'a-an' && /^[A-Z]{2,}/.test(m[2])) continue;
+      // "an" before h: silent-h words are "an" everywhere; for the others usage differs by
+      // variety ("an herb" in North America, "a herb" in Britain; "an historic", "an hotel"
+      // in some British usage), so none of those is marked.
+      if (r.rule === 'a-an' && /^an$/i.test(m[1]) && /^h(our|onest|onou?r|eir|erb|istor|otel|ypothe|abit|ero|orrif|ilari|eredit|yster|umble|omage)/i.test(m[2])) continue;
+      const start = m.index + (r.rule === 'cap' ? m[0].length - 1 : 0);
+      out.push({
+        start, end: m.index + m[0].length, rule: r.rule, message: r.msg,
+        suggestions: r.fix ? (r.rule === 'cap' ? [m[1].toUpperCase()] : r.fix(m)) : [],
+        kind: r.rule === 'spaces' || r.rule === 'paren' ? 'style' : 'grammar',
+      });
+    }
+  }
   return out;
 }
 
@@ -74,6 +147,8 @@ const GRAMMAR_RULES: { re: RegExp; msg: string; fix?: (m: RegExpExecArray) => st
   { re: /\s+([,.;:!?])(?!\w)/g, msg: 'Space before punctuation', fix: (m) => [m[1]], rule: 'spacepunct' },
   { re: /\b(a)\s+([aeiou]\w+)/gi, msg: 'Use "an" before a vowel sound', fix: (m) => [`${m[1] === 'A' ? 'An' : 'an'} ${m[2]}`], rule: 'a-an' },
   { re: /\b(an)\s+([bcdfghjklmnpqrstvwxyz]\w+)/gi, msg: 'Use "a" before a consonant sound', fix: (m) => [`${m[1] === 'An' ? 'A' : 'a'} ${m[2]}`], rule: 'a-an' },
+  // Silent h in every variety of English: "an hour", "an honest", "an honour/honor", "an heir".
+  { re: /\b(a)\s+((?:hour|honest|honou?r|heir)\w*)/gi, msg: 'Use "an" before a silent h', fix: (m) => [`${m[1] === 'A' ? 'An' : 'an'} ${m[2]}`], rule: 'a-an-h' },
   { re: /\b(could|should|would|must|might) of\b/gi, msg: 'Did you mean "have"?', fix: (m) => [`${m[1]} have`], rule: 'of-have' },
   { re: /\b(alot)\b/gi, msg: '"A lot" is two words', fix: () => ['a lot'], rule: 'alot' },
   { re: /\b(irregardless)\b/gi, msg: 'Nonstandard; use "regardless"', fix: () => ['regardless'], rule: 'irregardless' },
@@ -82,7 +157,7 @@ const GRAMMAR_RULES: { re: RegExp; msg: string; fix?: (m: RegExpExecArray) => st
   { re: /\b(their|there|they're) (is|are|was|were)\b/gi, msg: 'Check their / there / they\'re', rule: 'their' },
   { re: /\b(your) (welcome|right|wrong)\b/gi, msg: 'Did you mean "you\'re"?', fix: (m) => [`you're ${m[2]}`], rule: 'your' },
   { re: /\b(its) (a|an|the|been|not)\b/gi, msg: 'Did you mean "it\'s"?', fix: (m) => [`it's ${m[2]}`], rule: 'its' },
-  { re: /\b(then) (I|we|you|he|she|they) (thought|realized)\b/g, msg: 'Check "then" vs "than"', rule: 'then' },
+  { re: /\b(then) (I|we|you|he|she|they) (thought|reali[sz]ed)\b/g, msg: 'Check "then" vs "than"', rule: 'then' },
   { re: /\b(less) (people|items|things|words|cars|books)\b/gi, msg: 'Use "fewer" with countable nouns', fix: (m) => [`fewer ${m[2]}`], rule: 'fewer' },
   { re: /,{2,}|\.{4,}|!{2,}|\?{2,}/g, msg: 'Repeated punctuation', rule: 'punct' },
   { re: /\(\s+|\s+\)/g, msg: 'Space inside parentheses', fix: (m) => [m[0].trim()], rule: 'paren' },
@@ -109,13 +184,17 @@ export class Proofer {
     this.running = true;
     try {
       const doc = tab.view.state.doc;
-      const segs = segments(doc);
+      const segs = segments(doc, tab.settings?.language);
       const issues: ProofIssue[] = [];
       const ignored = new Set(this.app.prefs.ignoredWords.map((w) => w.toLowerCase()));
       const dict = new Set(this.app.prefs.dictionary.map((w) => w.toLowerCase()));
       if (this.app.prefs.spellcheck) {
-        const words = new Set<string>();
-        const occurrences: { word: string; from: number; to: number }[] = [];
+        // Words grouped by dictionary set: the preference, or with "follow the document" the
+        // language of each run (a quotation marked en-GB in an American document, say).
+        const pref = this.app.prefs.spellDialect;
+        const docDialect = dialectFor(pref, tab.settings?.language);
+        const words = new Map<string, Set<string>>();
+        const occurrences: { word: string; from: number; to: number; dialect: string }[] = [];
         for (const s of segs) {
           WORD_RE.lastIndex = 0;
           let m: RegExpExecArray | null;
@@ -125,32 +204,27 @@ export class Proofer {
             if (/\d/.test(w) || w.length < 2) continue;
             if (/^[\p{Lu}]{2,}$/u.test(w)) continue; // acronyms
             if (ignored.has(w.toLowerCase()) || dict.has(w.toLowerCase())) continue;
-            words.add(w);
-            occurrences.push({ word: w, from: s.pos[m.index], to: s.pos[m.index + m[0].length - 1] + 1 });
+            const at = m.index;
+            const runLang = pref === 'document' ? s.langs.find((r) => at >= r.from && at < r.to)?.lang : undefined;
+            const d = runLang ? dialectFor(pref, runLang) : docDialect;
+            if (!words.has(d)) words.set(d, new Set());
+            words.get(d)!.add(w);
+            occurrences.push({ word: w, from: s.pos[at], to: s.pos[at + m[0].length - 1] + 1, dialect: d });
           }
         }
-        if (words.size) {
-          const res = await call({ type: 'check', words: [...words] });
-          const bad = new Set<string>(res.bad || []);
-          for (const o of occurrences) if (bad.has(o.word)) issues.push({ from: o.from, to: o.to, kind: 'spell', message: `"${o.word}" may be misspelled`, suggestions: [] });
+        const bad = new Map<string, Set<string>>();
+        for (const [d, set] of words) {
+          const res = await call({ type: 'check', words: [...set], dialect: d });
+          if (res.failed) break; // the worker crashed: finish this run without spelling results
+          bad.set(d, new Set<string>(res.bad || []));
         }
+        for (const o of occurrences) if (bad.get(o.dialect)?.has(o.word)) issues.push({ from: o.from, to: o.to, kind: 'spell', message: `"${o.word}" may be misspelled`, suggestions: [], dialect: o.dialect });
       }
       if (this.app.prefs.grammar) {
         for (const s of segs) {
-          for (const r of GRAMMAR_RULES) {
-            r.re.lastIndex = 0;
-            let m: RegExpExecArray | null;
-            while ((m = r.re.exec(s.text))) {
-              if (m[0].length === 0) { r.re.lastIndex++; continue; }
-              if (r.rule === 'repeat' && /^(had|that|is|do|very|bye|no|so|ha|go)$/i.test(m[1])) continue;
-              if (r.rule === 'cap' && /\b(e\.g|i\.e|etc|vs|cf|al)\.\s+[a-z]$/i.test(s.text.slice(Math.max(0, m.index - 8), m.index + m[0].length))) continue;
-              if (r.rule === 'a-an' && /^(uni|use|usu|one|eu|ur)/i.test(m[2])) continue;
-              if (r.rule === 'a-an' && /^an$/i.test(m[1]) && /^h(our|onest|onor|eir)/i.test(m[2])) continue;
-              const start = m.index + (r.rule === 'cap' ? m[0].length - 1 : 0);
-              const end = m.index + m[0].length;
-              if (s.noProof.has(start)) continue;
-              issues.push({ from: s.pos[start], to: s.pos[end - 1] + 1, kind: r.rule === 'spaces' || r.rule === 'paren' ? 'style' : 'grammar', message: r.msg, suggestions: r.fix ? (r.rule === 'cap' ? [m[1].toUpperCase()] : r.fix(m)) : [], rule: r.rule });
-            }
+          for (const g of grammarMatches(s.text)) {
+            if (s.noProof.has(g.start)) continue;
+            issues.push({ from: s.pos[g.start], to: s.pos[g.end - 1] + 1, kind: g.kind, message: g.message, suggestions: g.suggestions, rule: g.rule });
           }
         }
       }

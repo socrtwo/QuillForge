@@ -41,7 +41,13 @@ Mobile View reflows text at real font sizes for phones. There are also Web Layou
 
 **Mailings.** Mail merge from typed lists, CSV/TSV files or an in-document table. Address block, greeting line, IF / Fill-in / record rules, preview, finishing to a merged document, envelopes and labels.
 
-**Review.** Track changes (accept or reject by change, by reviewer, or all), simple/all/no-markup/original views, threaded comments with replies, reactions and resolve, compare and combine documents, spelling (offline Hunspell dictionary) and grammar checks, an online thesaurus and dictionary, word count, readability statistics, an accessibility checker, read aloud, dictation, Restrict Editing, and Mark as Final.
+**Review.** Track changes (accept or reject by change, by reviewer, or all), simple/all/no-markup/original views, threaded comments with replies, reactions and resolve, compare and combine documents, spelling and grammar checks (offline Hunspell dictionaries for American, British, Canadian and Australian English; see *English spelling* below), an online thesaurus and dictionary, word count, readability statistics, an accessibility checker, read aloud, dictation, Restrict Editing, and Mark as Final.
+
+**English spelling.** By default the spelling check accepts every major variety of English, so *colour* and *color*, *organise* and *organize*, and *theatre* and *theater* are all correct. You can change this in **Review ▸ English Spelling** or **File ▸ Options**:
+- check one variety: American; British (with Oxford *-ize* spellings); Canadian; or Australian;
+- or follow each document's language. Text marked with its own variety (for example, a British quotation in an American document) is then checked against that variety.
+
+Ireland, India, South Africa and other countries that follow British spelling use the British dictionary. New Zealand uses the Australian one, and the Philippines the American one. Text marked as another language is not checked against English rules. The grammar check accepts each variety's usage before an *h* (*an historic*, *a herb*). AI commands keep the author's variety unless you choose one.
 
 **Developer.** Macro recorder (records commands and typing), a JavaScript macro editor with a document API, and content controls with form protection and CSV export of form data.
 
@@ -81,7 +87,7 @@ Keys are stored encrypted on the device (Android Keystore), and nothing is sent 
 - Pagination splits paragraphs but does not split tables or images across pages. A block taller than a page overflows it. Section breaks do not change page size or orientation mid-document; one page setup applies to the whole document.
 - Footnote, endnote and comment bodies are plain text.
 - Formatting changes are not tracked as revisions; insertions and deletions are.
-- The thesaurus, dictionary and translate commands need an internet connection. Spelling is offline (English).
+- The thesaurus, dictionary and translate commands need an internet connection. Spelling is offline and English-only; text in other languages is skipped, not checked. There is no separate South African dictionary (the only one available is LGPL-licensed), so South African English uses the British dictionary.
 - Charts and diagrams are stored as images with editable data. Other suites see them as pictures.
 - DOCX fidelity was verified with LibreOffice, pandoc and python-docx. It has not been tested in Microsoft Word itself.
 - .doc files open as text and paragraph structure only (no character or paragraph formatting).

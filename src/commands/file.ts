@@ -15,6 +15,7 @@ import { DEFAULT_AUTOFORMAT, DEFAULT_REPLACEMENTS } from '../editor/autoformat';
 import { commandCount } from './registry';
 import { h } from '../ui/dom';
 import { showRecoveryReport, showManualRecovery, recoverySummary } from '../ui/recovery';
+import { SPELL_DIALECTS } from '../proof/proofing';
 import { refuseIfProtected } from './review';
 
 const N = schema.nodes;
@@ -447,6 +448,7 @@ def([
         { key: 'h3', type: 'heading', label: 'Proofing & Editing' },
         { key: 'spellcheck', label: 'Check spelling as you type', type: 'checkbox', value: p.spellcheck, half: true },
         { key: 'grammar', label: 'Mark grammar errors', type: 'checkbox', value: p.grammar, half: true },
+        { key: 'spellDialect', label: 'English spelling', type: 'select', options: SPELL_DIALECTS, value: p.spellDialect || 'any' },
         { key: 'nativeSpellcheck', label: 'Also use the keyboard’s spell checker', type: 'checkbox', value: p.nativeSpellcheck, half: true },
         { key: 'wordCompletion', label: 'Word completion', type: 'checkbox', value: p.wordCompletion, half: true },
         { key: 'slashMenu', label: 'Type “/” for the command menu', type: 'checkbox', value: p.slashMenu, half: true },
@@ -464,7 +466,7 @@ def([
       Object.assign(p, {
         author: r.author || 'Author', initials: r.initials || (r.author || 'A')[0], theme: r.theme, units: r.units, defaultView: r.defaultView, uiScale: parseFloat(r.uiScale),
         miniToolbar: r.miniToolbar, qatPosition: r.qatBottom ? 'bottom' : 'top', qatLabels: r.qatLabels, autosave: r.autosave, autosaveSeconds: Math.max(3, r.autosaveSeconds || 10),
-        defaultSaveFormat: r.defaultSaveFormat, confirmClose: r.confirmClose, spellcheck: r.spellcheck, grammar: r.grammar, nativeSpellcheck: r.nativeSpellcheck,
+        defaultSaveFormat: r.defaultSaveFormat, confirmClose: r.confirmClose, spellcheck: r.spellcheck, grammar: r.grammar, nativeSpellcheck: r.nativeSpellcheck, spellDialect: r.spellDialect || 'any',
         wordCompletion: r.wordCompletion, slashMenu: r.slashMenu, pasteDefault: r.pasteDefault, clipboardHistory: r.clipboardHistory || 24,
       });
       app.savePrefs();

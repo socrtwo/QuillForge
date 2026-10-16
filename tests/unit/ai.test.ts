@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { detectKey, PROVIDERS, providerById } from '../../src/ai/providers';
 import { cleanOutput, splitAlternatives, diffText, looksLikeMarkdown } from '../../src/ai/apply';
-import { parseCommentJson, FEATURES } from '../../src/ai/features';
+import { parseCommentJson, FEATURES, BASE_SYSTEM, varietyName } from '../../src/ai/features';
 import { pickModels } from '../../src/ai/client';
 import { parseOAuthInput } from '../../src/ai/oauth';
 import { resolveBaseUrl } from '../../src/ai/store';
@@ -91,6 +91,16 @@ describe('feature definitions', () => {
   it('uses no trademarked feature names as labels', () => {
     const banned = /copilot|gemini|magic write|\bzia\b|writing tools|apple intelligence|help me write|spices|sparks/i;
     for (const f of FEATURES) expect(f.label).not.toMatch(banned);
+  });
+  it('keeps the author\'s variety of English unless the user chose one', () => {
+    const proof = FEATURES.find((f) => f.id === 'ai.proofread')!;
+    expect(BASE_SYSTEM).toMatch(/keep the author's variety/);
+    expect(varietyName('any')).toBe('');
+    expect(proof.prompt({ text: 'x', lang: 'auto', n: 1 })).toMatch(/text's own variety of English/);
+    expect(proof.prompt({ text: 'x', lang: 'auto', n: 1, variety: varietyName('en-GB') })).toMatch(/using British English .*spelling/);
+    const tr = FEATURES.find((f) => f.id === 'ai.translate')!;
+    expect(tr.prompt({ text: 'x', arg: 'English (British)', lang: 'auto', n: 1 })).toMatch(/adapt its spelling and vocabulary/);
+    expect(tr.prompt({ text: 'x', arg: 'French', lang: 'auto', n: 1 })).not.toMatch(/adapt its spelling/);
   });
   it('parses comment JSON wrapped in prose or fences', () => {
     expect(parseCommentJson('Here you go:\n```json\n[{"quote":"lazy dog","comment":"vague"}]\n```')).toEqual([{ quote: 'lazy dog', comment: 'vague' }]);

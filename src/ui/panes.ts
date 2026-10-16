@@ -304,7 +304,7 @@ const spelling: PaneDef = {
       idx = Math.min(idx, issues.length - 1);
       const is = issues[idx];
       const word = app.state.doc.textBetween(is.from, is.to);
-      const sugs = is.kind === 'spell' ? await suggest(word) : is.suggestions;
+      const sugs = is.kind === 'spell' ? await suggest(word, is.dialect) : is.suggestions;
       const counts = { spell: issues.filter((i) => i.kind === 'spell').length, grammar: issues.filter((i) => i.kind === 'grammar').length, style: issues.filter((i) => i.kind === 'style').length };
       el.append(
         h('p', { class: 'qf-help' }, `Spelling ${counts.spell} · Grammar ${counts.grammar} · Refinements ${counts.style}`),

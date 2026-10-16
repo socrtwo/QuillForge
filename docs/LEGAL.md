@@ -23,7 +23,7 @@ This file records how QuillForge provides a complete word-processing command set
 | Smart Lookup / Researcher / Editor / Copilot | not used |
 | Copilot, Gemini in Docs, Writing Tools, Magic Write, Zia, Spices, Sparks, Story Bible, Lorebook (AI feature brands) | generic labels on the AI tab: Draft with AI, Rewrite, Change Tone, Summarize, Story Notes, Add Detail… |
 
-- No copied help text, tooltips, templates, sample documents, clip art or dictionaries. Templates and placeholder text are original. The spelling dictionary is SCOWL en_US (BSD-style license).
+- No copied help text, tooltips, templates, sample documents, clip art or dictionaries. Templates and placeholder text are original. The spelling dictionaries are the SCOWL en_US, en_GB (-ise), en_CA and en_AU Hunspell dictionaries (MIT and BSD-style licenses). The SCOWL en_ZA dictionary is LGPL-2.1, so it is not bundled; South African English uses en_GB.
 - No proprietary fonts are bundled. Documents that name Calibri, Cambria, Times New Roman, Arial, Courier New, Georgia or Garamond render with metric-compatible open fonts: Carlito, Caladea, Tinos, Arimo, Cousine, Gelasio and EB Garamond (SIL OFL / Apache 2.0). A locally installed original is preferred when one is present.
 - References to other products ("inspired by WordPerfect Reveal Codes") are nominative use describing where an idea came from. They do not imply endorsement.
 - **AI providers** are named only to say which service a key belongs to and where to obtain it (nominative use). QuillForge does not use their logos and is not affiliated with them. Each provider's own terms govern its API; QuillForge only sends requests that the user starts, using the user's own key.
@@ -37,7 +37,7 @@ This file records how QuillForge provides a complete word-processing command set
 | JSZip | MIT (dual MIT/GPLv3; used under MIT) |
 | KaTeX | MIT |
 | nspell | MIT |
-| dictionary-en (SCOWL) | MIT and BSD-style |
+| dictionary-en, dictionary-en-gb, dictionary-en-ca, dictionary-en-au (SCOWL) | MIT and BSD-style |
 | Material Symbols | Apache 2.0 |
 | Capacitor | MIT |
 | Fonts: Carlito, Caladea, Gelasio, EB Garamond, Courier Prime, Libre Baskerville, Lato, Merriweather, Open Sans | SIL Open Font License 1.1 |

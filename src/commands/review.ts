@@ -10,6 +10,7 @@ import { countWords, docText, selectedText, textblocks, wordAt } from '../editor
 import { openDialog, toast, promptDialog, confirmDialog, alertDialog } from '../ui/dialog';
 import { h } from '../ui/dom';
 import { keepAwake, openExternal } from '../platform/native';
+import { SPELL_DIALECTS, type SpellDialect } from '../proof/proofing';
 
 const N = schema.nodes;
 const M = schema.marks;
@@ -43,6 +44,24 @@ export function textStats(text: string) {
 
 def([
   { id: 'review.spelling', label: 'Spelling & Grammar', icon: 'spellcheck', tab: 'Review', group: 'Proofing', keys: ['F7'], popular: true, run: (app) => { app.proofer.run(app.tab); app.ui.openPane('spelling'); } },
+  {
+    id: 'review.spellDialect', label: 'English Spelling', icon: 'translate', tab: 'Review', group: 'Language', kind: 'menu',
+    tip: 'Accept every standard English spelling (default), follow the document\'s language, or check one variety: US, UK (with Oxford -ize), Canada or Australia',
+    keywords: 'dialect american british canadian australian dictionary colour color',
+    run: async (app, arg?: SpellDialect) => {
+      if (!arg) {
+        const r = await openDialog({ title: 'English Spelling', fields: [{ key: 'd', label: 'Dictionary', type: 'select', options: SPELL_DIALECTS, value: app.prefs.spellDialect || 'any' }] });
+        if (!r) return;
+        arg = r.d;
+      }
+      if (!SPELL_DIALECTS.some((d) => d.value === arg)) return;
+      app.prefs.spellDialect = arg!;
+      app.savePrefs();
+      app.proofer.schedule(app.tab, 0);
+      toast(SPELL_DIALECTS.find((d) => d.value === arg)?.label || '');
+    },
+    menu: (app) => SPELL_DIALECTS.map((d) => ({ id: 'review.spellDialect', arg: d.value, label: d.label, checked: (app.prefs.spellDialect || 'any') === d.value })),
+  },
   { id: 'review.toggleSpell', label: 'Check Spelling as You Type', icon: 'spellcheck', tab: 'Review', group: 'Proofing', kind: 'toggle', run: (app) => { app.prefs.spellcheck = !app.prefs.spellcheck; app.savePrefs(); app.proofer.schedule(app.tab, 0); }, isActive: (app) => app.prefs.spellcheck },
   { id: 'review.toggleGrammar', label: 'Mark Grammar Errors as You Type', icon: 'grading', tab: 'Review', group: 'Proofing', kind: 'toggle', run: (app) => { app.prefs.grammar = !app.prefs.grammar; app.savePrefs(); app.proofer.schedule(app.tab, 0); }, isActive: (app) => app.prefs.grammar },
   { id: 'review.hideProof', label: 'Hide Spelling & Grammar Errors in This Document', icon: 'visibility_off', tab: 'Review', group: 'Proofing', run: (app) => app.view.dispatch(app.state.tr.setMeta(proofKey, []).setMeta('addToHistory', false)) },

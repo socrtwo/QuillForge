@@ -59,6 +59,10 @@ Every key is checked against the provider's model list before it is saved. That 
 - The first time you use a cloud provider, QuillForge tells you where your text will go. Before it sends a whole document it asks you first; you can switch that prompt off.
 - **AI Settings ▸ Insert AI edits as tracked changes** records every AI change as a revision by "AI (model)", with whole-word changes. Review them with **AI ▸ Review AI Edits**.
 
+## Varieties of English
+
+AI commands keep the author's variety of English (American, British, Canadian, Australian, Irish, Indian, South African or any other) and do not "correct" one variety's spelling into another's. If you choose one variety in **Review ▸ English Spelling**, or choose "follow each document's language", the AI writes and proofreads in that variety instead. **Translate** also offers each variety as a target. Translating English text into "English (British)", say, converts its spelling and vocabulary and changes nothing else.
+
 ## How AI edits are applied
 
 When AI changes text inside a paragraph, QuillForge applies only the words that changed (a word-level diff). Formatting on the words that did not change is kept, and pictures, footnotes and fields inside the paragraph are never deleted. Structured answers (lists, tables, headings) are read as Markdown and become real lists, tables and heading styles.
@@ -75,7 +79,7 @@ These commands come from a survey of how word processors and writing tools expos
 | Length & Structure | Shorten, Expand, Make Bulleted List, Convert to Table, Key Points, Add Detail (examples, counterarguments, definitions…), Add Headings |
 | Proofing | Proofread with AI (tracked changes), Clarity Suggestions (comments), Check Against Style Guide, Fix OCR Errors (tracked changes) |
 | Summarize & Analyze | Summarize (5 forms), Insert Summary at Top, Action Items, Explain, Analyze Text, Generate FAQ, Extract Names, Dates & Places |
-| Translate | Translate Selection (40 languages), Translate Document, Side-by-Side Translation, Detect Language |
+| Translate | Translate Selection (40 languages and 8 varieties of English), Translate Document, Side-by-Side Translation, Detect Language |
 | Research | Suggest Sources, Flag Claims to Verify, Format Citation (including Evidence Explained) |
 | Review | Feedback as Comments, Reader Reaction (12 personas), Grade Against Rubric, Manuscript Critique, Summarize Comments, Draft Comment Reply, Review AI Edits |
 | Pictures | Generate Alt Text, Image to Text (OCR), Describe Picture, Generate Image |

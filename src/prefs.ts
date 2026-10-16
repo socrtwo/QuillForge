@@ -44,6 +44,8 @@ export interface Prefs {
   focus: 'off' | 'paragraph' | 'sentence' | 'line';
   miniToolbar: boolean;
   language: string;
+  /** Spelling dictionary: all English varieties (default), the document's language, or one variety. */
+  spellDialect: 'any' | 'document' | 'en-US' | 'en-GB' | 'en-CA' | 'en-AU';
   confirmClose: boolean;
   defaultSaveFormat: string;
   readAloudRate: number;
@@ -100,6 +102,7 @@ export function defaultPrefs(): Prefs {
     focus: 'off',
     miniToolbar: true,
     language: 'en-US',
+    spellDialect: 'any',
     confirmClose: true,
     defaultSaveFormat: 'docx',
     readAloudRate: 1,

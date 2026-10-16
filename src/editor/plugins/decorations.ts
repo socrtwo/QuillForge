@@ -243,7 +243,7 @@ function completion(enabled: () => boolean) {
 // ------------------------------------------------------------------------------------------
 // Proofing decorations (spelling + grammar), filled asynchronously by the proofing engine.
 
-export interface ProofIssue { from: number; to: number; kind: 'spell' | 'grammar' | 'style'; message: string; suggestions: string[]; rule?: string }
+export interface ProofIssue { from: number; to: number; kind: 'spell' | 'grammar' | 'style'; message: string; suggestions: string[]; rule?: string; /** Spelling: the dictionary set that flagged the word. */ dialect?: string }
 export const proofKey = new PluginKey<{ issues: ProofIssue[]; deco: DecorationSet }>('proof');
 const proof = new Plugin<{ issues: ProofIssue[]; deco: DecorationSet }>({
   key: proofKey,
