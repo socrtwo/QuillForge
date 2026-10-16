@@ -80,7 +80,9 @@ export class Shell {
     this.statusEl = h('footer', { class: 'qf-status' });
     this.backstageEl = h('div', { class: 'qf-backstage', 'aria-hidden': 'true' });
     this.miniBar = h('div', { class: 'qf-minibar', role: 'toolbar' });
-    this.root.append(this.titlebar, this.tabsEl, this.ribbonEl, this.docTabsEl, main, this.qatBottom, this.statusEl, this.backstageEl, this.miniBar, h('div', { class: 'qf-toasts' }));
+    // Distraction-free writing hides every bar: this button (and Esc) brings them back, also on touch screens.
+    const zenExit = h('button', { class: 'qf-iconbtn qf-zen-exit', title: 'Exit distraction-free writing (Esc)', 'aria-label': 'Exit distraction-free writing', onclick: () => this.app.exec('view.distractionFree') }, icon('close_fullscreen'));
+    this.root.append(this.titlebar, this.tabsEl, this.ribbonEl, this.docTabsEl, main, this.qatBottom, this.statusEl, this.backstageEl, this.miniBar, zenExit, h('div', { class: 'qf-toasts' }));
     this.renderQat();
     this.renderTabs();
     this.renderRibbon();
@@ -578,7 +580,7 @@ export class Shell {
     };
     const show = () => {
       menuEl = showMenu(items().slice(0, 14).map((c) => ({ id: c.id, label: c.label, icon: c.icon })), {
-        x: coords.left, y: coords.bottom + 4, className: 'qf-slash-menu',
+        x: coords.left, y: coords.bottom + 4, className: 'qf-slash-menu', focus: false,
         onPick: (e) => { cleanup(); removeSlash(); if (e.id) app.exec(e.id); },
       });
     };

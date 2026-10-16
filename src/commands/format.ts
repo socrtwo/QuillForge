@@ -6,7 +6,7 @@ import { schema, PARA_DEFAULTS } from '../editor/schema';
 import {
   markActive, markAttr, toggleMark, setMark, removeMarks, clearCharFormatting, clearAllFormatting,
   setParaAttrs, paraAttr, effectiveParaProp, setParagraphStyle, toggleList, listIndent, findListAncestor,
-  mapSelectedText, transformCase, type CaseMode, currentParagraph, selectedParagraphs,
+  mapSelectedText, transformCase, type CaseMode, currentParagraph, selectedParagraphs, wordAt,
 } from '../editor/ops';
 import { resolveStyles, effectiveStyle, quickStyles, allStyles } from '../editor/styles';
 import { openDialog, colorMenu, toast, promptDialog } from '../ui/dialog';
@@ -232,8 +232,9 @@ def({
   id: 'fmt.changeCase', label: 'Change Case', icon: 'match_case', tab: 'Home', group: 'Font', kind: 'menu', edits: true, keys: ['Shift-F3'],
   run: (app, arg) => {
     if (arg) { mapSelectedText(v(app), (t) => transformCase(t, arg), arg === 'sentence' || arg === 'title' || arg === 'capitalize' || arg === 'toggle'); return; }
-    // Cycle: lower → upper → capitalize (Shift+F3 behavior)
-    const t = app.state.doc.textBetween(app.state.selection.from, app.state.selection.to);
+    // Cycle: lower → upper → capitalize (Shift+F3 behavior); a collapsed cursor cycles the word it is in.
+    const sel = app.state.selection;
+    const t = sel.empty ? wordAt(sel.$from)?.text || '' : app.state.doc.textBetween(sel.from, sel.to);
     const mode: CaseMode = t === t.toUpperCase() ? 'lower' : t === t.toLowerCase() ? 'capitalize' : 'upper';
     mapSelectedText(v(app), (s) => transformCase(s, mode), true);
   },
@@ -350,27 +351,51 @@ def([
 
 // Format painter: click = once, double-click (arg 'sticky') = repeated
 export const painter: { marks: readonly Mark[] | null; para: Record<string, any> | null; sticky: boolean } = { marks: null, para: null, sticky: false };
+let stopPainter: (() => void) | null = null;
+const PAINT_EVENTS = ['pointerdown', 'pointerup', 'pointercancel', 'keydown', 'keyup'];
 def({
   id: 'fmt.painter', label: 'Format Painter', icon: 'format_paint', tab: 'Home', group: 'Clipboard', kind: 'toggle', keys: ['Mod-Shift-c'], popular: true,
   tip: 'Copy formatting from the selection, then select text to apply it. Long-press to keep it on.',
   run: (app, arg) => {
-    if (painter.marks) { painter.marks = null; painter.para = null; app.ui.status(''); return; }
+    if (stopPainter) { stopPainter(); return; }
     const st = app.state;
     painter.marks = st.selection.empty ? (st.storedMarks || st.selection.$from.marks()) : (st.doc.nodeAt(st.selection.from)?.marks || st.selection.$from.marks());
     const p = currentParagraph(st);
     painter.para = p ? { ...p.attrs, id: null } : null;
     painter.sticky = arg === 'sticky';
     app.ui.status('Format Painter: select the text to format' + (painter.sticky ? ' (Esc to stop)' : ''));
+    // Paint the next selection the user makes, never the source (still selected when this runs), and only
+    // once the mouse button or Shift is released, so a drag or Shift+arrows paints the whole range.
+    let skip: { from: number; to: number } | null = st.selection.empty ? null : { from: st.selection.from, to: st.selection.to };
+    let held = false;
+    const onInput = (e: Event) => {
+      const key = (e as KeyboardEvent).key;
+      if (e.type === 'keydown' && key === 'Escape') { stop(); return; }
+      if (e.type.startsWith('key') && key !== 'Shift') return;
+      held = e.type === 'pointerdown' || e.type === 'keydown';
+      if (!held) app.refresh();
+    };
     const off = app.onRefresh(() => {
-      const s = app.state;
-      if (!painter.marks) { off(); return; }
-      if (!s.selection.empty) {
-        applyPaintedFormat(app);
-        if (!painter.sticky) { painter.marks = null; painter.para = null; app.ui.status(''); off(); }
-      }
+      const sel = app.state.selection;
+      if (!painter.marks) { stop(); return; }
+      if (held) return;
+      if (sel.empty) { skip = null; return; }
+      if (skip && sel.from === skip.from && sel.to === skip.to) return;
+      applyPaintedFormat(app);
+      skip = { from: app.state.selection.from, to: app.state.selection.to };
+      if (!painter.sticky) stop();
     });
+    const stop = () => {
+      off();
+      for (const t of PAINT_EVENTS) document.removeEventListener(t, onInput, true);
+      painter.marks = null; painter.para = null; stopPainter = null;
+      app.ui.status('');
+      app.refresh();
+    };
+    for (const t of PAINT_EVENTS) document.addEventListener(t, onInput, true);
+    stopPainter = stop;
   },
-  isActive: () => !!painter.marks,
+  isActive: () => !!stopPainter,
 });
 function applyPaintedFormat(app: App) {
   const view = v(app);

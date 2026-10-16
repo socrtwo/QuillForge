@@ -153,7 +153,7 @@ async function handleId(handle: any): Promise<string> {
   for (const [id, h] of handles) {
     try { if (await h.isSameEntry?.(handle)) { handles.set(id, handle); return id; } } catch { /* stale handle */ }
   }
-  // Unique across sessions too: the uri also keys recent files and saved versions.
+  // Unique per save, so two files with the same name in different folders never share a handle.
   const id = `${Date.now().toString(36)}${(++handleSeq).toString(36)}:${handle.name}`;
   handles.set(id, handle);
   return id;

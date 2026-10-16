@@ -1,7 +1,9 @@
 /** Review tab: proofing, comments, tracking, changes, compare, protect, accessibility, speech. */
 import { def } from './registry';
 import type { App } from '../app';
-import type { Node as PMNode } from 'prosemirror-model';
+import { Fragment, Mark, type Node as PMNode } from 'prosemirror-model';
+import type { EditorState, Transaction } from 'prosemirror-state';
+import { normalizeSettings } from '../editor/settings';
 import { schema } from '../editor/schema';
 import { trackKey, listChanges, resolveChanges, changesInRange } from '../editor/plugins/trackChanges';
 import { proofKey, coachKey } from '../editor/plugins/decorations';
@@ -43,7 +45,7 @@ export function textStats(text: string) {
 }
 
 def([
-  { id: 'review.spelling', label: 'Spelling & Grammar', icon: 'spellcheck', tab: 'Review', group: 'Proofing', keys: ['F7'], popular: true, run: (app) => { app.proofer.run(app.tab); app.ui.openPane('spelling'); } },
+  { id: 'review.spelling', label: 'Spelling & Grammar', icon: 'spellcheck', tab: 'Review', group: 'Proofing', keys: ['F7'], popular: true, run: (app) => { app.ui.openPane('spelling'); return app.proofer.run(app.tab); } },
   {
     id: 'review.spellDialect', label: 'English Spelling', icon: 'translate', tab: 'Review', group: 'Language', kind: 'menu',
     tip: 'Accept every standard English spelling (default), follow the document\'s language, or check one variety: US, UK (with Oxford -ize), Canada or Australia',
@@ -440,16 +442,18 @@ def([
     },
   },
   {
-    id: 'review.combine', label: 'Combine Revisions…', icon: 'merge_type', tab: 'Review', group: 'Compare',
+    id: 'review.combine', label: 'Combine Revisions…', icon: 'merge_type', tab: 'Review', group: 'Compare', edits: true,
     run: async (app) => {
+      if (refuseIfProtected(app)) return;
+      const tab = app.tab;
       toast('Choose the revised copy to combine into this document.');
       const { openDocument, OPEN_ACCEPT, OPEN_MIMES } = await import('../platform/native');
       const { importFile } = await import('../io');
       const f = await openDocument(OPEN_ACCEPT, OPEN_MIMES);
       if (!f) return;
       const other = (await importFile(f.data, f.name)).doc;
-      const doc = compareDocs(app.state.doc, other, f.name.replace(/\.[^.]+$/, ''));
-      app.replaceDoc(app.tab, doc);
+      if (!app.docs.includes(tab)) return;
+      tab.view.dispatch(combineTr(tab.view.state, other, f.name.replace(/\.[^.]+$/, '')));
     },
   },
   { id: 'review.compareVersions', label: 'Compare with Saved Version…', icon: 'history', tab: 'Review', group: 'Compare', run: (app) => app.ui.openPane('versions') },
@@ -462,8 +466,9 @@ def([
         { key: 'pw', label: 'Password (optional)', type: 'password', value: '' },
       ] });
       if (!r) return;
-      if (p.hash && r.mode !== p.mode) {
-        const pw = await promptDialog('Unprotect Document', 'Password:', '', { type: 'password' });
+      // Changing the mode or the password needs the current password.
+      if (p.hash && (r.mode !== p.mode || r.pw)) {
+        const pw = await promptDialog(r.mode !== p.mode ? 'Unprotect Document' : 'Change Password', 'Current password:', '', { type: 'password' });
         if (pw == null || (await sha(pw)) !== p.hash) { toast('Incorrect password.'); return; }
       }
       const hash = r.pw ? await sha(r.pw) : r.mode === 'none' ? undefined : p.hash;
@@ -485,6 +490,30 @@ def([
   },
   { id: 'review.hideInk', label: 'Hide Ink', icon: 'ink_eraser', tab: 'Review', group: 'Ink', kind: 'toggle', run: (app) => { app.tab.el.classList.toggle('qf-hide-ink'); app.refresh(); }, isActive: (app) => app.tab.el.classList.contains('qf-hide-ink') },
 ]);
+
+/** Combine Revisions as one undoable change to the current document: this document's settings (comments,
+ *  styles, page setup, protection) stay, unchanged text keeps its own formatting and comments, and the
+ *  revised copy's differences appear as tracked changes. compareDocs keeps its second argument's version of
+ *  unchanged text, so the revised copy is compared back to this one and the new changes (revision marks,
+ *  and the change attribute of block objects) are then flipped. */
+export function combineTr(state: EditorState, other: PMNode, label: string): Transaction {
+  const t0 = Date.now();
+  const merged = compareDocs(other, state.doc, label);
+  const t1 = Date.now();
+  const made = (a: { author?: string; date?: number }) => a.author === label && a.date! >= t0 && a.date! <= t1;
+  const flip = (m: Mark) => (!(m.type === M.insertion || m.type === M.deletion) || !made(m.attrs) ? m : m.type === M.insertion ? M.deletion.create(m.attrs) : M.insertion.create(m.attrs));
+  const swap = (n: PMNode): PMNode => {
+    const c = n.attrs.change;
+    let out = c && made(c) ? n.type.create({ ...n.attrs, change: { ...c, kind: c.kind === 'insertion' ? 'deletion' : 'insertion' } }, n.content, n.marks) : n;
+    if (n.content.size) { const kids: PMNode[] = []; n.forEach((k) => kids.push(swap(k))); out = out.copy(Fragment.fromArray(kids)); }
+    return n.marks.length ? out.mark(Mark.setFrom(n.marks.map(flip))) : out;
+  };
+  const content: PMNode[] = [];
+  merged.forEach((n) => content.push(swap(n)));
+  const s = JSON.parse(JSON.stringify(normalizeSettings(state.doc.attrs.settings)));
+  for (const [id, c] of Object.entries(normalizeSettings(other.attrs.settings).comments)) if (!s.comments[id]) s.comments[id] = c;
+  return state.tr.replaceWith(0, state.doc.content.size, content).setDocAttribute('settings', s).setMeta('trackSkip', true);
+}
 
 /** Hash used for Restrict Editing passwords (also used by Developer ▸ Protect for Form Filling). */
 export async function sha(s: string): Promise<string> {

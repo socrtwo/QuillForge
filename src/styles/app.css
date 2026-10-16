@@ -589,12 +589,16 @@ textarea { width: 100%; resize: vertical; font-family: ui-monospace, "Cousine", 
   .qf-status-view:not(.qf-on) { display: none; }
 }
 body.qf-zen .qf-titlebar, body.qf-zen .qf-tabs, body.qf-zen .qf-ribbon, body.qf-zen .qf-status, body.qf-zen .qf-doctabs, body.qf-zen .qf-qat-bottom { display: none !important; }
+.qf-zen-exit { display: none !important; position: fixed; top: calc(6px + env(safe-area-inset-top)); right: 8px; z-index: 650; background: var(--surface); color: var(--text); box-shadow: var(--shadow); opacity: .6; }
+.qf-zen-exit:hover, .qf-zen-exit:focus-visible { opacity: 1; }
+body.qf-zen .qf-zen-exit { display: inline-flex !important; }
 
 /* Print ------------------------------------------------------------------------------- */
 @media print {
   html, body { height: auto; overflow: visible; background: #fff; }
   .qf-app { display: block; height: auto; padding: 0; }
   .qf-titlebar, .qf-tabs, .qf-ribbon, .qf-doctabs, .qf-pane, .qf-status, .qf-qat-bottom, .qf-backstage, .qf-minibar, .qf-toasts, .qf-ruler, .qf-menu, .qf-overlay { display: none !important; }
+  body.qf-zen .qf-zen-exit { display: none !important; }
   .qf-main, .qf-workspace { display: block; }
   .qf-scroll { overflow: visible; background: #fff !important; }
   .qf-hidden-tab { display: none !important; }

@@ -17,11 +17,35 @@ import { h } from '../ui/dom';
 import { showRecoveryReport, showManualRecovery, recoverySummary } from '../ui/recovery';
 import { SPELL_DIALECTS } from '../proof/proofing';
 import { refuseIfProtected } from './review';
+import { sanitizePrefs } from '../prefs';
 
 const N = schema.nodes;
 
+/** Key for a document's cached copy, Recent entry, snapshots and AI notes. Native URIs are unique and lasting;
+ *  other files (the web build, whose File System Access handles last one session) keep the key they opened with. */
 export function docKey(tab: DocTab): string {
-  return tab.uri || `local:${tab.fileName || tab.title}`;
+  return (tab.uri && !tab.uri.startsWith('fsa:') ? tab.uri : '') || tab.key || `doc:${tab.id}`;
+}
+
+/** Key for a file opened without a URI: its name plus a fingerprint of its bytes (same-named files differ). */
+export function localKey(name: string, data: ArrayBuffer): string {
+  const b = new Uint8Array(data);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < b.length; i++) h = Math.imul(h ^ b[i], 0x01000193);
+  return `doc:${name}:${b.length.toString(36)}.${(h >>> 0).toString(36)}`;
+}
+
+/** The key of a Recent file last opened or saved here with exactly these bytes, so a file saved and opened
+ *  again keeps its versions and notes. */
+async function knownKey(app: App, name: string, data: ArrayBuffer): Promise<string | null> {
+  const b = new Uint8Array(data);
+  for (const r of app.prefs.recent) {
+    if (r.name !== name || !r.key.startsWith('doc:')) continue;
+    const c = await kvGet('file:' + r.key);
+    const d = c?.data instanceof ArrayBuffer ? new Uint8Array(c.data) : null;
+    if (d && d.length === b.length && d.every((x, i) => x === b[i])) return r.key;
+  }
+  return null;
 }
 
 function isPristine(tab: DocTab): boolean {
@@ -37,10 +61,10 @@ async function openRecoveredText(app: App, text: string, name: string): Promise<
   app.activate(tab);
 }
 
-export async function openBuffer(app: App, data: ArrayBuffer, name: string, uri: string | null, opts: { repair?: boolean; textOnly?: boolean } = {}): Promise<DocTab | null> {
+export async function openBuffer(app: App, data: ArrayBuffer, name: string, uri: string | null, opts: { repair?: boolean; textOnly?: boolean; key?: string } = {}): Promise<DocTab | null> {
   try {
     if (opts.repair || opts.textOnly) toast(opts.textOnly ? `Recovering text from ${name}…` : `Repairing ${name}…`);
-    const { doc, format, recovery } = await importFile(data, name, opts);
+    const { doc, format, recovery } = await importFile(data, name, { repair: opts.repair, textOnly: opts.textOnly });
     if (recovery && recovery.mode === 'text' && recovery.bestKey === 'strings' && !opts.textOnly) {
       const go = await confirmDialog('Only Text Fragments Recovered', `${name} is too badly damaged to open normally. Only loose text fragments (${recovery.bestText.length.toLocaleString()} characters) could be recovered. Open them in a new document?`, 'Open fragments', 'Cancel');
       if (!go) { void showRecoveryReport(recovery); return null; }
@@ -49,8 +73,8 @@ export async function openBuffer(app: App, data: ArrayBuffer, name: string, uri:
     const base = name.replace(/\.[^.]+$/, '');
     // A recovered document never writes back over the damaged original: Save asks for a new name.
     const meta = recovery
-      ? { title: `${base} (Recovered)`, fileName: `${base} (Recovered).${format.ext[0] === 'doc' ? 'docx' : format.ext[0]}`, format: format.canExport ? format.id : 'docx', uri: null }
-      : { title: base, fileName: name, format: format.id, uri };
+      ? { title: `${base} (Recovered)`, fileName: `${base} (Recovered).${format.ext[0] === 'doc' ? 'docx' : format.ext[0]}`, format: format.canExport ? format.id : 'docx', uri: null, key: '' }
+      : { title: base, fileName: name, format: format.id, uri, key: uri && !uri.startsWith('fsa:') ? '' : opts.key || (await knownKey(app, name, data)) || localKey(name, data) };
     let tab: DocTab;
     if (cur && isPristine(cur)) {
       Object.assign(cur, meta);
@@ -87,8 +111,8 @@ function addRecent(app: App, tab: DocTab) {
   app.savePrefs();
 }
 
-async function snapshot(app: App, tab: DocTab, label: string) {
-  await kvSet(`snap:${docKey(tab)}:${Date.now()}`, { label, json: tab.view.state.doc.toJSON(), words: countWords(docText(tab.view.state.doc)), when: Date.now(), name: tab.displayName });
+async function snapshot(app: App, tab: DocTab, label: string, doc = tab.view.state.doc) {
+  await kvSet(`snap:${docKey(tab)}:${Date.now()}`, { label, json: doc.toJSON(), words: countWords(docText(doc)), when: Date.now(), name: tab.displayName });
 }
 
 export async function saveTab(app: App, tab: DocTab, opts: { as?: boolean; format?: string; copy?: boolean } = {}): Promise<boolean> {
@@ -105,31 +129,32 @@ export async function saveTab(app: App, tab: DocTab, opts: { as?: boolean; forma
   const base = (tab.fileName || tab.title || 'Document').replace(/\.[^.]+$/, '');
   const name = `${base}.${formatById(format)!.ext[0]}`;
   app.updateFields(tab);
-  const blob = await exportFile(tab.view.state.doc, format, { fileName: name, author: s.properties.author || app.prefs.author, title: s.properties.title || base });
+  const doc = tab.view.state.doc; // the version written; edits made while saving stay unsaved
+  const blob = await exportFile(doc, format, { fileName: name, author: s.properties.author || app.prefs.author, title: s.properties.title || base });
   if (!opts.as && !opts.copy && tab.uri && format === tab.format) {
     try {
-      if (await writeBack(tab.uri, blob)) { markSaved(app, tab); toast(`Saved ${tab.displayName}`); await snapshot(app, tab, 'Saved'); return true; }
+      if (await writeBack(tab.uri, blob)) { markSaved(app, tab, doc); toast(`Saved ${tab.displayName}`); await snapshot(app, tab, 'Saved', doc); return true; }
     } catch (e) { console.warn(e); }
   }
   const r = await saveAs(blob, name);
   if (!r) return false;
   if (!opts.copy) {
     tab.fileName = r.name; tab.title = r.name.replace(/\.[^.]+$/, ''); tab.format = formatForName(r.name)?.id || format; tab.uri = r.uri;
-    markSaved(app, tab);
+    markSaved(app, tab, doc);
     addRecent(app, tab);
     await kvSet('file:' + docKey(tab), { name: r.name, data: await blob.arrayBuffer(), uri: r.uri, when: Date.now() });
-    await snapshot(app, tab, 'Saved');
+    await snapshot(app, tab, 'Saved', doc);
   }
   toast(`Saved ${r.name}`);
   return true;
 }
 
-function markSaved(app: App, tab: DocTab) {
-  tab.dirty = false;
+function markSaved(app: App, tab: DocTab, doc: PMNode) {
   tab.saved = Date.now();
-  kvDel('draft:' + tab.id);
+  // Edits made while the file was being written are not in it: the tab stays unsaved and keeps its draft.
+  if (tab.view.state.doc.eq(doc)) { tab.dirty = false; kvDel('draft:' + tab.id); } else app.scheduleAutosave();
   app.ui.tabsChanged();
-  document.title = `${tab.displayName} – QuillForge`;
+  document.title = `${tab.displayName}${tab.dirty ? ' •' : ''} – QuillForge`;
 }
 
 function hasRichContent(doc: PMNode): boolean {
@@ -219,7 +244,10 @@ def([
       let f = rec.uri ? await readUri(rec.uri) : null;
       if (!f) { const cached = await kvGet('file:' + key); if (cached) f = { name: cached.name, data: cached.data, uri: cached.uri }; }
       if (!f) { toast('That file is no longer available. Use Open to locate it.'); return; }
-      await openBuffer(app, f.data, f.name, f.uri);
+      // Keep the entry's key (its snapshots and notes); old name-only keys collided, so those get a new one.
+      const legacy = key.startsWith('local:');
+      const tab = await openBuffer(app, f.data, f.name, f.uri, { key: legacy ? undefined : key });
+      if (tab && legacy && docKey(tab) !== key) { app.prefs.recent = app.prefs.recent.filter((r) => r.key !== key); app.savePrefs(); }
       app.ui.hideBackstage();
     },
     menu: (app) => app.prefs.recent.slice(0, 12).map((r) => ({ id: 'file.openRecent', arg: r.key, label: (r.pinned ? '📌 ' : '') + r.name })),
@@ -416,7 +444,7 @@ def([
       const r = await openDialog({ title: 'Document Recovery', fields: [{ key: 'k', label: 'Available drafts', type: 'list', multiple: true, rows: 8, options: drafts.map(({ k, d }) => ({ value: k, label: `${d.fileName || d.title} — ${new Date(d.time).toLocaleString()}` })), value: keys }], buttons: [{ label: 'Discard All', onClick: async (_v, ctl) => { for (const k of keys) await kvDel(k); ctl.close(); toast('Drafts discarded'); } }], ok: 'Recover' });
       if (!r?.k?.length) return;
       for (const { k, d } of drafts.filter((x) => r.k.includes(x.k))) {
-        app.createTab(schema.nodeFromJSON(d.json), { title: d.title, fileName: d.fileName, format: d.format, uri: d.uri, dirty: true } as any);
+        app.createTab(schema.nodeFromJSON(d.json), { title: d.title, fileName: d.fileName, format: d.format, uri: d.uri, key: d.key || '', dirty: true } as any);
         await kvDel(k);
       }
     },
@@ -511,7 +539,20 @@ def([
     run: async (app) => {
       const r = await openDialog({ title: 'Settings Transfer', help: 'Copy this text to back up your Quick Access Bar, custom tabs, shortcuts, macros, building blocks, AutoCorrect and preferences. Paste settings text here and choose Import to restore.', fields: [{ key: 'json', label: 'Settings (JSON)', type: 'textarea', rows: 12, value: JSON.stringify({ ...app.prefs, recent: [] }, null, 1) }], ok: 'Import', buttons: [{ label: 'Copy', onClick: (x) => { navigator.clipboard?.writeText(x.json); toast('Copied'); } }] });
       if (!r) return;
-      try { const p = JSON.parse(r.json); Object.assign(app.prefs, p, { recent: app.prefs.recent }); app.savePrefs(); app.ui.applyPrefs(); app.ui.rebuild(); toast('Settings imported'); } catch { toast('That is not valid settings JSON.'); }
+      let p: unknown;
+      try { p = JSON.parse(r.json); } catch { /* reported below */ }
+      if (!p || typeof p !== 'object' || Array.isArray(p)) { toast('That is not valid settings JSON.'); return; }
+      // Only well-formed values are taken, and nothing is stored until the interface has rebuilt with them.
+      const before = JSON.parse(JSON.stringify(app.prefs));
+      const s = sanitizePrefs(p);
+      Object.assign(app.prefs, s, { autoformat: { ...app.prefs.autoformat, ...(s.autoformat || {}) }, recent: app.prefs.recent });
+      try { app.ui.applyPrefs(); app.ui.rebuild(); } catch (e: any) {
+        Object.assign(app.prefs, before); app.ui.applyPrefs(); app.ui.rebuild();
+        toast(`These settings could not be applied: ${e?.message || e}`);
+        return;
+      }
+      app.savePrefs();
+      toast('Settings imported');
     },
   },
   { id: 'file.resetCustomizations', label: 'Reset All Customizations', icon: 'restart_alt', tab: 'Backstage', group: 'Options', noRecord: true, run: async (app) => { if (!(await confirmDialog('Reset', 'Reset the Quick Access Bar, custom tabs and keyboard shortcuts to defaults?'))) return; const { DEFAULT_QAT } = await import('../prefs'); app.prefs.qat = [...DEFAULT_QAT]; app.prefs.customTabs = []; app.prefs.hiddenTabs = []; app.prefs.keymap = {}; app.savePrefs(); app.ui.rebuild(); } },

@@ -1,8 +1,8 @@
 /** Insert tab: pages, tables, illustrations, links, header/footer, text, symbols. */
 import { def } from './registry';
 import type { App } from '../app';
-import { TextSelection, NodeSelection } from 'prosemirror-state';
-import { Fragment, Slice, type Node as PMNode } from 'prosemirror-model';
+import { TextSelection, NodeSelection, type EditorState } from 'prosemirror-state';
+import { Fragment, Slice, type Mark, type Node as PMNode } from 'prosemirror-model';
 import { schema } from '../editor/schema';
 import { insertBlock, insertInline, markAttr, selectedText, setMark } from '../editor/ops';
 import { openDialog, toast, promptDialog, showMenu, confirmDialog } from '../ui/dialog';
@@ -348,15 +348,17 @@ def([
     id: 'insert.link', label: 'Link', icon: 'link', tab: 'Insert', group: 'Links', keys: ['Mod-k'], edits: true, popular: true,
     run: async (app, arg) => {
       const st = app.state;
-      const cur = markAttr(st, M.link, 'href') || '';
+      // A collapsed cursor inside a link edits that whole link (its text and address).
+      const at = !arg?.href && st.selection.empty ? linkAtCursor(st) : null;
+      const cur = at?.mark.attrs.href || markAttr(st, M.link, 'href') || '';
       let href = arg?.href, text = arg?.text;
       if (!href) {
         const bookmarks: string[] = [];
         st.doc.descendants((n) => { if (n.type === N.bookmark) bookmarks.push('#' + n.attrs.name); return true; });
         const r = await openDialog({ title: cur ? 'Edit Link' : 'Insert Link', fields: [
-          { key: 'text', label: 'Text to display', type: 'text', value: selectedText(st) },
+          { key: 'text', label: 'Text to display', type: 'text', value: at ? st.doc.textBetween(at.from, at.to) : selectedText(st) },
           { key: 'href', label: 'Address (web page, mailto:, tel:, or #bookmark)', type: 'combo', options: bookmarks, value: cur || '', autofocus: true },
-          { key: 'title', label: 'ScreenTip', type: 'text', value: markAttr(st, M.link, 'title') || '' },
+          { key: 'title', label: 'ScreenTip', type: 'text', value: (at ? at.mark.attrs.title : markAttr(st, M.link, 'title')) || '' },
         ], buttons: cur ? [{ label: 'Remove Link', onClick: (_v, ctl) => { app.exec('insert.removeLink'); ctl.close(); } }] : [] });
         if (!r || !r.href) return;
         href = r.href.trim(); text = r.text;
@@ -365,6 +367,14 @@ def([
       }
       const view = v(app);
       const mark = M.link.create({ href, title: arg?.title || null });
+      const link = at && view.state.selection.empty ? linkAtCursor(view.state) : null;
+      if (link) {
+        const tr = view.state.tr;
+        if (text && text !== view.state.doc.textBetween(link.from, link.to)) tr.replaceWith(link.from, link.to, schema.text(text, mark.addToSet(link.mark.removeFromSet(view.state.doc.resolve(link.from + 1).marks()))));
+        else tr.removeMark(link.from, link.to, M.link).addMark(link.from, link.to, mark);
+        view.dispatch(tr.scrollIntoView());
+        return;
+      }
       const { from, to, empty } = view.state.selection;
       if (empty || (text && text !== selectedText(view.state))) {
         const t = text || href;
@@ -381,20 +391,9 @@ def([
       const st = app.state;
       let { from, to } = st.selection;
       if (from === to) {
-        // Links are non-inclusive, so $pos.marks() is unreliable at their edges: look at the inline
-        // children around the cursor and take the whole run carrying the same link mark.
-        const $p = st.selection.$from;
-        const parent = $p.parent;
-        let i = $p.index();
-        const linkOf = (k: number) => (k >= 0 && k < parent.childCount ? M.link.isInSet(parent.child(k).marks) : null);
-        let m = $p.textOffset ? linkOf(i) : null;
-        if (!m && !$p.textOffset) { m = linkOf(i - 1); if (m) i--; else m = linkOf(i); }
-        if (!m) return;
-        let a = i, b = i;
-        while (a > 0 && m.isInSet(parent.child(a - 1).marks)) a--;
-        while (b < parent.childCount - 1 && m.isInSet(parent.child(b + 1).marks)) b++;
-        from = $p.start(); to = from;
-        for (let k = 0; k <= b; k++) { const size = parent.child(k).nodeSize; if (k < a) from += size; to += size; }
+        const link = linkAtCursor(st);
+        if (!link) return;
+        ({ from, to } = link);
       }
       v(app).dispatch(st.tr.removeMark(from, to, M.link));
     },
@@ -426,6 +425,24 @@ def([
     },
   },
 ]);
+
+/** The whole link run around a collapsed cursor. Links are non-inclusive, so $pos.marks() is unreliable at
+ *  their edges: look at the inline children around the cursor and take the run carrying the same link mark. */
+function linkAtCursor(st: EditorState): { from: number; to: number; mark: Mark } | null {
+  const $p = st.selection.$from;
+  const parent = $p.parent;
+  let i = $p.index();
+  const linkOf = (k: number) => (k >= 0 && k < parent.childCount ? M.link.isInSet(parent.child(k).marks) : null);
+  let m = $p.textOffset ? linkOf(i) : null;
+  if (!m && !$p.textOffset) { m = linkOf(i - 1); if (m) i--; else m = linkOf(i); }
+  if (!m) return null;
+  let a = i, b = i;
+  while (a > 0 && m.isInSet(parent.child(a - 1).marks)) a--;
+  while (b < parent.childCount - 1 && m.isInSet(parent.child(b + 1).marks)) b++;
+  let from = $p.start(), to = from;
+  for (let k = 0; k <= b; k++) { const size = parent.child(k).nodeSize; if (k < a) from += size; to += size; }
+  return { from, to, mark: m };
+}
 
 // Header & footer ------------------------------------------------------------------------------
 const HF_PRESETS: Record<string, { left: string; center: string; right: string }> = {

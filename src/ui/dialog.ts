@@ -141,6 +141,9 @@ export function openDialog(opts: DialogOptions): Promise<Record<string, any> | n
     }
     const onKey = (e: KeyboardEvent) => {
       if (dialogStack[dialogStack.length - 1] !== overlay) return;
+      // Shortcut capture boxes (Customize Keyboard) take Enter and modified keys themselves; plain Escape still closes.
+      const plainEsc = e.key === 'Escape' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey;
+      if ((e.target as HTMLElement | null)?.closest?.('[data-capture-keys]') && !plainEsc) return;
       if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); finish(null); }
       if (e.key === 'Enter' && !(e.target instanceof HTMLTextAreaElement) && !(e.target instanceof HTMLButtonElement) && opts.ok !== false) {
         e.preventDefault(); e.stopImmediatePropagation(); okClick();
@@ -171,8 +174,9 @@ export function openDialog(opts: DialogOptions): Promise<Record<string, any> | n
     build();
     opts.onOpen?.(ctl);
     opts.onChange?.(values(), ctl, '');
-    const first = body.querySelector<HTMLElement>('[autofocus], input:not([type=checkbox]):not([type=radio]), textarea, select');
-    setTimeout(() => first?.focus(), 30);
+    // The field marked autofocus (else the first text field), unless the user already moved into the dialog.
+    const first = body.querySelector<HTMLElement>('[autofocus]') || body.querySelector<HTMLElement>('input:not([type=checkbox]):not([type=radio]), textarea, select');
+    setTimeout(() => { if (!box.contains(document.activeElement)) first?.focus(); }, 30);
   });
 }
 
@@ -213,6 +217,7 @@ function buildField(f: Field, ctl: DialogControl, changed: () => void): { row: H
       const inp = h('input', { id, type: 'text', list: listId, value: f.value ?? '', placeholder: f.placeholder || '' });
       const dl = h('datalist', { id: listId }, ...(f.options || []).map((o) => h('option', { value: typeof o === 'string' ? o : String(o.value) })));
       inp.addEventListener('input', changed);
+      if (f.autofocus) inp.setAttribute('autofocus', '');
       el = inp;
       const row = h('div', { class: 'qf-field' + (f.half ? ' qf-half' : '') }, label, h('div', { class: 'qf-ctl' }, inp, dl, f.suffix ? h('span', { class: 'qf-suffix' }, f.suffix) : null), f.help ? h('div', { class: 'qf-help' }, f.help) : null);
       return { row, el };
@@ -384,6 +389,14 @@ export async function promptDialog(title: string, label: string, value = '', opt
 // Popup menus
 
 let openMenus: HTMLElement[] = [];
+/** Where focus goes back to when a menu is left with the keyboard (the button or editor it was opened from). */
+let menuReturn: HTMLElement | null = null;
+/** Whether the latest input was a key press: menus opened from the keyboard take focus, others leave it alone. */
+let keyboardInput = false;
+if (typeof document !== 'undefined') {
+  document.addEventListener('keydown', () => { keyboardInput = true; }, true);
+  for (const t of ['pointerdown', 'mousedown', 'touchstart']) document.addEventListener(t, () => { keyboardInput = false; }, true);
+}
 
 export function closeMenus(): void {
   for (const m of openMenus) m.remove();
@@ -406,10 +419,33 @@ export interface MenuOptions {
   title?: string;
   grid?: boolean;
   extra?: HTMLElement;
+  /** Move focus into the menu (default: when it was opened from the keyboard). */
+  focus?: boolean;
 }
 
+const menuItems = (menu: HTMLElement) => [...menu.querySelectorAll<HTMLElement>('button, input')].filter((x) => !(x as HTMLButtonElement).disabled && (x.offsetParent !== null || x === document.activeElement));
+
+/** Arrow keys, Home/End, Right/Left for submenus, Escape and Tab inside a menu. */
+function menuKey(ev: KeyboardEvent, menu: HTMLElement, level: number) {
+  const items = menuItems(menu);
+  const cur = document.activeElement as HTMLElement | null;
+  const i = cur ? items.indexOf(cur) : -1;
+  const typing = cur?.tagName === 'INPUT';
+  const go = (j: number) => { ev.preventDefault(); items[(j + items.length) % items.length]?.focus(); };
+  if (ev.key === 'ArrowDown') go(i + 1);
+  else if (typing) { if (ev.key === 'Escape' || ev.key === 'Tab') leave(ev); }
+  else if (ev.key === 'ArrowUp') go(i < 0 ? items.length - 1 : i - 1);
+  else if (ev.key === 'Home') go(0);
+  else if (ev.key === 'End') go(items.length - 1);
+  else if (ev.key === 'ArrowRight' && cur?.querySelector('.qf-sub')) { ev.preventDefault(); cur.click(); }
+  else if (ev.key === 'ArrowLeft' && level > 0) { ev.preventDefault(); for (const m of openMenus.slice(level)) m.remove(); openMenus = openMenus.slice(0, level); (menu as any)._back?.focus?.(); }
+  else if (ev.key === 'Escape' || ev.key === 'Tab') leave(ev);
+}
+function leave(ev: KeyboardEvent) { ev.preventDefault(); const back = menuReturn; closeMenus(); back?.focus?.(); }
+
 export function showMenu(entries: MenuEntry[], opts: MenuOptions): HTMLElement {
-  if (!opts.level) closeMenus();
+  const prior = document.activeElement as HTMLElement | null;
+  if (!opts.level) { if (!prior?.closest?.('.qf-menu')) menuReturn = prior; closeMenus(); }
   const phone = isPhone();
   const menu = h('div', { class: 'qf-menu' + (opts.className ? ' ' + opts.className : '') + (opts.grid ? ' qf-menu-grid' : ''), role: 'menu' });
   if (opts.title) menu.appendChild(h('div', { class: 'qf-menu-title' }, opts.title));
@@ -440,7 +476,9 @@ export function showMenu(entries: MenuEntry[], opts: MenuOptions): HTMLElement {
         }
         return;
       }
+      const back = keyboardInput && menu.contains(document.activeElement) ? menuReturn : null;
       closeMenus();
+      back?.focus?.();
       opts.onPick(e);
     });
     menu.appendChild(item);
@@ -448,6 +486,8 @@ export function showMenu(entries: MenuEntry[], opts: MenuOptions): HTMLElement {
   if (opts.extra) menu.appendChild(opts.extra);
   document.body.appendChild(menu);
   openMenus.push(menu);
+  (menu as any)._back = prior;
+  menu.addEventListener('keydown', (ev) => menuKey(ev, menu, opts.level || 0));
   // position
   const vw = window.innerWidth, vh = window.innerHeight;
   const mr = menu.getBoundingClientRect();
@@ -457,6 +497,7 @@ export function showMenu(entries: MenuEntry[], opts: MenuOptions): HTMLElement {
   if (y + mr.height > vh - 4) y = Math.max(4, vh - mr.height - 4);
   menu.style.left = x + 'px';
   menu.style.top = y + 'px';
+  if (opts.focus ?? keyboardInput) menuItems(menu)[0]?.focus();
   if (!opts.level) {
     setTimeout(() => {
       document.addEventListener('mousedown', outside, true);
@@ -489,7 +530,9 @@ export function colorMenu(anchor: HTMLElement | { x: number; y: number }, opts: 
       if (resolved) return;
       resolved = true;
       if (c && !recentColors.includes(c)) { recentColors.unshift(c); recentColors.splice(10); }
+      const back = keyboardInput && m.contains(document.activeElement) ? menuReturn : null;
       closeMenus();
+      back?.focus?.();
       resolve(c);
     };
     const grid = h('div', { class: 'qf-colors' });

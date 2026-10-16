@@ -127,11 +127,44 @@ export function loadPrefs(): Prefs {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return d;
-    const p = JSON.parse(raw);
+    const p = sanitizePrefs(JSON.parse(raw));
     return { ...d, ...p, autoformat: { ...d.autoformat, ...(p.autoformat || {}) }, replacements: p.replacements || d.replacements };
   } catch {
     return d;
   }
+}
+
+const ENUMS: Partial<Record<keyof Prefs, readonly string[]>> = {
+  qatPosition: ['top', 'bottom'], units: ['in', 'cm', 'mm', 'pt'], theme: ['system', 'light', 'dark'], ribbon: ['full', 'tabs', 'hidden'],
+  defaultView: ['auto', 'print', 'mobile', 'web'], focus: ['off', 'paragraph', 'sentence', 'line'],
+  pasteDefault: ['keep', 'merge', 'text'], fieldShading: ['always', 'selected', 'never'],
+};
+const isObj = (v: unknown): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v);
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+
+/** Keeps only preferences of the expected shape (stored, or pasted into Import Settings), so a damaged or
+ *  hand-edited settings file cannot leave the app unable to start. Unknown keys are dropped. */
+export function sanitizePrefs(raw: unknown): Partial<Prefs> {
+  if (!isObj(raw)) return {};
+  const d = defaultPrefs() as Record<string, any>;
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (!(k in d)) continue;
+    const def = d[k];
+    if (Array.isArray(def) ? Array.isArray(v) : isObj(def) ? isObj(v) : typeof v === typeof def && (typeof v !== 'number' || Number.isFinite(v))) out[k] = v;
+  }
+  for (const [k, ok] of Object.entries(ENUMS)) if (k in out && !ok!.includes(out[k])) delete out[k];
+  for (const k of ['qat', 'hiddenTabs', 'tabOrder', 'dictionary', 'ignoredWords', 'statusItems', 'pinnedCommands']) if (k in out) out[k] = strings(out[k]);
+  for (const k of ['keymap', 'replacements']) if (k in out) out[k] = Object.fromEntries(Object.entries(out[k]).filter(([, x]) => typeof x === 'string'));
+  if (out.autoformat) out.autoformat = Object.fromEntries(Object.entries(out.autoformat).filter(([k, x]) => k in d.autoformat && typeof x === typeof d.autoformat[k]));
+  if (out.customTabs) {
+    out.customTabs = out.customTabs.filter((t: any) => isObj(t) && typeof t.id === 'string' && Array.isArray(t.groups))
+      .map((t: any) => ({ ...t, label: String(t.label ?? t.id), groups: t.groups.filter(isObj).map((g: any) => ({ ...g, id: String(g.id ?? ''), label: String(g.label ?? ''), items: strings(g.items) })) }));
+  }
+  if (out.recent) out.recent = out.recent.filter((r: any) => isObj(r) && typeof r.key === 'string' && typeof r.name === 'string');
+  if (out.macros) out.macros = out.macros.filter((m: any) => isObj(m) && typeof m.name === 'string' && Array.isArray(m.steps) && m.steps.every((s: any) => isObj(s) && typeof s.id === 'string'));
+  if (out.snippets) out.snippets = out.snippets.filter((s: any) => isObj(s) && typeof s.name === 'string');
+  return out as Partial<Prefs>;
 }
 
 export function savePrefs(p: Prefs): void {

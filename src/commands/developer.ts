@@ -110,7 +110,7 @@ def([
       if (!r?.name) return;
       app.recording = { name: r.name, steps: [] };
       (app.recording as any).meta = r;
-      app.ui.status('● Recording macro… everything you type and every command is recorded');
+      app.ui.status('● Recording macro… typing, editing keys (Enter, Backspace, Delete, Tab) and commands are recorded');
       toast('Recording. Use Stop Recording (status bar) when done.');
     },
     isActive: (app) => !!app.recording,

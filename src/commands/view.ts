@@ -6,6 +6,7 @@ import { focusKey, foldKey, allHeadingKeys } from '../editor/plugins/decorations
 import { currentParagraph, setParaAttrs, moveBlocks } from '../editor/ops';
 import { openDialog, toast } from '../ui/dialog';
 import { keepAwake } from '../platform/native';
+import { prettyKey } from '../editor/setup';
 
 const N = schema.nodes;
 const v = (app: App) => app.view;
@@ -69,7 +70,11 @@ def([
   { id: 'view.nextWindow', label: 'Next Document', icon: 'arrow_forward', tab: 'View', group: 'Window', keys: ['Mod-F6'], noRecord: true, run: (app) => { const i = app.docs.indexOf(app.tab); app.activate(app.docs[(i + 1) % app.docs.length]); } },
   { id: 'view.prevWindow', label: 'Previous Document', icon: 'arrow_back', tab: 'View', group: 'Window', keys: ['Mod-Shift-F6'], noRecord: true, run: (app) => { const i = app.docs.indexOf(app.tab); app.activate(app.docs[(i - 1 + app.docs.length) % app.docs.length]); } },
   { id: 'view.fullScreen', label: 'Full Screen', icon: 'fullscreen', tab: 'View', group: 'Window', kind: 'toggle', noRecord: true, run: () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.(); }, isActive: () => !!document.fullscreenElement },
-  { id: 'view.distractionFree', label: 'Distraction-Free Writing', icon: 'self_improvement', tab: 'View', group: 'Window', kind: 'toggle', keys: ['Mod-Alt-Shift-z'], noRecord: true, origin: 'Distraction-free editors', run: (app) => { document.body.classList.toggle('qf-zen'); app.ui.applyPrefs(); toast(document.body.classList.contains('qf-zen') ? 'Press Ctrl+Shift+Enter or tap the top edge to exit' : ''); }, isActive: () => document.body.classList.contains('qf-zen') },
+  {
+    id: 'view.distractionFree', label: 'Distraction-Free Writing', icon: 'self_improvement', tab: 'View', group: 'Window', kind: 'toggle', keys: ['Mod-Alt-Shift-z'], noRecord: true, origin: 'Distraction-free editors',
+    run: (app) => { const on = document.body.classList.toggle('qf-zen'); app.ui.applyPrefs(); if (on) toast(`Press Esc or ${prettyKey('Mod-Alt-Shift-z')}, or tap ✕ at the top right, to exit`); },
+    isActive: () => document.body.classList.contains('qf-zen'),
+  },
   { id: 'view.commandSearch', label: 'Search Commands', icon: 'manage_search', tab: 'View', group: 'Window', keys: ['Alt-q'], popular: true, noRecord: true, run: (app) => app.ui.commandPalette() },
   { id: 'view.cmdSearch', label: 'Search Commands', icon: 'search', tab: 'View', group: 'Window', internal: true, noRecord: true, run: (app) => app.ui.commandPalette() },
   { id: 'view.collapseRibbon', label: 'Collapse the Ribbon', icon: 'expand_less', tab: 'View', group: 'Window', kind: 'toggle', keys: ['Mod-F1'], noRecord: true, run: (app) => { app.prefs.ribbon = app.prefs.ribbon === 'full' ? 'tabs' : 'full'; app.savePrefs(); app.ui.applyPrefs(); }, isActive: (app) => app.prefs.ribbon !== 'full' },

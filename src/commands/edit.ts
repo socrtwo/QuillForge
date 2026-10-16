@@ -1,5 +1,5 @@
 /** Clipboard, editing, selection, find/replace and navigation commands. */
-import { def } from './registry';
+import { def, getCommand } from './registry';
 import type { App } from '../app';
 import { undo, redo, undoDepth, redoDepth } from 'prosemirror-history';
 import { TextSelection, NodeSelection, Selection } from 'prosemirror-state';
@@ -296,6 +296,29 @@ def([
   { id: 'edit.lineBreak', label: 'Insert Line Break', icon: 'keyboard_return', tab: 'Insert', group: 'Text', keys: ['Shift-Enter'], edits: true, run: (app) => app.view.dispatch(app.state.tr.replaceSelectionWith(N.hard_break.create()).scrollIntoView()) },
   { id: 'edit.typeText', label: 'Type Text', icon: 'keyboard', tab: 'Home', group: 'Editing', internal: true, edits: true, run: (app, text) => app.view.dispatch(app.state.tr.insertText(String(text ?? '')).scrollIntoView()) },
   {
+    // Replays an editing key recorded in a macro (Enter, Backspace, Delete, Tab...) through the editor's keymaps.
+    id: 'edit.key', label: 'Press Key', icon: 'keyboard', tab: 'Home', group: 'Editing', internal: true, edits: true, noRecord: true,
+    run: (app, key: string) => {
+      const parts = String(key || '').split('-');
+      const base = parts.pop() || '';
+      const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+      const has = (m: string) => parts.includes(m);
+      const ev = new KeyboardEvent('keydown', { key: base, bubbles: true, cancelable: true, ctrlKey: has('Ctrl') || (has('Mod') && !mac), metaKey: has('Mod') && mac, altKey: has('Alt'), shiftKey: has('Shift') });
+      const view = app.view;
+      if (view.someProp('handleKeyDown', (f) => f(view, ev))) return true;
+      // Deleting a character (or word) at a collapsed cursor is the browser's job, so it is done here.
+      const st = view.state, $h = st.selection.$head, back = base === 'Backspace';
+      if (!st.selection.empty || (!back && base !== 'Delete')) return false;
+      if (has('Mod') || has('Alt')) return getCommand(back ? 'edit.deleteWordBack' : 'edit.deleteWordFwd')!.run(app);
+      const off = $h.parentOffset;
+      if (back ? off === 0 : off === $h.parent.content.size) return false;
+      const near = back ? $h.parent.textBetween(Math.max(0, off - 2), off, undefined, '\ufffc') : $h.parent.textBetween(off, Math.min($h.parent.content.size, off + 2), undefined, '\ufffc');
+      const n = (back ? /[\ud800-\udbff][\udc00-\udfff]$/ : /^[\ud800-\udbff][\udc00-\udfff]/).test(near) ? 2 : 1;
+      view.dispatch(st.tr.delete(back ? $h.pos - n : $h.pos, back ? $h.pos : $h.pos + n).setMeta('trackDir', back ? 'back' : 'forward').scrollIntoView());
+      return true;
+    },
+  },
+  {
     id: 'edit.collapseSelection', label: 'Collapse Selection', icon: 'deselect', tab: 'Home', group: 'Editing', noRecord: true,
     run: (app) => app.view.dispatch(app.state.tr.setSelection(TextSelection.create(app.state.doc, app.state.selection.head))),
   },
@@ -339,7 +362,7 @@ function nextMatchIndex(app: App, dir: 1 | -1): number {
   return s.matches.length - 1;
 }
 
-export function replaceAll(app: App, o: { find: string; replace: string; regex?: boolean; caseSensitive?: boolean; wholeWord?: boolean; wildcards?: boolean; inSelection?: boolean; style?: string; preserveCase?: boolean }): number {
+export function replaceAll(app: App, o: { find: string; replace: string; regex?: boolean; caseSensitive?: boolean; wholeWord?: boolean; wildcards?: boolean; inSelection?: boolean; style?: string; preserveCase?: boolean; quiet?: boolean }): number {
   const st = app.state;
   const re = buildMatcher(o.find, !!o.regex, !!o.caseSensitive, !!o.wholeWord, !!o.wildcards);
   if (!re) { toast('Invalid search expression.'); return 0; }
@@ -409,7 +432,7 @@ export function replaceAll(app: App, o: { find: string; replace: string; regex?:
     }
   }
   if (matches.length) app.view.dispatch(tr);
-  toast(`${matches.length} replacement(s) made` + (skipped ? `; ${skipped} skipped (match spans a picture or other object)` : ''));
+  if (!o.quiet || skipped) toast(`${matches.length} replacement(s) made` + (skipped ? `; ${skipped} skipped (match spans a picture or other object)` : ''));
   return matches.length;
 }
 

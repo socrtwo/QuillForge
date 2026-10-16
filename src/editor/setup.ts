@@ -216,8 +216,13 @@ export function keyName(e: KeyboardEvent): string | null {
   if (e.code === 'Comma') base = ',';
   if (e.code === 'Equal') base = '=';
   if (e.code === 'Minus') base = '-';
-  const parts: string[] = [];
   const mac = isMac();
+  // AltGr (reported as Ctrl+Alt on Windows) and macOS Option type characters such as \ ] } @ ≠:
+  // when the key produced something other than its layout-stable base, it is text, not a shortcut.
+  const ch = e.key;
+  const altGr = !!e.getModifierState?.('AltGraph') || (!e.shiftKey && !e.metaKey && e.altKey && (mac ? !e.ctrlKey : e.ctrlKey));
+  if (altGr && ch.length === 1 && ch !== ' ' && ch !== base) return null;
+  const parts: string[] = [];
   // On macOS Cmd is Mod and Ctrl stays a separate modifier (Ctrl+A/E/K are native line-editing keys).
   if (e.metaKey && mac) parts.push('Mod');
   if (e.ctrlKey) parts.push(mac ? 'Ctrl' : 'Mod');

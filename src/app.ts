@@ -6,10 +6,10 @@ import { DocAttrStep } from 'prosemirror-transform';
 import { EditorView } from 'prosemirror-view';
 import type { Node as PMNode } from 'prosemirror-model';
 import { schema, emptyDoc } from './editor/schema';
-import { buildPlugins, canonicalKey } from './editor/setup';
+import { buildPlugins, canonicalKey, keyName } from './editor/setup';
 import { trackTransaction, trackKey } from './editor/plugins/trackChanges';
 import { pageInfo, repaginate, type PageConfig } from './editor/plugins/pagination';
-import { footnoteLabel, focusKey } from './editor/plugins/decorations';
+import { footnoteLabel, focusKey, proofKey } from './editor/plugins/decorations';
 import { buildNodeViews } from './editor/nodeviews';
 import { normalizeSettings, defaultSettings, pageDims, type DocSettings } from './editor/settings';
 import { stylesCss } from './editor/styles';
@@ -25,6 +25,7 @@ import { Proofer } from './proof/proofing';
 export type ViewMode = 'print' | 'web' | 'mobile' | 'read' | 'outline' | 'draft' | 'focus';
 
 let tabCounter = 0;
+const RECORDED_KEYS = new Set(['Enter', 'Mod-Enter', 'Backspace', 'Mod-Backspace', 'Delete', 'Mod-Delete', 'Tab', 'Shift-Tab']);
 
 export class DocTab {
   id = `t${Date.now().toString(36)}${tabCounter++}`;
@@ -50,6 +51,8 @@ export class DocTab {
   mergeIndex: number | null = null;
   /** How this document was recovered from a damaged file, if it was. */
   recovery: import('./io/recover').RecoveryReport | null = null;
+  /** Storage key for documents without a unique URI (see docKey in commands/file). */
+  key = '';
   constructor(public app: App) {}
 
   get state(): EditorState { return this.view.state; }
@@ -163,6 +166,12 @@ export class App {
         if (this.recording) this.recordStep('edit.typeText', text);
         return false;
       },
+      handleKeyDown: (view, e) => {
+        // Editing keys handled by the keymap rather than a command are recorded too (replayed by edit.key).
+        const k = this.recording && keyName(e);
+        if (k && RECORDED_KEYS.has(canonicalKey(k)) && !this.keyIndex.has(canonicalKey(k))) this.recordStep('edit.key', k);
+        return false;
+      },
       handleClickOn: (view, pos, node, nodePos, e) => {
         const t = e.target as HTMLElement;
         if (node.type === schema.nodes.task_item || t.closest?.('li.qf-task')) {
@@ -268,7 +277,7 @@ export class App {
       this.proofer.schedule(tab);
     }
     if (old.doc.attrs.settings !== next.doc.attrs.settings) this.applySettingsToDom(tab);
-    if (t.docChanged || t.selectionSet || t.storedMarksSet || t.getMeta('refresh')) this.refresh();
+    if (t.docChanged || t.selectionSet || t.storedMarksSet || t.getMeta('refresh') || t.getMeta(proofKey)) this.refresh();
     if (this.prefs.typewriter && (t.docChanged || t.selectionSet)) this.typewriterScroll(tab);
   }
 
@@ -505,7 +514,7 @@ export class App {
     for (const tab of this.docs) {
       if (!tab.dirty) continue;
       await kvSet('draft:' + tab.id, {
-        id: tab.id, json: tab.view.state.doc.toJSON(), title: tab.title, fileName: tab.fileName, format: tab.format, uri: tab.uri, time: Date.now(),
+        id: tab.id, json: tab.view.state.doc.toJSON(), title: tab.title, fileName: tab.fileName, format: tab.format, uri: tab.uri, key: tab.key, time: Date.now(),
       });
     }
     this.ui.status?.('Draft saved');
