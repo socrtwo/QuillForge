@@ -190,7 +190,7 @@ export async function openAiSetup(app: App, opts: { provider?: string; reason?: 
         say('Signed in. Testing the key…', 'ok');
         await testAndSave();
       } catch (e: any) {
-        if (String(e?.message) !== 'Cancelled') say(`Sign-in did not complete: ${e?.message || e}`, 'err');
+        if (String(e?.message) !== 'Canceled') say(`Sign-in did not complete: ${e?.message || e}`, 'err');
       }
     };
 

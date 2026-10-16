@@ -6,7 +6,7 @@
  * widget decorations that (a) fill the remainder of the current page, (b) show the footnotes
  * and footer of that page, (c) draw the gap between sheets, and (d) show the next page's
  * header. Paragraphs that straddle a page boundary are split with an inline block widget at
- * the first line that does not fit, honouring widow/orphan control, keep-with-next,
+ * the first line that does not fit, honoring widow/orphan control, keep-with-next,
  * keep-lines-together and page-break-before. Tables and images that do not fit move to the
  * next page (they are not split).
  *

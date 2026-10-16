@@ -986,7 +986,7 @@ function atomMd(node: PMNode, w: WCtx, lineBreak: string): string {
   }
 }
 
-/** Serialise the inline content of a textblock. */
+/** Serialize the inline content of a textblock. */
 function inlineMd(node: PMNode, w: WCtx, lineBreak = '\\\n'): string {
   const segs: Seg[] = [];
   node.forEach((c) => {

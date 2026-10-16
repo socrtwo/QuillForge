@@ -152,7 +152,7 @@ async function importRaw(data: ArrayBuffer, name: string, opts: { repair?: boole
     if (!RECOVERABLE.includes(fmt.id)) throw e;
     return recover(e, false);
   }
-  // A package that "opens" but yields nothing from a sizeable file is usually damaged inside.
+  // A package that "opens" but yields nothing from a sizable file is usually damaged inside.
   if (RECOVERABLE.includes(fmt.id) && data.byteLength > 4096 && !doc.textContent.trim() && !hasAtoms(doc)) {
     try {
       const r = await recover(null, true);

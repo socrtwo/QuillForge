@@ -2,7 +2,7 @@
  * Shared helpers for the file-format converters (HTML, Markdown, text, RTF, ODT, EPUB).
  *
  * - byte / base64 / data-URL / Blob utilities that work in browsers and in jsdom
- * - settings, colour and font resolution
+ * - settings, color and font resolution
  * - footnote numbering and inline-atom text
  * - export preparation (drop tracked deletions, strip review marks, heading ids)
  * - a DOMSerializer-based "clean HTML" renderer used by HTML and EPUB export
@@ -250,7 +250,7 @@ export function decodeEntities(s: string): string {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Settings, colours, fonts
+// Settings, colors, fonts
 
 export function docSettings(doc: PMNode): DocSettings {
   return normalizeSettings(doc.attrs.settings);
@@ -267,7 +267,7 @@ export function docTitle(doc: PMNode, opts: { fileName?: string; title?: string 
 
 const NAMED_COLORS: Record<string, string> = {
   black: '#000000', white: '#ffffff', red: '#ff0000', green: '#008000', blue: '#0000ff', yellow: '#ffff00',
-  cyan: '#00ffff', aqua: '#00ffff', magenta: '#ff00ff', fuchsia: '#ff00ff', gray: '#808080', grey: '#808080',
+  cyan: '#00ffff', aqua: '#00ffff', magenta: '#ff00ff', fuchsia: '#ff00ff', gray: '#808080', grey: '#808080', // both CSS keywords are valid and occur in documents
   silver: '#c0c0c0', maroon: '#800000', olive: '#808000', lime: '#00ff00', teal: '#008080', navy: '#000080',
   purple: '#800080', orange: '#ffa500', pink: '#ffc0cb', brown: '#a52a2a', darkblue: '#00008b', darkred: '#8b0000',
   darkgreen: '#006400', darkcyan: '#008b8b', darkmagenta: '#8b008b', darkyellow: '#808000', lightgray: '#d3d3d3',
@@ -286,7 +286,7 @@ export function shadeHex(hex: string, amt: number): string {
   return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
 }
 
-/** Normalise any CSS colour we are likely to meet into #rrggbb (lower case), or null. */
+/** Normalize any CSS color we are likely to meet into #rrggbb (lower case), or null. */
 export function toHexColor(c: string | null | undefined, settings?: DocSettings): string | null {
   if (!c) return null;
   const v = String(c).trim().toLowerCase();
@@ -625,7 +625,7 @@ export function renderHtml(content: Fragment, notes: NoteInfo[], opts: RenderOpt
   return { container, notes: used };
 }
 
-/** Serialise element children as XHTML (well-formed XML). */
+/** Serialize element children as XHTML (well-formed XML). */
 export function toXhtml(el: Element): string {
   const ser = new XMLSerializer();
   let out = '';

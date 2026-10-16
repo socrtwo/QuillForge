@@ -49,8 +49,8 @@ import java.util.concurrent.Executors;
  *
  * JS contract (all binary payloads are base64 strings without line breaks):
  * <ul>
- *   <li>openDocument({mimeTypes: string[]}) -> {uri, name, mime, data} | {cancelled: true}</li>
- *   <li>saveAs({name, mime, data}) -> {uri, name} | {cancelled: true}</li>
+ *   <li>openDocument({mimeTypes: string[]}) -> {uri, name, mime, data} | {canceled: true}</li>
+ *   <li>saveAs({name, mime, data}) -> {uri, name} | {canceled: true}</li>
  *   <li>writeUri({uri, data}) -> {ok: true}</li>
  *   <li>readUri({uri}) -> {uri, name, mime, data}</li>
  *   <li>print({jobName}) -> void</li>
@@ -259,7 +259,7 @@ public class QuillNativePlugin extends Plugin {
         }
         final Uri uri = resultUri(result);
         if (uri == null) {
-            resolveCancelled(call);
+            resolveCanceled(call);
             return;
         }
         takePersistablePermission(uri);
@@ -304,7 +304,7 @@ public class QuillNativePlugin extends Plugin {
         final Uri uri = resultUri(result);
         final String data = pendingData.remove(call.getCallbackId());
         if (uri == null) {
-            resolveCancelled(call);
+            resolveCanceled(call);
             return;
         }
         if (data == null) {
@@ -733,9 +733,9 @@ public class QuillNativePlugin extends Plugin {
         return t instanceof Exception ? (Exception) t : new Exception(t.toString(), t);
     }
 
-    private static void resolveCancelled(PluginCall call) {
+    private static void resolveCanceled(PluginCall call) {
         JSObject ret = new JSObject();
-        ret.put("cancelled", true);
+        ret.put("canceled", true);
         call.resolve(ret);
     }
 

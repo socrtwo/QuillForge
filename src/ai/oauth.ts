@@ -110,7 +110,7 @@ export async function startOpenRouterSignIn(timeoutMs = 10 * 60 * 1000): Promise
       await finish(c);
       return key;
     },
-    cancel() { if (!done) { done = true; cleanup.forEach((f) => f()); settle.reject(new Error('Cancelled')); } },
+    cancel() { if (!done) { done = true; cleanup.forEach((f) => f()); settle.reject(new Error('Canceled')); } },
   };
 }
 

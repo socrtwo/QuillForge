@@ -527,7 +527,7 @@ export function parseBibtex(src: string): Source[] {
     }
     return v;
   };
-  // Skips to just after the entry's closing delimiter, honouring nested braces.
+  // Skips to just after the entry's closing delimiter, honoring nested braces.
   const skipEntry = (close: string) => {
     let depth = 0;
     for (; i < n; i++) {

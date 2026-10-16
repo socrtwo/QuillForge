@@ -2,7 +2,7 @@
  * HTML import / export and clipboard clean-up.
  *
  * Export produces a standalone HTML5 document: the document is rendered with the schema's
- * DOMSerializer (see serialize.ts › renderHtml), editor-only artefacts are removed and the
+ * DOMSerializer (see serialize.ts › renderHtml), editor-only artifacts are removed and the
  * style sheet produced by stylesCss() is embedded so paragraph styles look the same as in the
  * editor. Footnotes become an endnotes section with back-links; comments are omitted; tracked
  * deletions are dropped and insertions kept as plain text.
@@ -82,7 +82,7 @@ function styleOf(el: Element): string {
   return (el.getAttribute('style') || '').toLowerCase().replace(/\s+/g, '');
 }
 
-/** Remove declarations we never want (mso-*, junk colours, inherit fonts). */
+/** Remove declarations we never want (mso-*, junk colors, inherit fonts). */
 function cleanStyleAttr(el: HTMLElement): void {
   const raw = el.getAttribute('style');
   if (raw == null) return;

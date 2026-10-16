@@ -19,7 +19,7 @@ QuillForge registers for *Open with* and *Share to* on .docx, .doc, .odt, .rtf, 
 ## Features
 
 **Writing and formatting.** You get a full character format set:
-- underline styles and colours, double strikethrough, small and all caps, hidden text;
+- underline styles and colors, double strikethrough, small and all caps, hidden text;
 - character spacing, scale and position;
 - OpenType ligatures, number forms, kerning and stylistic sets;
 - text effects, character borders and shading, phonetic guides.
@@ -27,7 +27,7 @@ QuillForge registers for *Open with* and *Share to* on .docx, .doc, .odt, .rtf, 
 Paragraph controls cover alignment, indents, spacing, line rules, keep-with-next, keep-lines-together, page break before, widow/orphan control, borders and shading, tab stops and drop caps. Lists can be bulleted (custom bullets), numbered (many formats), multilevel outline, or checklists. A style system offers about 70 built-in styles, style sets (Classic, Modern, Elegant, Book, Manuscript, Academic, Technical, Newsletter, Typewriter) and themes. You can create, modify and inspect styles.
 
 **Pages.** Print Layout shows real pages with:
-- automatic pagination that splits paragraphs across pages and honours widow/orphan and keep rules;
+- automatic pagination that splits paragraphs across pages and honors widow/orphan and keep rules;
 - headers and footers with fields, first-page and odd/even variants;
 - footnotes at the foot of each page;
 - watermarks, page borders and line numbers;
@@ -101,6 +101,10 @@ npm run android:build   # build + cap sync + gradle assembleRelease (needs Andro
 CI (`.github/workflows/android.yml`) type-checks, tests, builds the web app, and produces a release APK and AAB on every push. Tags `v*` publish a GitHub Release. See [docs/ANDROID.md](docs/ANDROID.md).
 
 Browser checks: `npm run build && npx vite preview --port 4173`, then `node tests/e2e/smoke.mjs`, `node tests/e2e/all-commands.mjs` (executes every command and menu variant), `node tests/e2e/visual.mjs`, `node tests/e2e/io.mjs` and `node tests/e2e/ai.mjs` (AI features against a mock OpenAI/Anthropic/Gemini server).
+
+## Project language
+
+The interface, code comments and documentation use American English. The app itself treats all varieties of English as correct by default, as described above.
 
 ## Legal
 

@@ -142,7 +142,7 @@ class OdtWriter {
     return odfName(n);
   }
 
-  // ---------------------------------------------------------------- property serialisation
+  // ---------------------------------------------------------------- property serialization
 
   paraProps(a: Attrs): string {
     const out: string[] = [];
@@ -1489,7 +1489,7 @@ class OdtReader {
       return S.nodes.table_row.create(null, cells);
     }).filter((r) => r.childCount > 0);
     if (!pmRows.length) return null;
-    // Drop trailing empty repeated rows (spreadsheet artefacts).
+    // Drop trailing empty repeated rows (spreadsheet artifacts).
     return S.nodes.table.create({ headerRows }, pmRows);
   }
 

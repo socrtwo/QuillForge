@@ -17,7 +17,7 @@ const page = await open({ width: 1100, height: 1300 });
 await page.evaluate(() => {
   const app = window.qf; const S = app.view.state.schema;
   const p = (t, a) => S.nodes.paragraph.create(a || null, t ? S.text(t) : null);
-  const long = 'This long paragraph is intended to straddle a page boundary so that pagination has to split it in the middle, honouring widow and orphan control. '.repeat(14);
+  const long = 'This long paragraph is intended to straddle a page boundary so that pagination has to split it in the middle, honoring widow and orphan control. '.repeat(14);
   const blocks = [p('Layout Test', { style: 'Title' }), p('Section heading', { style: 'Heading 1' })];
   for (let i = 0; i < 6; i++) blocks.push(p(`Body paragraph ${i + 1}. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus lacinia odio vitae vestibulum vestibulum.`));
   blocks.push(S.nodes.paragraph.create(null, [S.text('A sentence with a footnote'), S.nodes.footnote.create({ text: 'This footnote should appear at the bottom of its page.' }), S.text(' and continues with a second one'), S.nodes.footnote.create({ text: 'Second note.' }), S.text('.')]));

@@ -10,10 +10,10 @@ import { download, pickFile } from '../ui/dom';
 export interface OpenedFile { name: string; data: ArrayBuffer; uri: string | null; mime?: string }
 
 interface QuillNativePlugin {
-  /** ACTION_OPEN_DOCUMENT. Resolves {cancelled:true} when dismissed. */
-  openDocument(opts: { mimeTypes: string[] }): Promise<{ cancelled?: boolean; uri?: string; name?: string; mime?: string; data?: string /* base64 */ }>;
+  /** ACTION_OPEN_DOCUMENT. Resolves {canceled:true} when dismissed. */
+  openDocument(opts: { mimeTypes: string[] }): Promise<{ canceled?: boolean; uri?: string; name?: string; mime?: string; data?: string /* base64 */ }>;
   /** ACTION_CREATE_DOCUMENT then write. */
-  saveAs(opts: { name: string; mime: string; data: string /* base64 */ }): Promise<{ cancelled?: boolean; uri?: string; name?: string }>;
+  saveAs(opts: { name: string; mime: string; data: string /* base64 */ }): Promise<{ canceled?: boolean; uri?: string; name?: string }>;
   /** Overwrite an existing document URI obtained from openDocument/saveAs (persisted permission). */
   writeUri(opts: { uri: string; data: string /* base64 */ }): Promise<{ ok: boolean }>;
   /** Read a URI again (recent files). */
@@ -63,7 +63,7 @@ export function bufferFromB64(b64: string): ArrayBuffer {
 export async function openDocument(accept: string, mimeTypes: string[]): Promise<OpenedFile | null> {
   if (isNative()) {
     const r = await Native.openDocument({ mimeTypes });
-    if (r.cancelled || !r.data) return null;
+    if (r.canceled || !r.data) return null;
     return { name: r.name || 'document', data: bufferFromB64(r.data), uri: r.uri || null, mime: r.mime };
   }
   const files = await pickFile(accept);
@@ -74,7 +74,7 @@ export async function openDocument(accept: string, mimeTypes: string[]): Promise
 export async function saveAs(blob: Blob, name: string): Promise<{ uri: string | null; name: string } | null> {
   if (isNative()) {
     const r = await Native.saveAs({ name, mime: blob.type || 'application/octet-stream', data: b64FromBuffer(await blob.arrayBuffer()) });
-    if (r.cancelled) return null;
+    if (r.canceled) return null;
     return { uri: r.uri || null, name: r.name || name };
   }
   const anyWin = window as any;

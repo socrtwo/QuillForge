@@ -1,12 +1,12 @@
 /**
  * Rich Text Format (RTF 1.9) import / export.
  *
- * Export writes a font table, colour table, style sheet (headings carry \outlinelevel), Word 97+
+ * Export writes a font table, color table, style sheet (headings carry \outlinelevel), Word 97+
  * list tables (\listtable/\ls/\ilvl with \listtext fallbacks), tables (\trowd … \row with
  * horizontal/vertical merges), PNG/JPEG pictures, footnotes/endnotes, HYPERLINK and other fields,
  * bookmarks, page setup and headers/footers.
  *
- * Import is a real tokenizer + group/destination state machine: font/colour/style/list tables,
+ * Import is a real tokenizer + group/destination state machine: font/color/style/list tables,
  * \pard/\plain resets, character and paragraph properties, Unicode (\uN with \ucN skipping) and
  * code-page text (\'hh with \ansicpg and per-font \fcharset), tables, pictures, fields, footnotes,
  * headers/footers, bookmarks, old-style (\pn/\pntext) and new-style lists, section and page breaks.
@@ -603,7 +603,7 @@ class RtfWriter {
 
   render(doc: PMNode, opts: ExportOptions, title: string): string {
     const s = this.settings;
-    // Body first, so fonts/colours/styles/lists are registered.
+    // Body first, so fonts/colors/styles/lists are registered.
     const body = this.children(doc, {});
     const author = s.properties.author || opts.author || '';
     const fileName = opts.fileName || '';

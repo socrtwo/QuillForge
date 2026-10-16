@@ -112,7 +112,7 @@ Repository -> *Settings* -> *Secrets and variables* -> *Actions* -> *New reposit
 | `ANDROID_KEY_PASSWORD` | the key password |
 
 The workflow decodes the keystore to `$RUNNER_TEMP` and exports `ANDROID_KEYSTORE_PATH`; release
-outputs are then properly signed. For Google Play, enrol in Play App Signing and use this key as the
+outputs are then properly signed. For Google Play, enroll in Play App Signing and use this key as the
 upload key.
 
 Signing locally works the same way:
@@ -156,8 +156,8 @@ base64 strings (no line breaks); `data:` URL prefixes are tolerated on input.
 
 | Method | Arguments | Resolves with |
 | --- | --- | --- |
-| `openDocument` | `{ mimeTypes: string[] }` | `{ uri, name, mime, data }` or `{ cancelled: true }` |
-| `saveAs` | `{ name, mime, data }` | `{ uri, name }` or `{ cancelled: true }` |
+| `openDocument` | `{ mimeTypes: string[] }` | `{ uri, name, mime, data }` or `{ canceled: true }` |
+| `saveAs` | `{ name, mime, data }` | `{ uri, name }` or `{ canceled: true }` |
 | `writeUri` | `{ uri, data }` | `{ ok: true }` (rejects with a message on failure) |
 | `readUri` | `{ uri }` | `{ uri, name, mime, data }` |
 | `print` | `{ jobName }` | nothing (print dialog shown) |

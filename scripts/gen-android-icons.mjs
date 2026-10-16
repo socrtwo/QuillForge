@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Generates the QuillForge launcher icon in every format the Android app needs
 // from a single set of vector shapes (defined below in a 108x108 adaptive-icon
-// coordinate space; the 66dp safe zone is the circle centred at 54,54 r=33).
+// coordinate space; the 66dp safe zone is the circle centered at 54,54 r=33).
 //
 // Outputs:
 //   resources/icon.svg                                   full-bleed source artwork
