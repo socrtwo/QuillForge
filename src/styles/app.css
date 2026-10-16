@@ -685,3 +685,17 @@ body.qf-zen .qf-titlebar, body.qf-zen .qf-tabs, body.qf-zen .qf-ribbon, body.qf-
   .qf-ai-paid { background: #333; color: #ccc; }
   .qf-warn { background: #3d2c00; color: #ffcc80; }
 }
+
+/* Spelling Dictionaries wizard */
+.qf-dict-wizard { display: flex; flex-direction: column; gap: 8px; min-width: min(640px, 86vw); }
+.qf-dict-wizard input[type=search] { width: 100%; }
+.qf-dict-list { max-height: 55vh; overflow: auto; border: 1px solid var(--border, #ccd); border-radius: 6px; padding: 0 8px; }
+.qf-dict-head { font-size: 13px; margin: 10px 0 4px; opacity: .8; }
+.qf-dict-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 6px 0; border-top: 1px solid var(--border, #e3e6ee); }
+.qf-dict-name code { font-size: 12px; opacity: .7; }
+.qf-dict-native { opacity: .8; }
+.qf-dict-actions, .qf-dict-use { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.qf-dict-actions progress { width: 110px; }
+.qf-badge { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: var(--accent-pale, #e6edf8); }
+.qf-warn-inline { color: #b25e00; }
+.qf-small { font-size: 12px; }

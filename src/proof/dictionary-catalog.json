@@ -1,0 +1,1942 @@
+{
+ "generated": "2026-10-16",
+ "source": "https://github.com/wooorm/dictionaries",
+ "dictionaries": [
+  {
+   "id": "bg",
+   "tag": "bg",
+   "name": "Bulgarian",
+   "native": "български",
+   "pkg": "dictionary-bg",
+   "version": "2.0.0",
+   "license": "(GPL-2.0 OR LGPL-2.1 OR MPL-1.1)",
+   "aff": {
+    "size": 58189,
+    "sha256": "cb6bfc56d6b1e70c812061086d7ec5ad6aaf6d35acd927a035f1cee0188ea477"
+   },
+   "dic": {
+    "size": 1566242,
+    "sha256": "44408b1ee50301e8f9a133b0ec92565bb8be49818c444d91821876d447f58906"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-bg/-/dictionary-bg-2.0.0.tgz",
+   "integrity": "sha512-70UDaLQbCThnaA1w14bmh8d6icEKyz2H6ud8edsa8GPVGD6tQ/vWu2JgrWG6EnbYDWvExGu+rQf3S1Z2BEngtQ==",
+   "loadSec": 0.1,
+   "memoryMB": 14
+  },
+  {
+   "id": "br",
+   "tag": "br",
+   "name": "Breton",
+   "native": "brezhoneg",
+   "pkg": "dictionary-br",
+   "version": "2.0.0",
+   "license": "(GPL-2.0 OR LGPL-2.1 OR MPL-1.1)",
+   "aff": {
+    "size": 13888,
+    "sha256": "8c05d6c1e2a9279f67407018145cf7f0b8b6da4f3a8ed83939a55f8e32af27cd"
+   },
+   "dic": {
+    "size": 3967626,
+    "sha256": "235241afc01c0726d32427e1411f96bee1a5f536bd1bdb7f083a311e6f0d780b"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-br/-/dictionary-br-2.0.0.tgz",
+   "integrity": "sha512-DnaaqVvxb38yG8Lq7qxkhUf7WlNPHnLX2tkF8uUI1+VWWxQCH4KV7iYEU7JSeiZGGOe5h4XuDdYP8zeT7SZelQ==",
+   "loadSec": 0.3,
+   "memoryMB": 28
+  },
+  {
+   "id": "ca",
+   "tag": "ca",
+   "name": "Catalan",
+   "native": "català",
+   "pkg": "dictionary-ca",
+   "version": "3.0.0",
+   "license": "(GPL-2.0 OR LGPL-2.1)",
+   "aff": {
+    "size": 49922,
+    "sha256": "bfc7d8412c9450ec63e00d13f2153191a11d04868b14d51cf6c50eace71efdb2"
+   },
+   "dic": {
+    "size": 2876608,
+    "sha256": "e272aeff4b2d1a92b428a22b52c685292d04936e34dfe7786e27539175cbef2e"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-ca/-/dictionary-ca-3.0.0.tgz",
+   "integrity": "sha512-h+crBYqX/X7cEU3cFAEgwIojOZTAw1wW4ybYN5Aum9f1oZ+8ULO/GGglLs8m8UBBGtSVLyoYf0CdvX8WKt8VDg==",
+   "loadSec": 0.2,
+   "memoryMB": 24
+  },
+  {
+   "id": "ca-valencia",
+   "tag": "ca-ES-valencia",
+   "name": "Catalan (Valencian)",
+   "native": "català",
+   "pkg": "dictionary-ca-valencia",
+   "version": "3.0.0",
+   "license": "(GPL-2.0 OR LGPL-2.1)",
+   "aff": {
+    "size": 50122,
+    "sha256": "b4c50941df5a8e3116b706ceb6010b09a8e6b15a99e20c4f281fcbee2d2544e4"
+   },
+   "dic": {
+    "size": 2881104,
+    "sha256": "80ada66b789096a526ab05d106e4658cd39bcc2c4442c4c893051bf4e8fa514c"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-ca-valencia/-/dictionary-ca-valencia-3.0.0.tgz",
+   "integrity": "sha512-OtgUKPjxBgf/d/qTvzUx1nFV2gtmNt7x1egeUHLCzS8gxdhFI1tNkExvHQ/IlA8J6ZYkr4v8aJDBWSxsW4T2eQ==",
+   "loadSec": 0.2,
+   "memoryMB": 22
+  },
+  {
+   "id": "cs",
+   "tag": "cs",
+   "name": "Czech",
+   "native": "čeština",
+   "pkg": "dictionary-cs",
+   "version": "4.0.0",
+   "license": "GPL-2.0",
+   "aff": {
+    "size": 112714,
+    "sha256": "175e02acb4786042a9c87e3cb6d3746e3a5b3079752118c2d4f0bb2c756ce72b"
+   },
+   "dic": {
+    "size": 3648134,
+    "sha256": "bbc0a495671c29337279182799e171c173a21ae8968c89dd0fb7c713b40c7832"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-cs/-/dictionary-cs-4.0.0.tgz",
+   "integrity": "sha512-foYC1H71sxEx2QwppL4liEFAD+O5wlyJeZkTFqwz7ux85dI8kQFc8sDmWeObPEXsTtksiuwv+OOdfS2mFY1YVA==",
+   "loadSec": 0.3,
+   "memoryMB": 31
+  },
+  {
+   "id": "cy",
+   "tag": "cy",
+   "name": "Welsh",
+   "native": "Cymraeg",
+   "pkg": "dictionary-cy",
+   "version": "2.0.0",
+   "license": "LGPL-3.0",
+   "aff": {
+    "size": 7489,
+    "sha256": "757c350b84889c4d0711c93760509fe532863079262695c069550f9a9c1c5222"
+   },
+   "dic": {
+    "size": 888651,
+    "sha256": "ef8f01db311cf17c617377d22b11f6752b01c65f5457820cc04d877bba6b92ff"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-cy/-/dictionary-cy-2.0.0.tgz",
+   "integrity": "sha512-X85f8Vmx7twYjz1r5LxMYnlujXMt6iILvCujxQeUnjhylZWUESbpIV5IbLlEKLGzNvE2Edg7vdlISqcvrBz3Pg==",
+   "loadSec": 0.1,
+   "memoryMB": 10
+  },
+  {
+   "id": "da",
+   "tag": "da",
+   "name": "Danish",
+   "native": "dansk",
+   "pkg": "dictionary-da",
+   "version": "6.0.0",
+   "license": "(GPL-2.0 OR LGPL-2.1 OR MPL-1.1)",
+   "aff": {
+    "size": 81584,
+    "sha256": "cb5ef704de0ab8575c883c97981d5d242260c7ebe47b28c15c205443aca15976"
+   },
+   "dic": {
+    "size": 3719300,
+    "sha256": "9a12345e1881c96f18cc460dbd062e47509571d5f2a2a9bf041da169856dc19e"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-da/-/dictionary-da-6.0.0.tgz",
+   "integrity": "sha512-gn0IPPVzFljxOOewzLPIEFQKdsPrtgGHEGCWjJeZArl7tZJpGwjXdbvOpteq1GK6YBl66Ljn91EtuGMlV7+itA==",
+   "loadSec": 0.2,
+   "memoryMB": 23
+  },
+  {
+   "id": "de",
+   "tag": "de",
+   "name": "German",
+   "native": "Deutsch",
+   "pkg": "dictionary-de",
+   "version": "3.0.0",
+   "license": "(GPL-2.0 OR GPL-3.0)",
+   "aff": {
+    "size": 19199,
+    "sha256": "57fdd1b16aac2131003c91e0cf2a488becb970382a402a9ce089307301cb3ef0"
+   },
+   "dic": {
+    "size": 1118194,
+    "sha256": "b5c781a0cf6f285fb6b9b8ab02fbea104b987104a1efdda8a835837e89e3ec77"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-de/-/dictionary-de-3.0.0.tgz",
+   "integrity": "sha512-0Xbq+YpWTscAL1e18aPPaqfG4goC2o9T595L/54v2OvOPC0/TJFFlclYanxuUoK73wutM5f9EgSuWGkvQXlOXw==",
+   "loadSec": 0.1,
+   "memoryMB": 11
+  },
+  {
+   "id": "de-at",
+   "tag": "de-AT",
+   "name": "Austrian German",
+   "native": "Österreichisches Deutsch",
+   "pkg": "dictionary-de-at",
+   "version": "3.0.0",
+   "license": "(GPL-2.0 OR GPL-3.0)",
+   "aff": {
+    "size": 19199,
+    "sha256": "04ebc966a0b1130d8fc62886bb801e77bf7d6a11accf205954c364d3c0c68864"
+   },
+   "dic": {
+    "size": 1121822,
+    "sha256": "02cbbeb74af85497b861b5782413b6c8c8ffab5c9423ef2e92265599b9359870"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-de-at/-/dictionary-de-at-3.0.0.tgz",
+   "integrity": "sha512-mCxRL8jOHITEuyN0BmvhlmSmHSpt37wFO0i78lS60IeBUiM901ERLUNWeF2ZS/+H4UvqiVLcLVN6zmOGKoPz2w==",
+   "loadSec": 0.1,
+   "memoryMB": 11
+  },
+  {
+   "id": "de-ch",
+   "tag": "de-CH",
+   "name": "Swiss High German",
+   "native": "Schweizer Hochdeutsch",
+   "pkg": "dictionary-de-ch",
+   "version": "3.0.0",
+   "license": "(GPL-2.0 OR GPL-3.0)",
+   "aff": {
+    "size": 19199,
+    "sha256": "11d773a903ece02c71b5094d71dcf3afe27cad0383cfe063fddbde26b8443785"
+   },
+   "dic": {
+    "size": 1119710,
+    "sha256": "abb1abcc1951abba255d4e6289e5d44293338ae29d1331dea16c75bd89a43e1c"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-de-ch/-/dictionary-de-ch-3.0.0.tgz",
+   "integrity": "sha512-B1s1Go9GIfYkwZvlOFfXiB1BH1wFZPZhoADPvu45N1Q4qd5vAKMU1vH/x00j9p75ZQa6AB3XHbghOsPMQSVvMg==",
+   "loadSec": 0.1,
+   "memoryMB": 11
+  },
+  {
+   "id": "el",
+   "tag": "el",
+   "name": "Greek",
+   "native": "Ελληνικά",
+   "pkg": "dictionary-el",
+   "version": "4.0.0",
+   "license": "(GPL-2.0 OR LGPL-2.1 OR MPL-1.1)",
+   "aff": {
+    "size": 20058,
+    "sha256": "5d2e3580af6d3523ac4470335a4b05968e59dddc58e1a7f2b260c81342e80063"
+   },
+   "dic": {
+    "size": 19421967,
+    "sha256": "f08daefb302600beb1b345e4fd77f4ecf6617aa080a72efe6ae7eec0ad5b2ac7"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-el/-/dictionary-el-4.0.0.tgz",
+   "integrity": "sha512-m8dWp+AIeGnUGBOBH7gx9YeQunMYdoKXKFvdSqzKPuJjz2Tb/pdW7oxG8lIKtASLHTCsf7RZoiuQbVRHJsSNCw==",
+   "loadSec": 1.1,
+   "memoryMB": 88
+  },
+  {
+   "id": "el-polyton",
+   "tag": "el-polyton",
+   "name": "Greek (Polytonic)",
+   "native": "Ελληνικά",
+   "pkg": "dictionary-el-polyton",
+   "version": "2.0.0",
+   "license": "GPL-3.0",
+   "aff": {
+    "size": 18678,
+    "sha256": "e734b5c534d9f5f48fc9edce2e75ac695b3620ebd1f9817cd43fda887f81107f"
+   },
+   "dic": {
+    "size": 16669155,
+    "sha256": "2368557909c26a368234623c199a70f4322e62a4c933dd32da43cb55bb26efa8"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-el-polyton/-/dictionary-el-polyton-2.0.0.tgz",
+   "integrity": "sha512-v9aovQtHD4Mp/XnFIlnWXsHq6SRcifsuPZw/vNvnYZqXmwCdvakgi1hpp6H9BIRhf4siR8g+puVaNB4xuhNdfQ==",
+   "loadSec": 0.8,
+   "memoryMB": 79
+  },
+  {
+   "id": "en",
+   "tag": "en",
+   "name": "English",
+   "native": "",
+   "pkg": "dictionary-en",
+   "version": "4.0.0",
+   "license": "(MIT AND BSD)",
+   "aff": {
+    "size": 3086,
+    "sha256": "8ae1f19d4840d957728ad90555d5a8dff6cc5c046279c95ff0c00fc0a0136c7b"
+   },
+   "dic": {
+    "size": 551762,
+    "sha256": "f0b1a234bd178bdd01875b2a392a9647f888b8fe879f79c52aae62c2759b3647"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-en/-/dictionary-en-4.0.0.tgz",
+   "integrity": "sha512-3NHnE1uq33ZE/CIwaZ6gqxa4BnglHnxeAcTM0GJ7cmtRGcvX9InMK/IqLtYcUMFCUpUNgybH+DzkqdgAo3F1zg==",
+   "bundled": true,
+   "loadSec": 0,
+   "memoryMB": 7
+  },
+  {
+   "id": "en-au",
+   "tag": "en-AU",
+   "name": "Australian English",
+   "native": "",
+   "pkg": "dictionary-en-au",
+   "version": "3.0.0",
+   "license": "(MIT AND BSD)",
+   "aff": {
+    "size": 3086,
+    "sha256": "8ae1f19d4840d957728ad90555d5a8dff6cc5c046279c95ff0c00fc0a0136c7b"
+   },
+   "dic": {
+    "size": 554336,
+    "sha256": "aa07c46571f306b79fc1bc534357ed357af15687381b26f891ba66e8a2caed89"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-en-au/-/dictionary-en-au-3.0.0.tgz",
+   "integrity": "sha512-whC8mFW7Crmoe2wH7cbBJwF6SFy3PGaExgZ1tU3J+qCUQdzJ3gdcD/PAXeWBBwAlsPA/Su0GGDxqp7uRM5lDVg==",
+   "bundled": true,
+   "loadSec": 0.1,
+   "memoryMB": 8
+  },
+  {
+   "id": "en-ca",
+   "tag": "en-CA",
+   "name": "Canadian English",
+   "native": "",
+   "pkg": "dictionary-en-ca",
+   "version": "3.0.0",
+   "license": "(MIT AND BSD)",
+   "aff": {
+    "size": 3086,
+    "sha256": "8ae1f19d4840d957728ad90555d5a8dff6cc5c046279c95ff0c00fc0a0136c7b"
+   },
+   "dic": {
+    "size": 551583,
+    "sha256": "53096689870246a78fa408b1e7a8c49bc140bd466a84a384cfb509445fff7173"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-en-ca/-/dictionary-en-ca-3.0.0.tgz",
+   "integrity": "sha512-MQ4VXbPv4+jDFcQq632RL2QmB+1Raq6jH/NWKTE4IsHcNXAb/l5106/xn1Dt63Ni2dRF9qfiBkk7myA//5clTA==",
+   "bundled": true,
+   "loadSec": 0.1,
+   "memoryMB": 8
+  },
+  {
+   "id": "en-gb",
+   "tag": "en-GB",
+   "name": "British English",
+   "native": "",
+   "pkg": "dictionary-en-gb",
+   "version": "3.0.0",
+   "license": "(MIT AND BSD)",
+   "aff": {
+    "size": 3086,
+    "sha256": "8ae1f19d4840d957728ad90555d5a8dff6cc5c046279c95ff0c00fc0a0136c7b"
+   },
+   "dic": {
+    "size": 552106,
+    "sha256": "869fe17ba4ee4b5401c60a666ee2d6a3dcc237f460b7294435df1cc6a799aa57"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-en-gb/-/dictionary-en-gb-3.0.0.tgz",
+   "integrity": "sha512-gU/dwC9xGYPh/0CCcmGNXO8OwSgOySAqevcSXxADCsgUD+tr6OJ52u7XaC7No7dNssvdUSfVjkzcqLrRZq3kPA==",
+   "bundled": true,
+   "loadSec": 0,
+   "memoryMB": 7
+  },
+  {
+   "id": "en-za",
+   "tag": "en-ZA",
+   "name": "English (South Africa)",
+   "native": "",
+   "pkg": "dictionary-en-za",
+   "version": "3.0.0",
+   "license": "LGPL-2.1",
+   "aff": {
+    "size": 35805,
+    "sha256": "d39436eedc236c02e5d2b904352a51c487e421ca33e803f500713b5a21c007d1"
+   },
+   "dic": {
+    "size": 596444,
+    "sha256": "cde2b8460049ec0f87933f56b20396fbb693e322f852b4878706eb5b2acfd768"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-en-za/-/dictionary-en-za-3.0.0.tgz",
+   "integrity": "sha512-Bo8qvNz082qCk9OPhkHAT3G3GrbkANpcNAkhhNgcqnx3YSPpo7cOnr0BqYkzuDC4uUQ22Rpo8ym1R5dTvV512Q==",
+   "loadSec": 0,
+   "memoryMB": 8
+  },
+  {
+   "id": "eo",
+   "tag": "eo",
+   "name": "Esperanto",
+   "native": "",
+   "pkg": "dictionary-eo",
+   "version": "2.0.0",
+   "license": "GPL-2.0",
+   "aff": {
+    "size": 16322,
+    "sha256": "a668bb25baccb39a758692a94325c47195a70fe723fe9875d1b3a3b4545412a5"
+   },
+   "dic": {
+    "size": 382137,
+    "sha256": "75b09812254cd6b49c2849ed3b92f1c252117906f5a2ce281d25e1798c437ac1"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-eo/-/dictionary-eo-2.0.0.tgz",
+   "integrity": "sha512-MeYTLA5v2SW8cq+2INe3oIf/Wl8WJm2+TKACqqMTbXg2lgC8WY2t9OrAhwidQS6TmeGtQZHlgJYkYZ4UTN3q3Q==",
+   "loadSec": 0.1,
+   "memoryMB": 7
+  },
+  {
+   "id": "es",
+   "tag": "es",
+   "name": "Spanish",
+   "native": "español",
+   "pkg": "dictionary-es",
+   "version": "4.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 167135,
+    "sha256": "892039d59db11d747061b81c3a92a52d48ba0e055b5835af1943cbd3c2fba85b"
+   },
+   "dic": {
+    "size": 706202,
+    "sha256": "907f786a8ceb3456722b20ad91dd4dbe99c5c16e45015ea63155e36f26b06d2c"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es/-/dictionary-es-4.0.0.tgz",
+   "integrity": "sha512-8J3IYdaHYmkojxqhB+DneQpek6N/s3MwbVk3bPNGQSTBT5kxJtmbuiT0LSDP0Al6K9Vevo1sjspG8AGP9Yvxiw==",
+   "loadSec": 0.1,
+   "memoryMB": 10
+  },
+  {
+   "id": "es-ar",
+   "tag": "es-AR",
+   "name": "Spanish (Argentina)",
+   "native": "español (Argentina)",
+   "pkg": "dictionary-es-ar",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 169460,
+    "sha256": "9d210c1a32da44bf8a0baa992c2bf3e9ae4730beb392c5e7e948948b48ff5474"
+   },
+   "dic": {
+    "size": 698035,
+    "sha256": "f4c9cd45bd56ad670200798f271a33360692ab29bdbc15661ac98fedc03ef714"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-ar/-/dictionary-es-ar-2.0.0.tgz",
+   "integrity": "sha512-9TnVDGuA5FyHk/mtI00qm6hpzJnucfMEGIXZlyqhoOWZII/O2cTpXMFyeqTq8q74r4qVoTjZ0uWYLLKKmGI3pg==",
+   "loadSec": 0.1,
+   "memoryMB": 10
+  },
+  {
+   "id": "es-bo",
+   "tag": "es-BO",
+   "name": "Spanish (Bolivia)",
+   "native": "español (Bolivia)",
+   "pkg": "dictionary-es-bo",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 160328,
+    "sha256": "7b52471a40dde29f06dc5ca5071fd4124225ad1dedaaaa932009eb4acc4e1bb7"
+   },
+   "dic": {
+    "size": 693089,
+    "sha256": "8096a7bdd06aec4fdfab48586d0703da445eda8aaf9398bd210a96b3759f6d4e"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-bo/-/dictionary-es-bo-2.0.0.tgz",
+   "integrity": "sha512-XVxllBrnWvJTv/8cZfPFdeiWFKShDLZX6dkI9nMmCcX3exTK4QObm2qyD8DnBwFJojqEk3QEwmkqhIudoX1hZw==",
+   "loadSec": 0.1,
+   "memoryMB": 11
+  },
+  {
+   "id": "es-cl",
+   "tag": "es-CL",
+   "name": "Spanish (Chile)",
+   "native": "español (Chile)",
+   "pkg": "dictionary-es-cl",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 160328,
+    "sha256": "7b52471a40dde29f06dc5ca5071fd4124225ad1dedaaaa932009eb4acc4e1bb7"
+   },
+   "dic": {
+    "size": 695714,
+    "sha256": "e52d2a4c4cefdd1a5fab9e66f13a13e2af7f41078781cf0b59bc2f285e90063a"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-cl/-/dictionary-es-cl-2.0.0.tgz",
+   "integrity": "sha512-STEyJltOuzi6XaCeHd6a7HaYYKBKb+A1DZxk5OXdFWU5GZsg+gUCyJT6vtuebAXYr192cvPDUnHRjVDPrJzvDA==",
+   "loadSec": 0.1,
+   "memoryMB": 9
+  },
+  {
+   "id": "es-co",
+   "tag": "es-CO",
+   "name": "Spanish (Colombia)",
+   "native": "español (Colombia)",
+   "pkg": "dictionary-es-co",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 158014,
+    "sha256": "4dc9ddafc140e0fc27a40fe808ff3d77138e12bf3db5748832f03d780aadecfa"
+   },
+   "dic": {
+    "size": 742304,
+    "sha256": "3fbc134bbdd2c6724e6f8cc5375bdaef05b33e59aefb007a2ed1864b5a4f6d8e"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-co/-/dictionary-es-co-2.0.0.tgz",
+   "integrity": "sha512-ZEmmq2ogKRnJ6W3gqoOF5VTs+AGkrWrQTAlJ1JDcuR5O/Pf7oLArOQftyP88SHFnOoxs2HJoYh7AeP15Pxh8wA==",
+   "loadSec": 0.1,
+   "memoryMB": 9
+  },
+  {
+   "id": "es-cr",
+   "tag": "es-CR",
+   "name": "Spanish (Costa Rica)",
+   "native": "español (Costa Rica)",
+   "pkg": "dictionary-es-cr",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 160328,
+    "sha256": "7b52471a40dde29f06dc5ca5071fd4124225ad1dedaaaa932009eb4acc4e1bb7"
+   },
+   "dic": {
+    "size": 691139,
+    "sha256": "9e5f628c5e43cc185530f788e6ae25407ab1eae9b8dfae291f61b31517d25b57"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-cr/-/dictionary-es-cr-2.0.0.tgz",
+   "integrity": "sha512-cKYYUfv64Kv/iP+DIL/9Zc18KJe6UZON38uQxMU9KmGEdNjt4XYToU8bBIqmV2v3AYS0uK2A21A/pkKqjk0FiA==",
+   "loadSec": 0.1,
+   "memoryMB": 9
+  },
+  {
+   "id": "es-cu",
+   "tag": "es-CU",
+   "name": "Spanish (Cuba)",
+   "native": "español (Cuba)",
+   "pkg": "dictionary-es-cu",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 160328,
+    "sha256": "7b52471a40dde29f06dc5ca5071fd4124225ad1dedaaaa932009eb4acc4e1bb7"
+   },
+   "dic": {
+    "size": 693050,
+    "sha256": "277f32d936d004ab345d6c0c35bc21455fb0451fe395ebe9a7e085588a1f34be"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-cu/-/dictionary-es-cu-2.0.0.tgz",
+   "integrity": "sha512-h2xb8nkwYhv+ajoxPxZGskMgMb/xx9KFwqdQGD7IK1fu8KBoDsl7qtDxUvGupRSwB8yY6WSuhbc5qppKlxF1PA==",
+   "loadSec": 0.1,
+   "memoryMB": 8
+  },
+  {
+   "id": "es-do",
+   "tag": "es-DO",
+   "name": "Spanish (Dominican Republic)",
+   "native": "español (República Dominicana)",
+   "pkg": "dictionary-es-do",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 160328,
+    "sha256": "7b52471a40dde29f06dc5ca5071fd4124225ad1dedaaaa932009eb4acc4e1bb7"
+   },
+   "dic": {
+    "size": 689843,
+    "sha256": "4ff3ecbe2087bc139e4b1e9580a0d1e28a5a875c85895ac48ac998612446e5ba"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-do/-/dictionary-es-do-2.0.0.tgz",
+   "integrity": "sha512-6YV1r/WkdHQSxeQRbnJnSMx6lMTXVnmm4gix3kRwUtlCrXGlI00qLVOLfACzqTosrAFRNUe62m/Q8KgHRemyHQ==",
+   "loadSec": 0.1,
+   "memoryMB": 9
+  },
+  {
+   "id": "es-ec",
+   "tag": "es-EC",
+   "name": "Spanish (Ecuador)",
+   "native": "español (Ecuador)",
+   "pkg": "dictionary-es-ec",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 160328,
+    "sha256": "7b52471a40dde29f06dc5ca5071fd4124225ad1dedaaaa932009eb4acc4e1bb7"
+   },
+   "dic": {
+    "size": 691730,
+    "sha256": "05f56b308775ed9320f50e7107148385a7ded87dcb18d96c9dacba11817c6337"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-ec/-/dictionary-es-ec-2.0.0.tgz",
+   "integrity": "sha512-w9hIrr2pKz117hykmAWItzm++EDziEo17zBTHrBD+fF5YL74r9pxMwpAuLj3j3XOLeSjt9nsrYaj9s2x4UpjOA==",
+   "loadSec": 0.1,
+   "memoryMB": 10
+  },
+  {
+   "id": "es-gt",
+   "tag": "es-GT",
+   "name": "Spanish (Guatemala)",
+   "native": "español (Guatemala)",
+   "pkg": "dictionary-es-gt",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 160328,
+    "sha256": "c8bdd478feef7731fa0e6c8f029ec6a62e7b32488c0d976e3b0edbcbbf4dd4e2"
+   },
+   "dic": {
+    "size": 690768,
+    "sha256": "674714464aae795aaaf442a0b08cfef2a178e08c6e6313160bc32df96bf4de6a"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-gt/-/dictionary-es-gt-2.0.0.tgz",
+   "integrity": "sha512-vQX+jIy0Kwe2uf5IMW3U4CaSUDObo6suOcCj42UZyp8GMQ3WGFAWgD0QEVhedp8l0GeAZcQ5zlCT+ALgfPhjmQ==",
+   "loadSec": 0.1,
+   "memoryMB": 9
+  },
+  {
+   "id": "es-hn",
+   "tag": "es-HN",
+   "name": "Spanish (Honduras)",
+   "native": "español (Honduras)",
+   "pkg": "dictionary-es-hn",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 160328,
+    "sha256": "7b52471a40dde29f06dc5ca5071fd4124225ad1dedaaaa932009eb4acc4e1bb7"
+   },
+   "dic": {
+    "size": 692774,
+    "sha256": "9364e9c6d3d76793f502669e250338b257054ee0b37cb392aca0abe66381444b"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-hn/-/dictionary-es-hn-2.0.0.tgz",
+   "integrity": "sha512-eNg4pwEIExJUwbhC6nV5llCBnj/fL03C4SLAnVuxt3wMOgojkMbMHLfyUd/TNDQZOVjOuhc235NrXoSvfUVH5w==",
+   "loadSec": 0.2,
+   "memoryMB": 9
+  },
+  {
+   "id": "es-mx",
+   "tag": "es-MX",
+   "name": "Mexican Spanish",
+   "native": "español de México",
+   "pkg": "dictionary-es-mx",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 158014,
+    "sha256": "4dc9ddafc140e0fc27a40fe808ff3d77138e12bf3db5748832f03d780aadecfa"
+   },
+   "dic": {
+    "size": 714044,
+    "sha256": "bfb17f2e285505fbe7a2d8c1785906e7ed2cd7f6fd6182afb9d8ac0e7e16d202"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-mx/-/dictionary-es-mx-2.0.0.tgz",
+   "integrity": "sha512-EkRPJAgPhY55oMiHqwEBavOpokkvXlOO5jOdwZJmV/B6w9pGpJxlm7YorgHjiB2HqyPGW0FRcOoJRBTspTXUEA==",
+   "loadSec": 0.1,
+   "memoryMB": 12
+  },
+  {
+   "id": "es-ni",
+   "tag": "es-NI",
+   "name": "Spanish (Nicaragua)",
+   "native": "español (Nicaragua)",
+   "pkg": "dictionary-es-ni",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 160328,
+    "sha256": "7b52471a40dde29f06dc5ca5071fd4124225ad1dedaaaa932009eb4acc4e1bb7"
+   },
+   "dic": {
+    "size": 691690,
+    "sha256": "7ab17d5634d2e1bf4f9e7b4d124eb0c69079d61bf9590818a8dac2e8b7192337"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-ni/-/dictionary-es-ni-2.0.0.tgz",
+   "integrity": "sha512-RlVOynaDwRxi58a2Ho/B16ChQe2MTn5Qj9p1tMZTL94D++BCrB36tdF4rI5En9/PG3HLZenQfNSlDt+ya19RUw==",
+   "loadSec": 0.1,
+   "memoryMB": 8
+  },
+  {
+   "id": "es-pa",
+   "tag": "es-PA",
+   "name": "Spanish (Panama)",
+   "native": "español (Panamá)",
+   "pkg": "dictionary-es-pa",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 160328,
+    "sha256": "7b52471a40dde29f06dc5ca5071fd4124225ad1dedaaaa932009eb4acc4e1bb7"
+   },
+   "dic": {
+    "size": 690426,
+    "sha256": "6ff67ff57bfed406a740815a7f1f58deeea0a88262b60e555b7442830b4334e7"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-pa/-/dictionary-es-pa-2.0.0.tgz",
+   "integrity": "sha512-i/ta1b6osDwq1Ssx20YHIlC1+wqEYjQEmLf1RGWc5vnEfIZsKc3WF7atMz9CU6YBaJtS5Lpu9avLlObfZrVGPA==",
+   "loadSec": 0.1,
+   "memoryMB": 9
+  },
+  {
+   "id": "es-pe",
+   "tag": "es-PE",
+   "name": "Spanish (Peru)",
+   "native": "español (Perú)",
+   "pkg": "dictionary-es-pe",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 158014,
+    "sha256": "4dc9ddafc140e0fc27a40fe808ff3d77138e12bf3db5748832f03d780aadecfa"
+   },
+   "dic": {
+    "size": 705766,
+    "sha256": "ef7bcc2f62bfa4de1a6266ba4dd8a0d2f65b22e005a3946d9572fb7fcbbbc6f9"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-pe/-/dictionary-es-pe-2.0.0.tgz",
+   "integrity": "sha512-57LMEGDzwGzdF1bkrvyEIM1YGwfqgJylncy4Sh/E6jVzKotm2Se+/6T49qBsARt2N2qtCcX/g7wHyNaehU8EeA==",
+   "loadSec": 0.1,
+   "memoryMB": 9
+  },
+  {
+   "id": "es-ph",
+   "tag": "es-PH",
+   "name": "Spanish (Philippines)",
+   "native": "español (Filipinas)",
+   "pkg": "dictionary-es-ph",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 169457,
+    "sha256": "459fcfa76382eb2333a3c2833053b3c37bb92345add3f8ad61e94e4413402c40"
+   },
+   "dic": {
+    "size": 788629,
+    "sha256": "7655fb1ed746387c92f69e41fefad229c0c8715154606c673fb38a6de958c588"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-ph/-/dictionary-es-ph-2.0.0.tgz",
+   "integrity": "sha512-9ue/bgg9C+j1tDRI3VCqySVG2XYqnzH2eN9mF5ytk6EPQiu1I3iKux99plzai7Erzva/ma1cHovwTZcoKoBFcw==",
+   "loadSec": 0.1,
+   "memoryMB": 9
+  },
+  {
+   "id": "es-pr",
+   "tag": "es-PR",
+   "name": "Spanish (Puerto Rico)",
+   "native": "español (Puerto Rico)",
+   "pkg": "dictionary-es-pr",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 160328,
+    "sha256": "7b52471a40dde29f06dc5ca5071fd4124225ad1dedaaaa932009eb4acc4e1bb7"
+   },
+   "dic": {
+    "size": 689965,
+    "sha256": "7da63fd40658d0487862db0da3b42bf3046322eb68390ff123595d14732bfde4"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-pr/-/dictionary-es-pr-2.0.0.tgz",
+   "integrity": "sha512-KQU0g7HhkBcu4AN469kvBjsn6RdlFbJzstsvef4m5c/k8vWOt0szPE0BbK4LJwt1cnhK+dLvpZpt82hFJuZbyw==",
+   "loadSec": 0.1,
+   "memoryMB": 9
+  },
+  {
+   "id": "es-py",
+   "tag": "es-PY",
+   "name": "Spanish (Paraguay)",
+   "native": "español (Paraguay)",
+   "pkg": "dictionary-es-py",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 160328,
+    "sha256": "7b52471a40dde29f06dc5ca5071fd4124225ad1dedaaaa932009eb4acc4e1bb7"
+   },
+   "dic": {
+    "size": 690557,
+    "sha256": "3bcce5995c0f3382ded300ceb9a0fd48b47e04fb1bc516d8a0f42dc3934457eb"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-py/-/dictionary-es-py-2.0.0.tgz",
+   "integrity": "sha512-RsYGP13G24rS7plZbtCm60r3FQFo+Cvc1M91mit9LgKY0hHGIvQecOyhuPgJPBd2ejMEhnu2G9m8/N/WOSmyTg==",
+   "loadSec": 0.1,
+   "memoryMB": 7
+  },
+  {
+   "id": "es-sv",
+   "tag": "es-SV",
+   "name": "Spanish (El Salvador)",
+   "native": "español (El Salvador)",
+   "pkg": "dictionary-es-sv",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 160328,
+    "sha256": "7b52471a40dde29f06dc5ca5071fd4124225ad1dedaaaa932009eb4acc4e1bb7"
+   },
+   "dic": {
+    "size": 691130,
+    "sha256": "7642f7cb031166ae3960e2354f98c80ab7511c57690d0c9a43ca70a4ac28672d"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-sv/-/dictionary-es-sv-2.0.0.tgz",
+   "integrity": "sha512-eg1pUCNgYLRbR4KdFV80gP6TBosVRYQDUglMYl1JtWwcs3DWfB8sbAoXlp2iaodbpBPUcmZIMyVS4PTQSpR2MA==",
+   "loadSec": 0.1,
+   "memoryMB": 8
+  },
+  {
+   "id": "es-us",
+   "tag": "es-US",
+   "name": "Spanish (United States)",
+   "native": "español (Estados Unidos)",
+   "pkg": "dictionary-es-us",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 169457,
+    "sha256": "459fcfa76382eb2333a3c2833053b3c37bb92345add3f8ad61e94e4413402c40"
+   },
+   "dic": {
+    "size": 686440,
+    "sha256": "37e8e1cb67121f37a622fc559ffb80bab26144883bf723bbfe184e8645215dc0"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-us/-/dictionary-es-us-2.0.0.tgz",
+   "integrity": "sha512-E9HNOl6RSG7eIDIhdIny9W+NkjMFlp/MaJ9IYOggGm3J4FPW2HRFEI6WPR6lC7rD5qxt1gNiDjhO55iGAULgrw==",
+   "loadSec": 0.1,
+   "memoryMB": 10
+  },
+  {
+   "id": "es-uy",
+   "tag": "es-UY",
+   "name": "Spanish (Uruguay)",
+   "native": "español (Uruguay)",
+   "pkg": "dictionary-es-uy",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 160328,
+    "sha256": "7b52471a40dde29f06dc5ca5071fd4124225ad1dedaaaa932009eb4acc4e1bb7"
+   },
+   "dic": {
+    "size": 692682,
+    "sha256": "8ed4cc0c6a95dca239312a99b21d860c0c6cc93e5ad70f44cf34ec6cf8970a8a"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-uy/-/dictionary-es-uy-2.0.0.tgz",
+   "integrity": "sha512-W2TyFkF0ITBNVZeHsSUOE8++BjOymASdqWFJgV+WBTr3NYFjA0oMuf9XJ2Xwcha4M0fXKbhhoqOAq7RZEYDenA==",
+   "loadSec": 0.1,
+   "memoryMB": 9
+  },
+  {
+   "id": "es-ve",
+   "tag": "es-VE",
+   "name": "Spanish (Venezuela)",
+   "native": "español (Venezuela)",
+   "pkg": "dictionary-es-ve",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-1.1)",
+   "aff": {
+    "size": 158014,
+    "sha256": "4dc9ddafc140e0fc27a40fe808ff3d77138e12bf3db5748832f03d780aadecfa"
+   },
+   "dic": {
+    "size": 694769,
+    "sha256": "1a855f3a06e48a341f4d509729cfd65a309bf544d90faef67499071226f482de"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-es-ve/-/dictionary-es-ve-2.0.0.tgz",
+   "integrity": "sha512-4AKVrQVlwCsfw+g7su3iHx8FcNMMXpC336NTyUp9/XL7wB6KGh/rp+e4qDQ3XiJMrJkG/ph/5+cRrh0h60YNiQ==",
+   "loadSec": 0.1,
+   "memoryMB": 8
+  },
+  {
+   "id": "et",
+   "tag": "et",
+   "name": "Estonian",
+   "native": "eesti",
+   "pkg": "dictionary-et",
+   "version": "2.0.0",
+   "license": "LGPL-2.1",
+   "aff": {
+    "size": 240016,
+    "sha256": "f568a1003d9d49d377e87e35a4b712a243b4490ef0647992c85169d46ed948e3"
+   },
+   "dic": {
+    "size": 4457441,
+    "sha256": "237ff31093ec03c7f992919b8e7c9a4d3df90cdef9859edab571ebff42c9f5e8"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-et/-/dictionary-et-2.0.0.tgz",
+   "integrity": "sha512-MxyW1AvySPuXTrKikX9gXGj4R039kYd33xuJw4Pk5TllKitfZYp+rSiOVYI9azDW5foAXBYclPdkVglA5iNKQw==",
+   "loadSec": 0.4,
+   "memoryMB": 32
+  },
+  {
+   "id": "eu",
+   "tag": "eu",
+   "name": "Basque",
+   "native": "euskara",
+   "pkg": "dictionary-eu",
+   "version": "4.0.0",
+   "license": "GPL-2.0",
+   "aff": {
+    "size": 2729393,
+    "sha256": "ba68948c642828c80e5b5fc7ea19876bd38ce6f874f4453c662395adca8fef2a"
+   },
+   "dic": {
+    "size": 2303418,
+    "sha256": "2f046ed070c11f9dc6f502577462bdc11a0966be50e0d9750823922a22d9e948"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-eu/-/dictionary-eu-4.0.0.tgz",
+   "integrity": "sha512-+xpwNbE5OikUzcH9qCm3VDhCLjFBBz0ad2NqhMzrBubtfKL/e3lJMllI1yKKIQcy30zIRUYY0iRGfGEJi2/OOQ==",
+   "loadSec": 3.8,
+   "memoryMB": 40
+  },
+  {
+   "id": "fa",
+   "tag": "fa",
+   "name": "Persian",
+   "native": "فارسی",
+   "pkg": "dictionary-fa",
+   "version": "2.0.0",
+   "license": "Apache-2.0",
+   "aff": {
+    "size": 5440,
+    "sha256": "dba0980816354ad969aa46dda0c040eeebda4a9381be331e17eae8647a2a1e1c"
+   },
+   "dic": {
+    "size": 2575990,
+    "sha256": "314f31e059994f26e8016c834b14dfd10f74834b3f623a6040265b8f2a9dddab"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-fa/-/dictionary-fa-2.0.0.tgz",
+   "integrity": "sha512-FEvC923119V9sJ5MKbXOssauLTHJ4zxwUhFLGaC1sETJASWF01Xcank24achQtm1f2eDzZgyWphzbjy3M5u2Lw==",
+   "loadSec": 0.2,
+   "memoryMB": 16
+  },
+  {
+   "id": "fo",
+   "tag": "fo",
+   "name": "Faroese",
+   "native": "føroyskt",
+   "pkg": "dictionary-fo",
+   "version": "3.0.0",
+   "license": "(GPL-2.0 OR LGPL-2.1 OR MPL-1.1)",
+   "aff": {
+    "size": 170213,
+    "sha256": "6e459e5a3346ee0b7ad3ddc98dd0a412226060c6e7be6e096cfdf039f877b491"
+   },
+   "dic": {
+    "size": 1716099,
+    "sha256": "3b62983af6b5c093e2ec020ff35869cc3068167e7cc7f8cc9585456a6b1368db"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-fo/-/dictionary-fo-3.0.0.tgz",
+   "integrity": "sha512-s3u0/uTzWKx0JbisQPGDgEVCj+64Mmyip4cGMfx55IR+gYmhAEzO7zxofA2btbYxx58KgZJxHHkJNsGGqFD+6w==",
+   "loadSec": 0.3,
+   "memoryMB": 16
+  },
+  {
+   "id": "fr",
+   "tag": "fr",
+   "name": "French",
+   "native": "français",
+   "pkg": "dictionary-fr",
+   "version": "3.0.0",
+   "license": "MPL-2.0",
+   "aff": {
+    "size": 199870,
+    "sha256": "05a735d34c912e4e381ff08ee7c747923ccf5cf9dca81d8467982fa1ca51c2b7"
+   },
+   "dic": {
+    "size": 1229133,
+    "sha256": "984e933237bc1224a48f42828233be9b03228260ef67aa8e2bdddcd03a26230d"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-fr/-/dictionary-fr-3.0.0.tgz",
+   "integrity": "sha512-fhDRX1cRyHPA69GJg8R4XgNYgSQvbNHj3kr5UqvEG1OS5pJqH6P3GbO7wpTCwvr5KMQ0NxGIsXps9P5NyXRVEg==",
+   "loadSec": 0.2,
+   "memoryMB": 13
+  },
+  {
+   "id": "fur",
+   "tag": "fur",
+   "name": "Friulian",
+   "native": "furlan",
+   "pkg": "dictionary-fur",
+   "version": "2.0.0",
+   "license": "GPL-2.0",
+   "aff": {
+    "size": 17832,
+    "sha256": "9b59cc525dec3a8580259e94493fd450a409835a0c35a19ac64b86fe9b750ec9"
+   },
+   "dic": {
+    "size": 384726,
+    "sha256": "f1ac6d1029915bc749c8b4f4d454a28c977992328c541bd362266b6fc630988f"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-fur/-/dictionary-fur-2.0.0.tgz",
+   "integrity": "sha512-NzWvClOsKX11rMB1NTiANnldxiKRB0e/io0EQWBszA4TOlZHMJzotiXTd5Sz7+2czzYYqvvDt+3Swnb2unoe1A==",
+   "loadSec": 0.1,
+   "memoryMB": 8
+  },
+  {
+   "id": "fy",
+   "tag": "fy",
+   "name": "Western Frisian",
+   "native": "Frysk",
+   "pkg": "dictionary-fy",
+   "version": "2.0.0",
+   "license": "GPL-3.0",
+   "aff": {
+    "size": 7020461,
+    "sha256": "10264e8cf0a21a448da15840422382c44c6f7592070a1cb8c103cf4f19ed03fd"
+   },
+   "dic": {
+    "size": 3612120,
+    "sha256": "529dd768a52b833fd3be90074dfeaaace18a785bd881e3d92ec1691312b901b1"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-fy/-/dictionary-fy-2.0.0.tgz",
+   "integrity": "sha512-+Anl7NRAG819rvB0ioX9P5lVa5O8QMin2sgx/cfPhE3MJeTJybN/5LcSqs1hHoZa9KoyU/obomcNTTuB+BQC1g==",
+   "loadSec": 0.8,
+   "memoryMB": 67
+  },
+  {
+   "id": "ga",
+   "tag": "ga",
+   "name": "Irish",
+   "native": "Gaeilge",
+   "pkg": "dictionary-ga",
+   "version": "3.0.0",
+   "license": "GPL-2.0",
+   "aff": {
+    "size": 20537,
+    "sha256": "1c48edbeb0e4225e612bb92d21f819fec58c9121b236db5ac0bba458982623b7"
+   },
+   "dic": {
+    "size": 1582329,
+    "sha256": "3ca59ca30da8875020f83697d9f817d44b4efa02d78fe9fb52a2c5a86527349d"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-ga/-/dictionary-ga-3.0.0.tgz",
+   "integrity": "sha512-zj4jYB3b9ZRpFwr5niIQn9QKdoS6ZWn55XcMgFshekGKTzUwcFPWct50jOMg8g8uy7eu3rMCx+ddqJERXU5/BQ==",
+   "loadSec": 0.1,
+   "memoryMB": 15
+  },
+  {
+   "id": "gd",
+   "tag": "gd",
+   "name": "Scottish Gaelic",
+   "native": "Gàidhlig",
+   "pkg": "dictionary-gd",
+   "version": "2.0.0",
+   "license": "GPL-3.0",
+   "aff": {
+    "size": 11019,
+    "sha256": "88bbdc85cc1826fe91a2001dc1b48c96bce9a5e4a8c0c63169dc64c65a87cee9"
+   },
+   "dic": {
+    "size": 2361638,
+    "sha256": "1769eb3317c90b9aa9e34b9ec95292d1ddde47115ed57c804a01eb03d9a0d83c"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-gd/-/dictionary-gd-2.0.0.tgz",
+   "integrity": "sha512-Rzf16mwWu4pqyPo2JTKwwxEFNgBqSaY/u5KfGQrpBpLnFm0V1r0DfowyiW12dZtTIwWdYIWimQiZoCBLPSB8QA==",
+   "loadSec": 0.2,
+   "memoryMB": 19
+  },
+  {
+   "id": "gl",
+   "tag": "gl",
+   "name": "Galician",
+   "native": "galego",
+   "pkg": "dictionary-gl",
+   "version": "3.0.0",
+   "license": "GPL-3.0",
+   "aff": {
+    "size": 1159910,
+    "sha256": "e2abc4122548c5f9e914fbbbcbebad3486b1492ac352fef72b95be93e32a0617"
+   },
+   "dic": {
+    "size": 8636406,
+    "sha256": "ca5f8d735a13225c1dabab042ddac8c58fd5e820ffba807ba8024d0fa0a68170"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-gl/-/dictionary-gl-3.0.0.tgz",
+   "integrity": "sha512-6eTiIZLq5AQu87potynhkiUZAcmJLG7QgG51fyzPNZWBRrv45b2hld0BPnmwvvdzeNRi7PXQJjxRD+br0Z1DcA==",
+   "loadSec": 0.6,
+   "memoryMB": 44
+  },
+  {
+   "id": "he",
+   "tag": "he",
+   "name": "Hebrew",
+   "native": "עברית",
+   "pkg": "dictionary-he",
+   "version": "2.0.0",
+   "license": "AGPL-3.0",
+   "aff": {
+    "size": 78883,
+    "sha256": "e115a0a5014d17a8e904f9d4a67d7992039b396c5fa031eb036a13bf63dfb037"
+   },
+   "dic": {
+    "size": 5688111,
+    "sha256": "9bd95042a927e13ab422231e355caa8a7018456e7c49b889f2e6c62ddb5a0552"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-he/-/dictionary-he-2.0.0.tgz",
+   "integrity": "sha512-lHtYauHajRL+gnS1iI50RANqn+ce1NnQwbxim2WD6PtX4NXME0vFiqkW/BFAae0kaT1+/86Ze15GAnwsTBBNGA==",
+   "loadSec": 0.4,
+   "memoryMB": 36
+  },
+  {
+   "id": "hr",
+   "tag": "hr",
+   "name": "Croatian",
+   "native": "hrvatski",
+   "pkg": "dictionary-hr",
+   "version": "2.0.0",
+   "license": "(LGPL-2.1 OR SISSL)",
+   "aff": {
+    "size": 96099,
+    "sha256": "230a7f0ca65159ecf8f3eea4afd79f7436415e83129b1d6b2424892074d8194d"
+   },
+   "dic": {
+    "size": 732589,
+    "sha256": "fb436f3a758cd4faf9ef4cd5c2e6e2a1e3abe535ee183095a2f59fd18dad0731"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-hr/-/dictionary-hr-2.0.0.tgz",
+   "integrity": "sha512-kQoiUkcZAbubqpLSh54cpMWJ8hWJI7UObCwrCzTbrulxdFseSmANPYnxH9CJ/Rz/WhMkNP6JW+Di/BnEN+LKGw==",
+   "loadSec": 0.1,
+   "memoryMB": 8
+  },
+  {
+   "id": "hu",
+   "tag": "hu",
+   "name": "Hungarian",
+   "native": "magyar",
+   "pkg": "dictionary-hu",
+   "version": "3.0.0",
+   "license": "(GPL-2.0 OR LGPL-2.1 OR MPL-1.1)",
+   "aff": {
+    "size": 807730,
+    "sha256": "625a5fb8bf77cf1a4d73288883b8abeff4753f736579a35ec285088fb9098d2c"
+   },
+   "dic": {
+    "size": 3114250,
+    "sha256": "b6bda85603bb293de53b6deed5043771b1a61958f76e09aa8058c26e563f63e1"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-hu/-/dictionary-hu-3.0.0.tgz",
+   "integrity": "sha512-yTOarR7/KU/E1VbqzCru8hX0TMtQGWo6JF5CBBBbsqodzBhPxO+rHrmRSrXUMlcsPieqm3wWQtXuO/3OjQ95gw==",
+   "loadSec": 0.4,
+   "memoryMB": 24
+  },
+  {
+   "id": "hy",
+   "tag": "hy",
+   "name": "Armenian",
+   "native": "հայերեն",
+   "pkg": "dictionary-hy",
+   "version": "2.0.0",
+   "license": "(GPL-2.0 OR LGPL-2.1 OR MPL-1.1)",
+   "aff": {
+    "size": 25543,
+    "sha256": "aa8b49f32350a0136d112f62ee697c87cdc452256d12a70ef1fea2e7a13b32fb"
+   },
+   "dic": {
+    "size": 2210856,
+    "sha256": "53530792b4937e4b8cd387e28ff45884e42742c8218d8ba4510804efcfb81084"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-hy/-/dictionary-hy-2.0.0.tgz",
+   "integrity": "sha512-gk+xqwgxZ7sRC526s5Kkz7jVNr1KhqEcC8clsII5xzarGjNB9KoKz6hmOgITPxy+uArS19IWIlAsuTvcGxG1UA==",
+   "loadSec": 0.2,
+   "memoryMB": 14
+  },
+  {
+   "id": "hyw",
+   "tag": "hyw",
+   "name": "Western Armenian",
+   "native": "",
+   "pkg": "dictionary-hyw",
+   "version": "2.0.0",
+   "license": "(GPL-2.0 OR LGPL-2.1 OR MPL-1.1)",
+   "aff": {
+    "size": 96878,
+    "sha256": "4223fd49fb82891911f65270982beb5b929e44763476895706567596819dcd3e"
+   },
+   "dic": {
+    "size": 2068288,
+    "sha256": "ecfbc8af694532bfb2a40654608d8e0d6cad0b55520543d84c97d2ae8b710694"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-hyw/-/dictionary-hyw-2.0.0.tgz",
+   "integrity": "sha512-Votz9grOftANxrbNaMQS4EbxlS4XU6pPKse6v6B3Urtfq5iSdINHzSUwJPNKix6vJFOVXbmmHSn89AIFX0VVPA==",
+   "loadSec": 0.2,
+   "memoryMB": 15
+  },
+  {
+   "id": "ia",
+   "tag": "ia",
+   "name": "Interlingua",
+   "native": "",
+   "pkg": "dictionary-ia",
+   "version": "2.0.0",
+   "license": "GPL-3.0",
+   "aff": {
+    "size": 34025,
+    "sha256": "08fa657fc641f6b2db0e9179d4219a14a0e7091a23471b794a5c5e9805283d18"
+   },
+   "dic": {
+    "size": 713481,
+    "sha256": "22ee44726f058c904541b83db9bc3f4652e51186188fadd475619e3a596ada47"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-ia/-/dictionary-ia-2.0.0.tgz",
+   "integrity": "sha512-5lNKpIm8nmKy/5wwUPobZQT2TtdRgCpGRX/WMUvzFSK0nA+mbOrqMhyT8wWEFloJXA2WNplx3AARNSTjR7bEcg==",
+   "loadSec": 0.1,
+   "memoryMB": 9
+  },
+  {
+   "id": "ie",
+   "tag": "ie",
+   "name": "Interlingue",
+   "native": "",
+   "pkg": "dictionary-ie",
+   "version": "2.0.0",
+   "license": "Apache-2.0",
+   "aff": {
+    "size": 5686,
+    "sha256": "7dea5efa7b33134d370e64cf7b4c57b0cf19045d1bb155b36b7d16e2ff0f289d"
+   },
+   "dic": {
+    "size": 252917,
+    "sha256": "f44d9fad8b6a206f2d517624e70dc60426747d118f6674bd16a71cfedb8a6e6d"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-ie/-/dictionary-ie-2.0.0.tgz",
+   "integrity": "sha512-5fHxvVAn4C8WQcp/Ehj8iKn5v1l9YL4ANYLtyu3ozaRLipZz+R2k54TMwJIFrMDpiRyD7eeSja86uKNp7VpVQA==",
+   "loadSec": 0,
+   "memoryMB": 6
+  },
+  {
+   "id": "is",
+   "tag": "is",
+   "name": "Icelandic",
+   "native": "íslenska",
+   "pkg": "dictionary-is",
+   "version": "2.0.0",
+   "license": "CC-BY-SA-3.0",
+   "aff": {
+    "size": 309734,
+    "sha256": "0168050c64a369c55b5aeb61f9dfe484d2aa7512d78bb3fa36779ea24b467c50"
+   },
+   "dic": {
+    "size": 2454138,
+    "sha256": "8447594fd7eb1d6d43725c4ca49b00d3f00c4c4f3ac2f2b6dfe3f56eb211d280"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-is/-/dictionary-is-2.0.0.tgz",
+   "integrity": "sha512-XsZP6pjiWL+VQk8O6BblwCmQGw5vQcLTIgMw2q1EVQ7hlJi0Y+hg0vvvsn4YY5qvfXBltnY2j22tkGezG494rg==",
+   "loadSec": 0.3,
+   "memoryMB": 19
+  },
+  {
+   "id": "it",
+   "tag": "it",
+   "name": "Italian",
+   "native": "italiano",
+   "pkg": "dictionary-it",
+   "version": "2.0.0",
+   "license": "GPL-3.0",
+   "aff": {
+    "size": 70020,
+    "sha256": "5770cd3e16d494c045b4a9a4a9fcd7962577e642d0384a7129c020a12cdd2c79"
+   },
+   "dic": {
+    "size": 1295754,
+    "sha256": "b1348fbdb6f441ea9dd7e33b2cfcb96ead39ccd5e48bf894972774cd5aa86abb"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-it/-/dictionary-it-2.0.0.tgz",
+   "integrity": "sha512-klTygBjKRYKEeDmqLfDpI9eDCj334TQhbq2zExKREV4CMPiUsnXnO/0CGMTiRTRL+Wk+qXd0fKfEZbgw+gnjHw==",
+   "loadSec": 0.1,
+   "memoryMB": 13
+  },
+  {
+   "id": "ka",
+   "tag": "ka",
+   "name": "Georgian",
+   "native": "ქართული",
+   "pkg": "dictionary-ka",
+   "version": "2.0.0",
+   "license": "MIT",
+   "aff": {
+    "size": 63577,
+    "sha256": "f5c39986659f13d703d0bae0ac8856d58768ce2b8d1f5ab6fb1ca3487c5ede5a"
+   },
+   "dic": {
+    "size": 3884579,
+    "sha256": "5963f268e996f1e27e17163873b4d32f41fae2a1e5bef0117126caefe62f5857"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-ka/-/dictionary-ka-2.0.0.tgz",
+   "integrity": "sha512-5zzK11IhrybJaon/rZltNbOELJ7NPviRt9I9ATKEiCkRGSN/PibF0gCvY3x9bknjWeRK+PeNHP8CM6ZG7W5BeQ==",
+   "loadSec": 0.2,
+   "memoryMB": 20
+  },
+  {
+   "id": "ko",
+   "tag": "ko",
+   "name": "Korean",
+   "native": "한국어",
+   "pkg": "dictionary-ko",
+   "version": "2.0.0",
+   "license": "(GPL-2.0 OR LGPL-2.1 OR MPL-1.1)",
+   "aff": {
+    "size": 11094418,
+    "sha256": "7b8930ce1357691591a3c38afc9cba787ec6dce0e30d0438bd156c4b4c94dbdf"
+   },
+   "dic": {
+    "size": 2864525,
+    "sha256": "ea275b5fe256925a95f9192a173f7c3d3c2480fa748371c64b89d7e0cc531b1d"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-ko/-/dictionary-ko-2.0.0.tgz",
+   "integrity": "sha512-0/0UdG9/SqUzGUcuTLZsM0BjSTagDiWdNQ51H1BdDKW7TqR7WjfBhipg+YLAKvyCG2Is6dPwCSoBIPUgOgPdxw==",
+   "loadSec": 1.3,
+   "memoryMB": 68
+  },
+  {
+   "id": "la",
+   "tag": "la",
+   "name": "Latin",
+   "native": "",
+   "pkg": "dictionary-la",
+   "version": "2.0.0",
+   "license": "GPL-2.0",
+   "aff": {
+    "size": 441477,
+    "sha256": "6d78952f21ddd6158227544d573958a3d05b759c6219a2e1ac924daf24210e71"
+   },
+   "dic": {
+    "size": 1710586,
+    "sha256": "8e0910e623800110cf9cc70b6adaea813857d02916b7c9a7dd9d9e9dd72a98ef"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-la/-/dictionary-la-2.0.0.tgz",
+   "integrity": "sha512-JNV/FoLx82h1WIKI+dlfpTmmOJofxkLR/I1xlHEVTifC1h1rsgqoRK+OTNabXDXh6d4p7ar1qxwvftcrPYvfTA==",
+   "loadSec": 0.2,
+   "memoryMB": 18
+  },
+  {
+   "id": "lb",
+   "tag": "lb",
+   "name": "Luxembourgish",
+   "native": "Lëtzebuergesch",
+   "pkg": "dictionary-lb",
+   "version": "4.0.0",
+   "license": "EUPL-1.1",
+   "aff": {
+    "size": 79066,
+    "sha256": "0f32ab1e7e9e3a0e6f8ddf2d062897291587d8db60f6b04d0bfbcac14965a643"
+   },
+   "dic": {
+    "size": 3704091,
+    "sha256": "fdcfb369bf6d4f38ad0ae3d831e40b55e9c0a97680f2f339e5bed9eecccd96fc"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-lb/-/dictionary-lb-4.0.0.tgz",
+   "integrity": "sha512-nshdpJptRdQ3C0J28rtA/uK+dKa03TWXLOOgzvZF6SiN1NWRRG+txt86v/U5LnfGjDOflC1l2+aP5Zp78Bx8Dw==",
+   "loadSec": 0.2,
+   "memoryMB": 23
+  },
+  {
+   "id": "lt",
+   "tag": "lt",
+   "name": "Lithuanian",
+   "native": "lietuvių",
+   "pkg": "dictionary-lt",
+   "version": "2.0.0",
+   "license": "BSD-3-Clause",
+   "aff": {
+    "size": 99714,
+    "sha256": "79c6f8304490d1c8b27ec93e509b2f635d9bb21d45a2d41c15162b18c8ff897c"
+   },
+   "dic": {
+    "size": 1181184,
+    "sha256": "a751750b040623cf408cf1a3b6f6336141b55ac9519e54068dbeaa52eb395ccd"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-lt/-/dictionary-lt-2.0.0.tgz",
+   "integrity": "sha512-NPuz8zyQn92yX1tc/W7yADmHuTpPQ6rNY+LWiWyWFJvqV6jQgg/Ag7jsY9LfVFIiv2uQ/LgrIHC5/XlhHcgs4Q==",
+   "loadSec": 0.1,
+   "memoryMB": 10
+  },
+  {
+   "id": "ltg",
+   "tag": "ltg",
+   "name": "Latgalian",
+   "native": "",
+   "pkg": "dictionary-ltg",
+   "version": "2.0.0",
+   "license": "LGPL-2.1",
+   "aff": {
+    "size": 210162,
+    "sha256": "ffe84b7e9fca7157d4f423f246ac3f4da42a78e41d21c64886f9632df00b35ff"
+   },
+   "dic": {
+    "size": 134293,
+    "sha256": "0f99a93abe86adfe8304967e9e3e8af45dc0d39ba734b42dd49243acf6f8e7fd"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-ltg/-/dictionary-ltg-2.0.0.tgz",
+   "integrity": "sha512-rMDReYcZjpyEVdNmGAKgp4aJoiK8V3PmauYjtNhFNFIyMeh0X5deeJA655weoHmGfxR5nhABesCXuUZ3/rgbCw==",
+   "loadSec": 0,
+   "memoryMB": 6
+  },
+  {
+   "id": "lv",
+   "tag": "lv",
+   "name": "Latvian",
+   "native": "latviešu",
+   "pkg": "dictionary-lv",
+   "version": "2.0.0",
+   "license": "LGPL-2.1",
+   "aff": {
+    "size": 130475,
+    "sha256": "a11f646c6905d6c96f3218ada4a6cf84129c9e6169720ac1a17f1707940a2890"
+   },
+   "dic": {
+    "size": 1844831,
+    "sha256": "bf7d054e28bc5e44df19410f3ed9d5fd8d6a4d8c051676650388c4e8d65c3148"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-lv/-/dictionary-lv-2.0.0.tgz",
+   "integrity": "sha512-jtPBAmcXELIj6br9Tmi8CwNgiE8AKn7BrhdQo7i+9kqkWJYKwDHTthVBe5FsvafRCWL7LAt2l70f4BLEJfkHBw==",
+   "loadSec": 0.1,
+   "memoryMB": 14
+  },
+  {
+   "id": "mk",
+   "tag": "mk",
+   "name": "Macedonian",
+   "native": "македонски",
+   "pkg": "dictionary-mk",
+   "version": "2.0.0",
+   "license": "GPL-3.0",
+   "aff": {
+    "size": 181552,
+    "sha256": "4774871b7cafa2d59bd2f539be7a2293f4aa2b2e2a331f1d11f8bcb849b4105e"
+   },
+   "dic": {
+    "size": 2279845,
+    "sha256": "5008053d3b4e4be163c32b23a9d0551ae7aefceaa7d0760c07f2ebc10af7afb5"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-mk/-/dictionary-mk-2.0.0.tgz",
+   "integrity": "sha512-fZmbMsQqVKFJn71JCW6J6uwoNfEurHy5P/JYLQa73KNuDH8f/3fEVpizzg9Tdb40jG1a59dEHpKDyhHyTbVNDQ==",
+   "loadSec": 0.1,
+   "memoryMB": 14
+  },
+  {
+   "id": "mn",
+   "tag": "mn",
+   "name": "Mongolian",
+   "native": "монгол",
+   "pkg": "dictionary-mn",
+   "version": "3.0.0",
+   "license": "LPPL-1.3c",
+   "aff": {
+    "size": 490281,
+    "sha256": "a9cca137eecec85b99894abdbe1935ebf9bccae5767f9736538741c72818a5a5"
+   },
+   "dic": {
+    "size": 17417591,
+    "sha256": "0fe948e7d1824596fd9e6b4f7ee319c4fc2d8cc3e7fb7fea4961bf33e82adfd3"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-mn/-/dictionary-mn-3.0.0.tgz",
+   "integrity": "sha512-c1IuZROs4XwkmOi+uH/wR0ouzlRayhyVbLgRb0lyDFlT9G79c+U1lq218ldL0ykKmnH4hjcEXTitfr4oDwg/tQ==",
+   "loadSec": 0.8,
+   "memoryMB": 84
+  },
+  {
+   "id": "nb",
+   "tag": "nb",
+   "name": "Norwegian Bokmål",
+   "native": "norsk bokmål",
+   "pkg": "dictionary-nb",
+   "version": "3.0.0",
+   "license": "GPL-2.0",
+   "aff": {
+    "size": 17381,
+    "sha256": "515a1e5f32ffa555d253c827830420dc5bb1d9a59ea9f720729acb0874c6a8c3"
+   },
+   "dic": {
+    "size": 5349724,
+    "sha256": "e97fdf7f441b3c46e1d0761a8ad25fa1883d0977d70ea8cb04751cb1c47fa10e"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-nb/-/dictionary-nb-3.0.0.tgz",
+   "integrity": "sha512-YemD394r1z5BrC1HUsV7iF6zLIalFBbcDfMCn4OV+KP3fRqC5VBLuohGBGmKnCmwwXSJmhOjmzaQY2cbK61iFw==",
+   "loadSec": 0.3,
+   "memoryMB": 35
+  },
+  {
+   "id": "nds",
+   "tag": "nds",
+   "name": "Low German",
+   "native": "Neddersass’sch",
+   "pkg": "dictionary-nds",
+   "version": "2.0.0",
+   "license": "GPL-3.0",
+   "aff": {
+    "size": 12733,
+    "sha256": "3bede75cd7db3b8262778e6a5cc673bfee37cb703702e412682d806429ae1073"
+   },
+   "dic": {
+    "size": 103126,
+    "sha256": "d8c380bed2182b1ac36bcef33a9391d9d77232045aaf43b59fe1cb492f378a95"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-nds/-/dictionary-nds-2.0.0.tgz",
+   "integrity": "sha512-5ZZmsNFsNoVo9g6B3IcogDG4UE8vSyom2+HHizNTQ7FFBphrTpSGZwIYguKD7zAbeqwIiKaJg9KsIQgSDjuw3Q==",
+   "loadSec": 0,
+   "memoryMB": 5
+  },
+  {
+   "id": "ne",
+   "tag": "ne",
+   "name": "Nepali",
+   "native": "नेपाली",
+   "pkg": "dictionary-ne",
+   "version": "2.0.0",
+   "license": "LGPL-2.1",
+   "aff": {
+    "size": 69405,
+    "sha256": "0e07d48fbebb6cb7f40d686a9eb9540a949922360d71c6d423a0384ee65f3fc2"
+   },
+   "dic": {
+    "size": 876717,
+    "sha256": "dfc130b2ccbaeee54a859bdc512c27107eb6efa6ae5167615a65df83377ba427"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-ne/-/dictionary-ne-2.0.0.tgz",
+   "integrity": "sha512-iSKsMzeY2ELJyLInAEcYVMyR8i7M055erWoIZ2IeVlyegL2x7S5TkQ0TQ8ZpfNELBIAplxi7AuPmGJBdCXyTTQ==",
+   "loadSec": 0.1,
+   "memoryMB": 10
+  },
+  {
+   "id": "nl",
+   "tag": "nl",
+   "name": "Dutch",
+   "native": "Nederlands",
+   "pkg": "dictionary-nl",
+   "version": "2.0.0",
+   "license": "(BSD-3-Clause OR CC-BY-3.0)",
+   "aff": {
+    "size": 46732,
+    "sha256": "b430d9cf5f4170d9e5072397927e1402b34aa877d1f4c8fbc00dab6370d87312"
+   },
+   "dic": {
+    "size": 2489166,
+    "sha256": "be192fdc36efd39dde0fb9a5a113143e0a906782e81ed68a74a710edced378d0"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-nl/-/dictionary-nl-2.0.0.tgz",
+   "integrity": "sha512-BJRu3jT52mEjDunbpC9Y1UiQJy22VUuA/N6s2Oc5KuN+hHS3MDCoTQiyjifePd2rlHtZSy0fGZaB0qXiCGh7Vw==",
+   "loadSec": 0.2,
+   "memoryMB": 21
+  },
+  {
+   "id": "nn",
+   "tag": "nn",
+   "name": "Norwegian Nynorsk",
+   "native": "norsk nynorsk",
+   "pkg": "dictionary-nn",
+   "version": "3.0.0",
+   "license": "GPL-2.0",
+   "aff": {
+    "size": 13615,
+    "sha256": "e50821655063f5680a3e4cf775b0a69c87de74bd6d2bbbb5da14ff8de4633beb"
+   },
+   "dic": {
+    "size": 3338635,
+    "sha256": "eaf1dc7ee7c848358df9aa231640b054ca4e388f2a870185528e4b229626faa6"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-nn/-/dictionary-nn-3.0.0.tgz",
+   "integrity": "sha512-nglKcs6cDzcOK0eBStDMx11PIz6q4WPbSIPfQNRQ7K9KIoMmsEebao0OkGFUxlFEa+P/NT1nTrREDdunobJshw==",
+   "loadSec": 0.2,
+   "memoryMB": 25
+  },
+  {
+   "id": "oc",
+   "tag": "oc",
+   "name": "Occitan",
+   "native": "",
+   "pkg": "dictionary-oc",
+   "version": "2.0.0",
+   "license": "GPL-2.0",
+   "aff": {
+    "size": 19560,
+    "sha256": "aad666af536d132640941b2231287600dd226fcd432f6ca5c96281ac4bfbe13f"
+   },
+   "dic": {
+    "size": 2767078,
+    "sha256": "986e7947c13682f4a56ac46737480475ec599b51e99a146e07d66f5ed2417b7f"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-oc/-/dictionary-oc-2.0.0.tgz",
+   "integrity": "sha512-klcMhuJd+fpQsN+EUi72+hHcL9K2/lcX/vggEQxUgGtkz2EjFEF9dj/k3ihYWlAg3ANAvXwi8etZbL8yvN0N2w==",
+   "loadSec": 0.3,
+   "memoryMB": 17
+  },
+  {
+   "id": "pl",
+   "tag": "pl",
+   "name": "Polish",
+   "native": "polski",
+   "pkg": "dictionary-pl",
+   "version": "2.0.0",
+   "license": "(GPL-3.0 OR LGPL-3.0 OR MPL-2.0)",
+   "aff": {
+    "size": 268824,
+    "sha256": "de7b54a8fa37562d58b481cf3d87a63e3dcc2d74021f6403eb0e4f5df9ecc225"
+   },
+   "dic": {
+    "size": 4683579,
+    "sha256": "74b6155391025419967c26913541b55b36d58e80b1028037d4a0b8ddcb18d0b7"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-pl/-/dictionary-pl-2.0.0.tgz",
+   "integrity": "sha512-jg1j4DM12i6oyp34Re5UeVYZAh2u4Y0Qi8zUfLVQjRmUQA8PsHO41ShoZLDwcQm7mWfeTeZjDPLv9wygPdqj3Q==",
+   "loadSec": 0.4,
+   "memoryMB": 32
+  },
+  {
+   "id": "pt",
+   "tag": "pt-BR",
+   "name": "Portuguese (Brazil)",
+   "native": "português (Brasil)",
+   "pkg": "dictionary-pt",
+   "version": "4.0.0",
+   "license": "(LGPL-3.0 OR MPL-2.0)",
+   "aff": {
+    "size": 979789,
+    "sha256": "a9f3621b94eb4d6838474bf9982027758e77dcb248815f49409b1a4a477dbd27"
+   },
+   "dic": {
+    "size": 4477692,
+    "sha256": "32e2edd83541d58613bcc83ef731a79aadf85ed57e977a16c6b5f711a7a36cee"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-pt/-/dictionary-pt-4.0.0.tgz",
+   "integrity": "sha512-ryJRhAtsaunBWw9grYXmVFftfab8+BCQ5wwh7fUzWO0oYEeMuR1lW2ubu1AHdvxOL32XP+u5wW/XhbFuoFuq8Q==",
+   "loadSec": 0.5,
+   "memoryMB": 36
+  },
+  {
+   "id": "pt-pt",
+   "tag": "pt-PT",
+   "name": "European Portuguese",
+   "native": "português europeu",
+   "pkg": "dictionary-pt-pt",
+   "version": "2.0.0",
+   "license": "(GPL-2.0 OR LGPL-2.1 OR MPL-1.1)",
+   "aff": {
+    "size": 95089,
+    "sha256": "975a209fcc892cb382fa5f34a28c391a39668661ce373ae071287809c5fcae24"
+   },
+   "dic": {
+    "size": 1475328,
+    "sha256": "fcac21564163586df74ba88cde362bb75560548b35bcaa780558c8f97f43de04"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-pt-pt/-/dictionary-pt-pt-2.0.0.tgz",
+   "integrity": "sha512-N44fxg2uDhF71Ql20zpe6BpdMlVkOT7oyjltuOhRwb2mx2SX3CJ/lqUE6+/HKZdqaxggqNbM/qv02a+Sa1XQiA==",
+   "loadSec": 0.1,
+   "memoryMB": 13
+  },
+  {
+   "id": "ro",
+   "tag": "ro",
+   "name": "Romanian",
+   "native": "română",
+   "pkg": "dictionary-ro",
+   "version": "3.0.0",
+   "license": "(GPL-2.0 OR LGPL-2.1 OR MPL-1.1)",
+   "aff": {
+    "size": 55040,
+    "sha256": "3ee127a667bdec829faee546ae32033e8f10f7c63117f9b572ef03ad9df2b76b"
+   },
+   "dic": {
+    "size": 2202394,
+    "sha256": "c26a9356f598a0ae89e7be650f6bdd9ba70acce66b41d7ab14c0c68639b6ed33"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-ro/-/dictionary-ro-3.0.0.tgz",
+   "integrity": "sha512-kcR0BSFq16g1jCKpn15jpyio3ztMMS+O3PK4TE8ird8XjBgSAr2RRH0VoLG4uzMG1CFQNix/cHLne1wBu3CcTg==",
+   "loadSec": 0.2,
+   "memoryMB": 21
+  },
+  {
+   "id": "ru",
+   "tag": "ru",
+   "name": "Russian",
+   "native": "русский",
+   "pkg": "dictionary-ru",
+   "version": "3.0.0",
+   "license": "BSD-3-Clause",
+   "aff": {
+    "size": 71236,
+    "sha256": "38ce7d4af78e211e9bafe4bf7e3d6a2c420591136cb738ec6648f8fdf6524cd7"
+   },
+   "dic": {
+    "size": 3473191,
+    "sha256": "f6047416a0204adbecf3a451b874ec8a97ee37e2cbc714466ef04d8dbcc0d6fc"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-ru/-/dictionary-ru-3.0.0.tgz",
+   "integrity": "sha512-tigem0CDnNpxEciW6ktwVH3wWB4FYpuvpwA6IR6UlF7bVu2kez6vOejVNyZgBX1TJIjuYTCTuLxzg/YOls2mRQ==",
+   "loadSec": 0.2,
+   "memoryMB": 23
+  },
+  {
+   "id": "rw",
+   "tag": "rw",
+   "name": "Kinyarwanda",
+   "native": "Ikinyarwanda",
+   "pkg": "dictionary-rw",
+   "version": "2.0.0",
+   "license": "GPL-3.0",
+   "aff": {
+    "size": 38203967,
+    "sha256": "236049e5460d8b77c3a863bc2a32b0c81cc2cb5222d6a10efe8f5ba55a6a2feb"
+   },
+   "dic": {
+    "size": 542,
+    "sha256": "29d2e7fff8d8f94a800c4c8ca98ee8e3d1ef67d12ab18c84f91e408209b50f23"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-rw/-/dictionary-rw-2.0.0.tgz",
+   "integrity": "sha512-w2d+lVvabiPvGxxEnvozMl5ZpZdGVm5fZZnf7XlTZcZ1KtTtjQu56lj2C3NhLj25P7OLU/IPI/MpqK7fH88d2w==",
+   "loadSec": 6.7,
+   "memoryMB": 244
+  },
+  {
+   "id": "sk",
+   "tag": "sk",
+   "name": "Slovak",
+   "native": "slovenčina",
+   "pkg": "dictionary-sk",
+   "version": "2.0.0",
+   "license": "(GPL-2.0 OR LGPL-2.1 OR MPL-1.1)",
+   "aff": {
+    "size": 99298,
+    "sha256": "a79dc992b849aa2355db38eea9c4722239993639d77bc81c9c1aa79f213e723c"
+   },
+   "dic": {
+    "size": 3502147,
+    "sha256": "b6cdb6fb512c44881cc91329aea0b179840f5f9a3e6cb024c2ab8547f96f5d94"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-sk/-/dictionary-sk-2.0.0.tgz",
+   "integrity": "sha512-rC+CQwuwURS7Cd2MWa5KXoFTdfZ7bAzgaCUM/4nGZxe1ySDksoYppGzX1vcYObqTCiQwKmsP4GwwGk+Ygsrzkg==",
+   "loadSec": 0.3,
+   "memoryMB": 23
+  },
+  {
+   "id": "sl",
+   "tag": "sl",
+   "name": "Slovenian",
+   "native": "slovenščina",
+   "pkg": "dictionary-sl",
+   "version": "3.0.0",
+   "license": "(GPL-3.0 OR LGPL-2.1)",
+   "aff": {
+    "size": 15054,
+    "sha256": "511043a4f9c64a966599e3d53fa1f4e9a172a87de4a7a0c2cf327098a3a605d1"
+   },
+   "dic": {
+    "size": 3084448,
+    "sha256": "5bac615dbd301ddbefbdaafdae242a89e46605916d77958df22778e770a95b9e"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-sl/-/dictionary-sl-3.0.0.tgz",
+   "integrity": "sha512-+i2WB6ZFOiejKS0XCo24OMG2aM2mqZfEX7zF98H1lFhllxb+EyQvFgQo92nCEA0gwRpfyVWRyQPMJBVIZU10iw==",
+   "loadSec": 0.2,
+   "memoryMB": 25
+  },
+  {
+   "id": "sr",
+   "tag": "sr",
+   "name": "Serbian",
+   "native": "српски",
+   "pkg": "dictionary-sr",
+   "version": "4.0.0",
+   "license": "(GPL-2.0 OR LGPL-2.1 OR MPL-1.1 OR CC-BY-SA-3.0)",
+   "aff": {
+    "size": 1296,
+    "sha256": "10e11edbd55742975f0720b26a2b6669187e9b91fabc5063ee81f0db2f73279f"
+   },
+   "dic": {
+    "size": 4447970,
+    "sha256": "8bdbbe464f20a5a600ccad1ff0257883c42bb6170a55440d45b4b39e002f433a"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-sr/-/dictionary-sr-4.0.0.tgz",
+   "integrity": "sha512-5obFi+mUG45V1tmB6+p2w0yA6MpoX9tsPoo6eevPkwKB6rw7UzOfyU+X7AQmbCZjIMYz/tIrj/fKCXm/hoN/jQ==",
+   "loadSec": 0.2,
+   "memoryMB": 26
+  },
+  {
+   "id": "sr-latn",
+   "tag": "sr-Latn",
+   "name": "Serbian (Latin)",
+   "native": "srpski (latinica)",
+   "pkg": "dictionary-sr-latn",
+   "version": "4.0.0",
+   "license": "(GPL-2.0 OR LGPL-2.1 OR MPL-1.1 OR CC-BY-SA-3.0)",
+   "aff": {
+    "size": 704,
+    "sha256": "9112fdbd53c8a20ac06397e736884450d61df0c6c5be6f5512210ed58229f939"
+   },
+   "dic": {
+    "size": 2489827,
+    "sha256": "a41302b3e707c7a344560bc7df6db739db254f87be0442108a68f4ed2a34782d"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-sr-latn/-/dictionary-sr-latn-4.0.0.tgz",
+   "integrity": "sha512-7X4KaFMgNoAkE420YAgGOMWC23hCzSE68xFzVR6MmwhtmFAF2nMXoRTmkjtkk25K45iZeSmGvuQBewqxWaABbw==",
+   "loadSec": 0.2,
+   "memoryMB": 20
+  },
+  {
+   "id": "sv",
+   "tag": "sv",
+   "name": "Swedish",
+   "native": "svenska",
+   "pkg": "dictionary-sv",
+   "version": "4.0.0",
+   "license": "LGPL-3.0",
+   "aff": {
+    "size": 18581,
+    "sha256": "ff8ddb979daa9f128e7489ece5edd666ada7af787933221543b7cecb2b3ed478"
+   },
+   "dic": {
+    "size": 2344199,
+    "sha256": "540ff8d0d9b05aae66dd919625d3a0bd25026d1e157027e6602e5dd11a07b645"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-sv/-/dictionary-sv-4.0.0.tgz",
+   "integrity": "sha512-GJM7IHfEHmSUecp9EbwX5efQe6CVdytFy5vDIJTT4dEDtwuEMyJGs7nqGuuK44Dtic36p4f0duWW5WogK9yzBw==",
+   "loadSec": 0.2,
+   "memoryMB": 20
+  },
+  {
+   "id": "sv-fi",
+   "tag": "sv-FI",
+   "name": "Swedish (Finland)",
+   "native": "svenska (Finland)",
+   "pkg": "dictionary-sv-fi",
+   "version": "2.0.0",
+   "license": "LGPL-3.0",
+   "aff": {
+    "size": 18581,
+    "sha256": "1a8fa2740a552b9d9fbc99c034d0a70eff80fa3f8a1c1603033867220220bd38"
+   },
+   "dic": {
+    "size": 2339364,
+    "sha256": "62874b2ca0080ae663c5e241940097161bb277e5b99bbc40f2cdda1548b38eaa"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-sv-fi/-/dictionary-sv-fi-2.0.0.tgz",
+   "integrity": "sha512-T28/Q5u+utNJjso/deDx+8pb88IhevxTL3c3RyJhh6syOkv5uDoanl7shJFRk9UTL9QsebYP1KSb3+wDagPpZA==",
+   "loadSec": 0.2,
+   "memoryMB": 19
+  },
+  {
+   "id": "tk",
+   "tag": "tk",
+   "name": "Turkmen",
+   "native": "türkmen dili",
+   "pkg": "dictionary-tk",
+   "version": "3.0.0",
+   "license": "Apache-2.0",
+   "aff": {
+    "size": 369118,
+    "sha256": "c55a9e98cab463d6095920bc2f8f682837beb971c21a8ea37d8ef60d80133755"
+   },
+   "dic": {
+    "size": 784836,
+    "sha256": "4c75d6e1c9f4e4780bd1a00828b37b8826232db4b204a96b30b841f94d2a0b81"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-tk/-/dictionary-tk-3.0.0.tgz",
+   "integrity": "sha512-2piEIPqTHhKZUGFi7Pvkk/KpXHHJx9hCCajxcRyLqcnX5p4MIOC84qZTlDPGEkR2tY9FIU7Dha01HvqIoLr1Tw==",
+   "loadSec": 0.1,
+   "memoryMB": 9
+  },
+  {
+   "id": "tlh",
+   "tag": "tlh",
+   "name": "Klingon",
+   "native": "",
+   "pkg": "dictionary-tlh",
+   "version": "2.0.0",
+   "license": "Apache-2.0",
+   "aff": {
+    "size": 2242,
+    "sha256": "26f0ec79d36476e271496848a6453e713981bfb651ee4a51ca792426faca6b07"
+   },
+   "dic": {
+    "size": 93976,
+    "sha256": "90c8fc2d019d0698a7b11455c07901b8f5e78f4eae7dda7d4416ced3d2cced2c"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-tlh/-/dictionary-tlh-2.0.0.tgz",
+   "integrity": "sha512-A2WB+sIsQuVKa8UTdW9MG1UlfmLZS6/d7Ai71HVNmF2BNVsHKFmO1W5HoBq7mcnVlb53E84PgjmcaVZJ9OCWyA==",
+   "loadSec": 0,
+   "memoryMB": 5
+  },
+  {
+   "id": "tlh-latn",
+   "tag": "tlh-Latn",
+   "name": "Klingon (Latin)",
+   "native": "",
+   "pkg": "dictionary-tlh-latn",
+   "version": "2.0.0",
+   "license": "Apache-2.0",
+   "aff": {
+    "size": 1774,
+    "sha256": "3f2c2beb38884f725b0965340a032c134fbf11e6f0e09224fb669e1a512c7323"
+   },
+   "dic": {
+    "size": 44710,
+    "sha256": "ad443c9f2c8fce9fd3474cf34084f0285f4716c9c9aa803b1f7dc63f0b424217"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-tlh-latn/-/dictionary-tlh-latn-2.0.0.tgz",
+   "integrity": "sha512-ds8s6IbcJm2y78mh15XuzyZ9rYXe4tjPLTPi9F6pLN6wnFx2xpacec5wajO9bkNyqxPoku2Y9orSY/I21sIDJw==",
+   "loadSec": 0,
+   "memoryMB": 5
+  },
+  {
+   "id": "tr",
+   "tag": "tr",
+   "name": "Turkish",
+   "native": "Türkçe",
+   "pkg": "dictionary-tr",
+   "version": "2.0.0",
+   "license": "MIT",
+   "aff": {
+    "size": 240814,
+    "sha256": "6a390c79b054ad427cf9a6bf6de43463953cc1918e7f727e9dd4ebd4f9702f42"
+   },
+   "dic": {
+    "size": 9117192,
+    "sha256": "dc1d8f7724f4aefd117274678de431e4ea1765f2e02e6983b6ca48cbf5a7fc7c"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-tr/-/dictionary-tr-2.0.0.tgz",
+   "integrity": "sha512-Du0PHWIqAlNheOUEDgGea0lmEV4L/T57EvG4231IUeSWySSDZ8wj5TKo2Vlkx7j9RVD07XqZQLDCtOZvhll6xA==",
+   "loadSec": 0.5,
+   "memoryMB": 45
+  },
+  {
+   "id": "uk",
+   "tag": "uk",
+   "name": "Ukrainian",
+   "native": "українська",
+   "pkg": "dictionary-uk",
+   "version": "4.0.0",
+   "license": "GPL-3.0",
+   "aff": {
+    "size": 203526,
+    "sha256": "cd22837ffdbf96d57f3f7c5702f37f9069eb480cb3078668b32e1c69b0549fc1"
+   },
+   "dic": {
+    "size": 8448957,
+    "sha256": "38fc49e64b54f7154a045edfd6e51f47ed4cb1e33c013a0e6de942713a82e199"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-uk/-/dictionary-uk-4.0.0.tgz",
+   "integrity": "sha512-AgeLt1iIi3lvUQ8DpEvqhikPvnwF+ffYLdjP0lrh+iOhCwTMhmDRvczyPqIksmHAWxRkFfgDcn7Qw/23GJ/GvA==",
+   "loadSec": 0.8,
+   "memoryMB": 47
+  },
+  {
+   "id": "vi",
+   "tag": "vi",
+   "name": "Vietnamese",
+   "native": "Tiếng Việt",
+   "pkg": "dictionary-vi",
+   "version": "3.0.0",
+   "license": "GPL-2.0",
+   "aff": {
+    "size": 1081,
+    "sha256": "0d836ebf1d4f1e9964d931fbb76464b24037b71995c73784166a07c43e2a7ae5"
+   },
+   "dic": {
+    "size": 39858,
+    "sha256": "9c56725b43e66de33d28aac8e58124e38247c8b2be34a8469b3113169110256c"
+   },
+   "tarball": "https://registry.npmjs.org/dictionary-vi/-/dictionary-vi-3.0.0.tgz",
+   "integrity": "sha512-r7QNGoJvKsLbxc4/59QP2pvJd7X08/8OWtZxiTfQGLwtl7nLw9F/IveWiUR46HBzSjws0L33fKf9UtlSrcYbRA==",
+   "loadSec": 0,
+   "memoryMB": 5
+  }
+ ]
+}

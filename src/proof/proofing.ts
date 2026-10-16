@@ -3,6 +3,7 @@ import type { App, DocTab } from '../app';
 import type { Node as PMNode } from 'prosemirror-model';
 import { schema } from '../editor/schema';
 import { proofKey, type ProofIssue } from '../editor/plugins/decorations';
+import { installedDictionaries, dictionaryFor, loadDictionary } from './dictionaries';
 
 let worker: Worker | null = null;
 let workerFailures = 0;
@@ -22,7 +23,7 @@ function getWorker(): Worker | null {
       // A crashed or unloadable worker never answers: settle every waiting request with empty
       // results so the proofing run finishes (and clears its running flag) instead of hanging.
       workerFailures++;
-      if (worker === w) worker = null;
+      if (worker === w) { worker = null; inWorker.clear(); }
       try { w.terminate(); } catch { /* */ }
       for (const cb of pending.values()) cb(FAILED);
       pending.clear();
@@ -32,6 +33,40 @@ function getWorker(): Worker | null {
     worker = null;
   }
   return worker;
+}
+
+/** Downloaded dictionaries already sent to the current worker. */
+const inWorker = new Set<string>();
+
+/** Send a downloaded dictionary to the worker once. Returns false if it is not available. */
+async function ensureLoaded(id: string): Promise<boolean> {
+  if (inWorker.has(id) && worker) return true;
+  const d = await loadDictionary(id);
+  if (!d) return false;
+  const r = await call({ type: 'load', dialect: 'dict:' + id, aff: d.aff, dic: d.dic });
+  if (r.failed || r.error) return false;
+  inWorker.add(id);
+  return true;
+}
+
+const NONE = new Set<string>();
+/** Downloaded dictionaries matter only for text that is not (or is South African) English. */
+function needsDictionaries(doc: PMNode, docLang: string | undefined): boolean {
+  const special = (l: string | null | undefined) => !isEnglish(l) || /^en[-_]za\b/i.test(l || '');
+  if (special(docLang)) return true;
+  let found = false;
+  doc.descendants((n) => {
+    if (found) return false;
+    if (n.isText && n.marks.some((m) => m.type === schema.marks.lang && special(m.attrs.lang))) found = true;
+    return !found;
+  });
+  return found;
+}
+
+/** Forget a dictionary in the worker (after it is removed). */
+export async function unloadDictionary(id: string): Promise<void> {
+  inWorker.delete(id);
+  if (worker) await call({ type: 'unload', dialect: 'dict:' + id });
 }
 
 function call(msg: Record<string, any>): Promise<any> {
@@ -73,36 +108,50 @@ export function isEnglish(lang: string | null | undefined): boolean {
 export async function suggest(word: string, dialect?: string): Promise<string[]> { return (await call({ type: 'suggest', word, dialect })).suggestions || []; }
 export async function addWord(word: string): Promise<void> { await call({ type: 'add', word }); }
 
-interface Seg { text: string; pos: number[]; base: number; noProof: Set<number>; langs: { from: number; to: number; lang: string }[] }
+interface Seg {
+  text: string; pos: number[]; base: number;
+  /** Not checked at all. */
+  noProof: Set<number>;
+  /** Text in another language with a downloaded dictionary: spelling only, no English grammar rules. */
+  noGrammar: Set<number>;
+  /** Runs with their own language: an English tag, or 'dict:<id>' for a downloaded dictionary. */
+  langs: { from: number; to: number; lang: string }[];
+}
 
 /**
  * Text blocks as plain text with a position map. Characters that are not proofed: "do not
  * check" text, code, deletions, links, and text in a language other than English (marked on the
- * run, or the document's default language when the run has none): there is no dictionary for
- * it, and the English grammar rules do not apply.
+ * run, or the document's default language when the run has none) unless a dictionary for that
+ * language was downloaded; English grammar rules never apply to other languages.
  */
-function segments(doc: PMNode, docLang: string | undefined): Seg[] {
+function segments(doc: PMNode, docLang: string | undefined, installed: Set<string>): Seg[] {
   const out: Seg[] = [];
   const docEnglish = isEnglish(docLang);
+  const docDict = docEnglish ? null : dictionaryFor(docLang, installed);
   doc.descendants((node, pos) => {
     if (!node.isTextblock) return true;
     if (node.type.spec.code) return false;
     let text = '';
     const map: number[] = [];
     const noProof = new Set<number>();
+    const noGrammar = new Set<number>();
     const langs: Seg['langs'] = [];
     node.forEach((child, off) => {
       if (child.isText) {
         const lm = child.marks.find((m) => m.type === schema.marks.lang);
         const lang: string | null = lm?.attrs.lang || null;
-        const skip = !!lm?.attrs.noProof || (lang ? !isEnglish(lang) : !docEnglish) || child.marks.some((m) => m.type === schema.marks.code || m.type === schema.marks.deletion || m.type === schema.marks.link);
-        if (lang && !skip) langs.push({ from: text.length, to: text.length + child.text!.length, lang });
-        for (let i = 0; i < child.text!.length; i++) { if (skip) noProof.add(text.length + i); map.push(pos + 1 + off + i); }
+        const english = lang ? isEnglish(lang) : docEnglish;
+        const foreign = english ? null : lang ? dictionaryFor(lang, installed) : docDict;
+        const skip = !!lm?.attrs.noProof || (!english && !foreign) || child.marks.some((m) => m.type === schema.marks.code || m.type === schema.marks.deletion || m.type === schema.marks.link);
+        const from = text.length, to = text.length + child.text!.length;
+        if (!skip && foreign) langs.push({ from, to, lang: 'dict:' + foreign });
+        else if (!skip && lang) langs.push({ from, to, lang });
+        for (let i = 0; i < child.text!.length; i++) { if (skip) noProof.add(from + i); else if (foreign) noGrammar.add(from + i); map.push(pos + 1 + off + i); }
         text += child.text;
       } else { map.push(pos + 1 + off); text += '\ufffc'; }
     });
     map.push(pos + 1 + node.content.size);
-    out.push({ text, pos: map, base: pos + 1, noProof, langs });
+    out.push({ text, pos: map, base: pos + 1, noProof, noGrammar, langs });
     return false;
   });
   return out;
@@ -184,7 +233,8 @@ export class Proofer {
     this.running = true;
     try {
       const doc = tab.view.state.doc;
-      const segs = segments(doc, tab.settings?.language);
+      const installed = needsDictionaries(doc, tab.settings?.language) ? await installedDictionaries() : NONE;
+      const segs = segments(doc, tab.settings?.language, installed);
       const issues: ProofIssue[] = [];
       const ignored = new Set(this.app.prefs.ignoredWords.map((w) => w.toLowerCase()));
       const dict = new Set(this.app.prefs.dictionary.map((w) => w.toLowerCase()));
@@ -192,7 +242,9 @@ export class Proofer {
         // Words grouped by dictionary set: the preference, or with "follow the document" the
         // language of each run (a quotation marked en-GB in an American document, say).
         const pref = this.app.prefs.spellDialect;
-        const docDialect = dialectFor(pref, tab.settings?.language);
+        // South African English has its own dictionary when downloaded; otherwise it uses British.
+        const english = (tag: string | undefined) => (pref === 'document' && tag && /^en[-_]za\b/i.test(tag) && installed.has('en-za') ? 'dict:en-za' : dialectFor(pref, tag));
+        const docDialect = english(tab.settings?.language);
         const words = new Map<string, Set<string>>();
         const occurrences: { word: string; from: number; to: number; dialect: string }[] = [];
         for (const s of segs) {
@@ -205,8 +257,8 @@ export class Proofer {
             if (/^[\p{Lu}]{2,}$/u.test(w)) continue; // acronyms
             if (ignored.has(w.toLowerCase()) || dict.has(w.toLowerCase())) continue;
             const at = m.index;
-            const runLang = pref === 'document' ? s.langs.find((r) => at >= r.from && at < r.to)?.lang : undefined;
-            const d = runLang ? dialectFor(pref, runLang) : docDialect;
+            const run = s.langs.find((r) => at >= r.from && at < r.to)?.lang;
+            const d = run?.startsWith('dict:') ? run : run && pref === 'document' ? english(run) : docDialect;
             if (!words.has(d)) words.set(d, new Set());
             words.get(d)!.add(w);
             occurrences.push({ word: w, from: s.pos[at], to: s.pos[at + m[0].length - 1] + 1, dialect: d });
@@ -214,6 +266,7 @@ export class Proofer {
         }
         const bad = new Map<string, Set<string>>();
         for (const [d, set] of words) {
+          if (d.startsWith('dict:') && !(await ensureLoaded(d.slice(5)))) continue;
           const res = await call({ type: 'check', words: [...set], dialect: d });
           if (res.failed) break; // the worker crashed: finish this run without spelling results
           bad.set(d, new Set<string>(res.bad || []));
@@ -223,7 +276,7 @@ export class Proofer {
       if (this.app.prefs.grammar) {
         for (const s of segs) {
           for (const g of grammarMatches(s.text)) {
-            if (s.noProof.has(g.start)) continue;
+            if (s.noProof.has(g.start) || s.noGrammar.has(g.start)) continue;
             issues.push({ from: s.pos[g.start], to: s.pos[g.end - 1] + 1, kind: g.kind, message: g.message, suggestions: g.suggestions, rule: g.rule });
           }
         }

@@ -52,6 +52,13 @@ const parts = [
   '(appcompat, coordinatorlayout, core, core-splashscreen, activity) under the Apache',
   'License 2.0, whose text appears below with Material Symbols.',
   '',
+  'Hunspell (https://github.com/hunspell/hunspell), compiled to WebAssembly inside hunspell-asm',
+  'and used unmodified for downloaded spelling dictionaries, is tri-licensed under the Mozilla',
+  'Public License 1.1, GPL 2.0 or LGPL 2.1; QuillForge uses it under the MPL 1.1',
+  '(https://www.mozilla.org/MPL/1.1/). Its source code is available at the address above.',
+  'Desktop builds also include Electron (MIT) and Chromium, whose licenses ship alongside the',
+  'app as LICENSE.electron.txt and LICENSES.chromium.html.',
+  '',
 ];
 const sorted = [...seen.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name));
 for (const [dir, pkg] of sorted) {

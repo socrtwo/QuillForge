@@ -331,6 +331,8 @@ def([
     id: 'fmt.language', label: 'Set Proofing Language', icon: 'language', tab: 'Review', group: 'Language', edits: true,
     run: async (app) => {
       const langs = ['en', 'en-US', 'en-GB', 'en-AU', 'en-CA', 'en-IE', 'en-IN', 'en-NZ', 'en-ZA', 'en-SG', 'en-PH', 'en-HK', 'en-MY', 'en-NG', 'en-KE', 'en-JM', 'en-TT', 'en-BZ', 'en-ZW', 'es-ES', 'es-MX', 'fr-FR', 'fr-CA', 'de-DE', 'it-IT', 'pt-BR', 'pt-PT', 'nl-NL', 'sv-SE', 'da-DK', 'nb-NO', 'fi-FI', 'pl-PL', 'cs-CZ', 'ru-RU', 'uk-UA', 'el-GR', 'tr-TR', 'he-IL', 'ar-SA', 'hi-IN', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'la', 'grc'];
+      // Every language with a downloadable dictionary (Review ▸ Spelling Dictionaries).
+      for (const d of (await import('../proof/dictionaries')).CATALOG) if (!langs.some((l) => l.toLowerCase() === d.tag.toLowerCase())) langs.push(d.tag);
       const r = await openDialog({
         title: 'Language', fields: [
           { key: 'lang', label: 'Mark selected text as', type: 'list', options: langs, value: markAttr(app.state, M.lang, 'lang') || app.settings.language, rows: 10 },

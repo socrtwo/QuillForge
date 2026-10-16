@@ -60,7 +60,13 @@ def([
       app.proofer.schedule(app.tab, 0);
       toast(SPELL_DIALECTS.find((d) => d.value === arg)?.label || '');
     },
-    menu: (app) => SPELL_DIALECTS.map((d) => ({ id: 'review.spellDialect', arg: d.value, label: d.label, checked: (app.prefs.spellDialect || 'any') === d.value })),
+    menu: (app) => [...SPELL_DIALECTS.map((d) => ({ id: 'review.spellDialect', arg: d.value, label: d.label, checked: (app.prefs.spellDialect || 'any') === d.value })), { id: 'review.dictionaries', label: 'Dictionaries for other languages…' }],
+  },
+  {
+    id: 'review.dictionaries', label: 'Spelling Dictionaries…', icon: 'download', tab: 'Review', group: 'Language', noRecord: true,
+    tip: 'Download free spelling dictionaries for 90+ languages and use them for documents or marked text',
+    keywords: 'language dictionary hunspell download french german spanish install',
+    run: async (app) => { const { openDictionaryWizard } = await import('../ui/dictWizard'); await openDictionaryWizard(app); },
   },
   { id: 'review.toggleSpell', label: 'Check Spelling as You Type', icon: 'spellcheck', tab: 'Review', group: 'Proofing', kind: 'toggle', run: (app) => { app.prefs.spellcheck = !app.prefs.spellcheck; app.savePrefs(); app.proofer.schedule(app.tab, 0); }, isActive: (app) => app.prefs.spellcheck },
   { id: 'review.toggleGrammar', label: 'Mark Grammar Errors as You Type', icon: 'grading', tab: 'Review', group: 'Proofing', kind: 'toggle', run: (app) => { app.prefs.grammar = !app.prefs.grammar; app.savePrefs(); app.proofer.schedule(app.tab, 0); }, isActive: (app) => app.prefs.grammar },

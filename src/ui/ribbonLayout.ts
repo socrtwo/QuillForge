@@ -79,7 +79,7 @@ export const DEFAULT_TABS: RibbonTab[] = [
       G('proofing', 'Proofing', ['review.spelling', 'review.thesaurus', 'review.wordCount', 'review.readability', 'review.styleCoach']),
       G('speech', 'Speech', ['review.readAloud']),
       G('accessibility', 'Accessibility', ['review.accessibility']),
-      G('language', 'Language', ['review.translate', 'fmt.language', 'review.spellDialect']),
+      G('language', 'Language', ['review.translate', 'fmt.language', 'review.spellDialect', 'review.dictionaries']),
       G('comments', 'Comments', ['review.newComment', 'review.deleteComment', 'review.prevComment', 'review.nextComment', 'review.showComments']),
       G('tracking', 'Tracking', ['review.trackChanges', 'review.markupView', 'review.showMarkup', 'review.reviewingPane']),
       G('changes', 'Changes', ['review.accept', 'review.reject', 'review.prevChange', 'review.nextChange']),
