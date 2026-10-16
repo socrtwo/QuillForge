@@ -1,6 +1,6 @@
 # QuillForge Command Reference
 
-QuillForge ships **817 commands**. Every one can be placed on the Quick Access Bar, added to a custom tab, bound to a keyboard shortcut, recorded in a macro, or found with command search (Alt+Q).
+QuillForge ships **819 commands**. Every one can be placed on the Quick Access Bar, added to a custom tab, bound to a keyboard shortcut, recorded in a macro, or found with command search (Alt+Q).
 
 435 of them are "Commands Not in the Tabs" — reachable through the Quick Access Bar chooser, Customize Tabs, the command search, or menus — mirroring how desktop suites expose their full command library.
 
@@ -581,7 +581,7 @@ This file is generated from the source by `npm run catalog`.
 | Insert Merge Field | Write & Insert Fields |  | `mail.insertField` | has options menu |
 | Rules | Write & Insert Fields |  | `mail.rules` | has options menu |
 
-## Review (46)
+## Review (47)
 
 | Command | Group | Shortcut | ID | Notes |
 |---|---|---|---|---|
@@ -609,6 +609,7 @@ This file is generated from the source by `npm run catalog`.
 | Compare with Saved Version… | Compare |  | `review.compareVersions` | not in tabs |
 | Hide Ink | Ink |  | `review.hideInk` |  |
 | Do Not Check Spelling | Language |  | `fmt.noProof` | not in tabs |
+| English Spelling | Language |  | `review.spellDialect` | has options menu |
 | Set Proofing Language | Language |  | `fmt.language` |  |
 | Translate Selection (online) | Language |  | `review.translate` |  |
 | Check Spelling as You Type | Proofing |  | `review.toggleSpell` | not in tabs |
@@ -839,7 +840,7 @@ This file is generated from the source by `npm run catalog`.
 | Document Panel (Properties) | Templates |  | `dev.documentPanel` |  |
 | Document Template (Attach Styles)… | Templates |  | `dev.documentTemplate` |  |
 
-## Help (6)
+## Help (7)
 
 | Command | Group | Shortcut | ID | Notes |
 |---|---|---|---|---|
@@ -848,6 +849,7 @@ This file is generated from the source by `npm run catalog`.
 | Keyboard Shortcuts | Help | Ctrl+/ | `help.shortcuts` |  |
 | Report an Issue | Help |  | `help.feedback` |  |
 | Show the Quick Tour | Help |  | `help.tour` |  |
+| Third-Party Notices | Help |  | `help.notices` |  |
 | What’s New | Help |  | `help.whatsNew` |  |
 
 ## Table Tools (contextual) (41)

@@ -2,7 +2,7 @@
 
 An original, open-source word processor for Android (and the web) whose goal is simple: **no missing commands**. Every feature is a command, and every command can be put on the Quick Access Bar, on your own tab, on a keyboard shortcut, or in a macro, which is the full-library customization that mobile and online office apps leave out.
 
-- **817 commands** across File, Home, Insert, Draw, Design, Layout, References, Mailings, Review, View, Tools, **AI**, Developer and Help, plus contextual Table Design, Table Layout and Picture Format tabs. See [docs/COMMANDS.md](docs/COMMANDS.md).
+- **819 commands** across File, Home, Insert, Draw, Design, Layout, References, Mailings, Review, View, Tools, **AI**, Developer and Help, plus contextual Table Design, Table Layout and Picture Format tabs. See [docs/COMMANDS.md](docs/COMMANDS.md).
 - **Opens damaged documents** with the [Word Recovery](https://github.com/socrtwo/wordrecovery-SF) engine: byte-level ZIP salvage, XML repair, Word 97–2003 binary text, and Open and Repair / Recover Text from Any File. See [docs/RECOVERY.md](docs/RECOVERY.md).
 - **AI tab** with 67 commands surveyed from other word processors and writing tools. It offers a free on-device model (no account) and a setup wizard for free and paid providers that opens the right page in your browser and picks up the key. See [docs/AI.md](docs/AI.md).
 - **Quick Access Bar chooser** with the desktop-style categories: *Popular Commands*, *Commands Not in the Tabs*, *All Commands*, each tab, and *Macros*. You can add separators, reorder, reset, and import or export the layout. Long-press any ribbon button to add it, and the bar can sit at the top or at the bottom near the keyboard.
@@ -82,7 +82,7 @@ Providers:
 
 Keys are stored encrypted on the device (Android Keystore), and nothing is sent until you use an AI command.
 
-## Known limitations (0.2)
+## Known limitations (0.2.1)
 
 - Pagination splits paragraphs but does not split tables or images across pages. A block taller than a page overflows it. Section breaks do not change page size or orientation mid-document; one page setup applies to the whole document.
 - Footnote, endnote and comment bodies are plain text.
