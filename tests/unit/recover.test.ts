@@ -205,3 +205,34 @@ describe('DOCX recovery pipeline', () => {
     expect(r.doc!.textContent).toContain(SAMPLE);
   });
 });
+
+describe('damaged deflate inside an intact archive', () => {
+  // Same shape as real-world damage: the ZIP structure is fine, one part's compressed data is not.
+  async function damagedPackage() {
+    const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    let body = '';
+    for (let i = 1; i <= 400; i++) body += `<w:p><w:r><w:t>Paragraph ${i} of a document whose middle is damaged.</w:t></w:r></w:p>`;
+    const z = await JSZip.loadAsync(docx);
+    z.file('word/document.xml', `<?xml version="1.0"?><w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`);
+    const u8 = await z.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+    const { at, size } = entryData(u8, 'word/document.xml');
+    const c = u8.slice();
+    for (let k = 0; k < 24; k++) c[at + Math.floor(size * 0.45) + k] ^= 0xa5;
+    return c;
+  }
+
+  it('flags only the damaged part (CRCs with the high bit set are not false positives)', async () => {
+    const r = await recoverDocument(buf(await damagedPackage()), 'mid.docx');
+    const std = r.methods.find((m) => m.key === 'standard')!;
+    expect(std.detail).toMatch(/1 damaged part: word\/document\.xml/);
+    expect(r.repaired?.salvagedParts).toEqual(['word/document.xml']);
+  });
+
+  it('keeps the text before the damage and marks where the loss begins', async () => {
+    const res = await importFile(buf(await damagedPackage()), 'mid.docx');
+    const text = res.doc.textContent;
+    expect(text).toContain('Paragraph 1 of a document');
+    expect(text).toMatch(/QuillForge: the file is damaged/);
+    expect(res.recovery!.notes.join(' ')).toMatch(/compressed data inside the file is damaged/);
+  });
+});

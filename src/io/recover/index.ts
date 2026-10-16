@@ -112,7 +112,7 @@ export async function recoverDocument(data: ArrayBuffer, fileName: string, opts:
   };
   if (!raw.length) { report.notes.push('The file is empty (0 bytes). Nothing can be recovered from it.'); return report; }
   if (id.multiple) report.notes.push(`The file contains ${plural(id.segments.length, 'separate piece')}. ${id.foreign.length ? `${plural(id.foreign.length, 'piece')} of another kind were set aside.` : ''}`.trim());
-  if (u8 !== raw) report.notes.push(`Repair ran on the ${id.matching[0]?.description || 'document'} found at byte ${(id.matching[0]?.offset ?? 0).toLocaleString()}.`);
+  if ((id.matching[0]?.offset ?? 0) > 0) report.notes.push(`Repair ran on the ${id.matching[0].description} found at byte ${id.matching[0].offset.toLocaleString()}.`);
 
   const kindGuess = id.matching[0]?.ext || id.primary.ext;
   const isZipLike = (u8[0] === 0x50 && u8[1] === 0x4b) || ['docx', 'ooxml', 'odt', 'zip'].includes(kindGuess) || /\.(docx|docm|dotx|dotm|odt|ott)$/i.test(fileName) || hasLocalHeader(u8);
@@ -131,8 +131,9 @@ export async function recoverDocument(data: ArrayBuffer, fileName: string, opts:
         try {
           const bytes = await f.async('uint8array');
           // JSZip does not verify CRCs by default, and damaged deflate data often inflates without error.
+          // JSZip reads the CRC as a signed 32-bit integer; compare unsigned.
           const want = (f as any)._data?.crc32;
-          if (typeof want === 'number' && want !== 0 && crc32(bytes) !== want) { damagedInZip.push(f.name); corruptParts.add(f.name); }
+          if (typeof want === 'number' && want !== 0 && crc32(bytes) !== want >>> 0) { damagedInZip.push(f.name); corruptParts.add(f.name); }
           parts.set(f.name, bytes);
         } catch { damagedInZip.push(f.name); }
       }
@@ -174,9 +175,11 @@ export async function recoverDocument(data: ArrayBuffer, fileName: string, opts:
   let tagChanges = 0;
   // A damaged main part: keep the consistent prefix and set aside the text decoded after the damage.
   let unverified = '';
+  let mainDamaged = false;
   for (const main of ['word/document.xml', 'content.xml']) {
     const bytes = parts.get(main);
     if (!bytes || !corruptParts.has(main)) continue;
+    mainDamaged = true;
     const xml = dec(bytes);
     const cut = findDamageCut(xml, main === 'content.xml' ? '</text:p>' : '</w:p>');
     if (cut > 0) {
@@ -256,7 +259,7 @@ export async function recoverDocument(data: ArrayBuffer, fileName: string, opts:
   const isOdt = parts.has('content.xml') && !parts.has('word/document.xml');
   if (!opts.textOnly && mainXml) {
     try {
-      if (unverified) appendUnverified(parts, isOdt, unverified);
+      if (mainDamaged) appendUnverified(parts, isOdt, unverified);
       const pkg = isOdt ? await buildOdt(parts) : await buildDocx(parts, fileName);
       report.repaired = { kind: isOdt ? 'odt' : 'docx', data: pkg, parts: parts.size, repairedParts, salvagedParts: salvaged, lostParts: [...new Set([...lostParts, ...damagedInZip.filter((n) => !parts.has(n))])] };
       const doc = isOdt ? await (await import('../odt')).importOdt(pkg, fileName) : await (await import('../docx-import')).importDocx(pkg, fileName);
@@ -282,11 +285,17 @@ export async function recoverDocument(data: ArrayBuffer, fileName: string, opts:
 
 const xmlEsc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-/** Add the unreliable tail as red paragraphs under a notice, at the end of the body. */
+/**
+ * Mark where the damage begins with a red notice at the end of the recovered body, followed by
+ * any text decoded after the damage (unverified).
+ */
 function appendUnverified(parts: Map<string, Uint8Array>, isOdt: boolean, text: string): void {
   const name = isOdt ? 'content.xml' : 'word/document.xml';
   const xml = dec(parts.get(name)!);
-  const lines = ['[Recovered after the damaged area — unverified; check against another copy]', ...text.split('\n').filter((l) => l.trim())];
+  const notice = text
+    ? '[QuillForge: the file is damaged here. The text below was decoded after the damage and is unverified; check it against another copy. The text just above may contain garbled words.]'
+    : '[QuillForge: the file is damaged from this point, and the rest of the document could not be recovered. The text just above may contain garbled words.]';
+  const lines = [notice, ...text.split('\n').filter((l) => l.trim())];
   const paras = isOdt
     ? lines.map((l) => `<text:p>${xmlEsc(l)}</text:p>`).join('')
     : lines.map((l, i) => `<w:p><w:r><w:rPr>${i ? '' : '<w:b/>'}<w:color w:val="C00000"/></w:rPr><w:t xml:space="preserve">${xmlEsc(l)}</w:t></w:r></w:p>`).join('');

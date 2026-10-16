@@ -139,7 +139,7 @@ async function importRaw(data: ArrayBuffer, name: string, opts: { repair?: boole
       const why = report.notes.join(' ') || 'No recoverable content was found.';
       throw new Error(cause instanceof Error ? `${cause.message}. ${why}` : why);
     }
-    if (cause instanceof Error) report.notes.unshift(`Normal open failed: ${cause.message}`);
+    if (cause instanceof Error) report.notes.unshift(`Normal open failed: ${friendlyOpenError(cause.message)}`);
     const kind = report.repaired?.kind || (fmt && RECOVERABLE.includes(fmt.id) ? fmt.id : 'docx');
     return { doc: report.doc, format: formatById(kind) || formatById('docx')!, recovery: report };
   };
@@ -160,6 +160,14 @@ async function importRaw(data: ArrayBuffer, name: string, opts: { repair?: boole
     } catch { /* keep the empty document */ }
   }
   return { doc, format: fmt };
+}
+
+/** Translate low-level ZIP/inflate errors into plain language for the recovery report. */
+export function friendlyOpenError(msg: string): string {
+  if (/size mismatch|invalid (distance|code|block|stored)|too far back|incorrect header|unexpected end|crc32|corrupt/i.test(msg)) return 'compressed data inside the file is damaged.';
+  if (/end of central directory|is this a zip/i.test(msg)) return 'the file\'s table of contents (ZIP central directory) is missing or damaged.';
+  if (/document\.xml is missing or unreadable/i.test(msg)) return 'the main document part could not be read.';
+  return msg;
 }
 
 function hasAtoms(doc: PMNode): boolean {
