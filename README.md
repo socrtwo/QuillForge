@@ -2,7 +2,7 @@
 
 An original, open-source word processor for Android (and the web) whose goal is simple: **no missing commands**. Every feature is a command, and every command can be put on the Quick Access Bar, on your own tab, on a keyboard shortcut, or in a macro, which is the full-library customization that mobile and online office apps leave out.
 
-- **819 commands** across File, Home, Insert, Draw, Design, Layout, References, Mailings, Review, View, Tools, **AI**, Developer and Help, plus contextual Table Design, Table Layout and Picture Format tabs. See [docs/COMMANDS.md](docs/COMMANDS.md).
+- **820 commands** across File, Home, Insert, Draw, Design, Layout, References, Mailings, Review, View, Tools, **AI**, Developer and Help, plus contextual Table Design, Table Layout and Picture Format tabs. See [docs/COMMANDS.md](docs/COMMANDS.md).
 - **Opens damaged documents** with the [Word Recovery](https://github.com/socrtwo/wordrecovery-SF) engine: byte-level ZIP salvage, XML repair, Word 97–2003 binary text, and Open and Repair / Recover Text from Any File. See [docs/RECOVERY.md](docs/RECOVERY.md).
 - **AI tab** with 67 commands surveyed from other word processors and writing tools. It offers a free on-device model (no account) and a setup wizard for free and paid providers that opens the right page in your browser and picks up the key. See [docs/AI.md](docs/AI.md).
 - **Quick Access Bar chooser** with the desktop-style categories: *Popular Commands*, *Commands Not in the Tabs*, *All Commands*, each tab, and *Macros*. You can add separators, reorder, reset, and import or export the layout. Long-press any ribbon button to add it, and the bar can sit at the top or at the bottom near the keyboard.
@@ -10,11 +10,20 @@ An original, open-source word processor for Android (and the web) whose goal is 
 - **Customize Keyboard:** rebind any command, with conflict display.
 - **Command search** (Alt+Q or the 🔍 button) across the whole library.
 
-## Install (Android)
+## Install
 
-Download `QuillForge-<version>.apk` from the [Releases](../../releases) page and sideload it. You may need to allow "Install unknown apps" for your browser or file manager. Builds without a configured signing key are debug-signed and meant for testing; see [docs/ANDROID.md](docs/ANDROID.md) for Play-Store signing.
+Each [release](../../releases) has builds for:
+- **Windows** (installer for x64 or ARM, or portable);
+- **macOS** (universal);
+- **Linux** (AppImage or .deb for x64, arm64 and armv7l, which covers **Raspberry Pi OS**);
+- **ChromeOS** (Android app, Linux app or web app);
+- **Android** (APK);
+- **iOS/iPadOS** (an unsigned .ipa you sign with your Apple ID);
+- the **web** (static files; offline-capable and installable).
 
-QuillForge registers for *Open with* and *Share to* on .docx, .doc, .odt, .rtf, .md, .txt, .html and .epub files. It uses the Android system file picker, so files on the device, SD card, Google Drive, Dropbox and similar providers all work. **Save** writes back to the same file.
+[docs/INSTALL.md](docs/INSTALL.md) has the steps for each. To build it yourself, including the APK on the phone itself with Termux, see [docs/BUILD.md](docs/BUILD.md).
+
+On Android, QuillForge registers for *Open with* and *Share to* on .docx, .doc, .odt, .rtf, .md, .txt, .html and .epub files. It uses the Android system file picker, so files on the device, SD card, Google Drive, Dropbox and similar providers all work. **Save** writes back to the same file.
 
 ## Features
 
@@ -46,6 +55,20 @@ Mobile View reflows text at real font sizes for phones. There are also Web Layou
 **English spelling.** By default the spelling check accepts every major variety of English, so *colour* and *color*, *organise* and *organize*, and *theatre* and *theater* are all correct. You can change this in **Review ▸ English Spelling** or **File ▸ Options**:
 - check one variety: American; British (with Oxford *-ize* spellings); Canadian; or Australian;
 - or follow each document's language. Text marked with its own variety (for example, a British quotation in an American document) is then checked against that variety.
+
+### Spelling in other languages
+
+**Review ▸ Spelling Dictionaries** is a wizard for free dictionaries in 90+ languages and regional varieties:
+- 21 Spanish varieties, 3 German, 2 Portuguese, Catalan and Valencian, Serbian in Cyrillic and Latin, Polytonic Greek;
+- Hebrew, Persian, Korean, Ukrainian, Russian, Basque, Irish, Welsh, Latin, Esperanto, and many more.
+
+It shows:
+- the languages of your device and of the open document first;
+- each dictionary's size, license and memory use.
+
+It downloads a dictionary only when you ask, verifies it against a published checksum, and keeps it on the device for offline use. One click then sets it as the document language or marks the selected text with it.
+
+Downloaded dictionaries run on Hunspell, the engine LibreOffice and Firefox use, compiled to WebAssembly. Compounds (German) and elisions (French *l'homme*) work as in those programs. Text in a language with no installed dictionary is skipped rather than marked wrong.
 
 Ireland, India, South Africa and other countries that follow British spelling use the British dictionary. New Zealand uses the Australian one, and the Philippines the American one. Text marked as another language is not checked against English rules. The grammar check accepts each variety's usage before an *h* (*an historic*, *a herb*). AI commands keep the author's variety unless you choose one.
 
@@ -82,12 +105,14 @@ Providers:
 
 Keys are stored encrypted on the device (Android Keystore), and nothing is sent until you use an AI command.
 
-## Known limitations (0.2.1)
+## Known limitations (0.3)
 
 - Pagination splits paragraphs but does not split tables or images across pages. A block taller than a page overflows it. Section breaks do not change page size or orientation mid-document; one page setup applies to the whole document.
 - Footnote, endnote and comment bodies are plain text.
 - Formatting changes are not tracked as revisions; insertions and deletions are.
-- The thesaurus, dictionary and translate commands need an internet connection. Spelling is offline and English-only; text in other languages is skipped, not checked. There is no separate South African dictionary (the only one available is LGPL-licensed), so South African English uses the British dictionary.
+- The thesaurus, dictionary and translate commands need an internet connection.
+- Spelling works offline. English is built in; other languages need a one-time download (Review ▸ Spelling Dictionaries). The South African English dictionary (LGPL-licensed) is a download, not built in; until it is installed, South African English uses the British dictionary.
+- Grammar rules are English-only.
 - Charts and diagrams are stored as images with editable data. Other suites see them as pictures.
 - DOCX fidelity was verified with LibreOffice, pandoc and python-docx. It has not been tested in Microsoft Word itself.
 - .doc files open as text and paragraph structure only (no character or paragraph formatting).
@@ -102,11 +127,13 @@ npm run dev          # web app at http://localhost:5173
 npm test             # unit tests (vitest)
 npm run build        # production web build in dist/ (first writes public/third-party-notices.txt)
 npm run android:build   # build + cap sync + gradle assembleRelease (needs Android SDK)
+npm run desktop         # run the desktop app (Electron); desktop:dist builds installers
+npm run ios:sync        # web build into the Xcode project (ios/)
 ```
 
-CI (`.github/workflows/android.yml`) type-checks, tests, builds the web app, and produces a release APK and AAB on every push. Tags `v*` publish a GitHub Release. See [docs/ANDROID.md](docs/ANDROID.md).
+CI (`.github/workflows/android.yml`) type-checks, tests, builds the web app, and produces an APK and AAB on every push. The **Release** workflow (`.github/workflows/release.yml`) builds every platform and publishes them together; run it from the Actions tab or push a tag `v*`. See [docs/BUILD.md](docs/BUILD.md).
 
-Browser checks: `npm run build && npx vite preview --port 4173`, then `node tests/e2e/smoke.mjs`, `node tests/e2e/all-commands.mjs` (executes every command and menu variant), `node tests/e2e/visual.mjs`, `node tests/e2e/io.mjs` and `node tests/e2e/ai.mjs` (AI features against a mock OpenAI/Anthropic/Gemini server).
+Browser checks: `npm run build && npx vite preview --port 4173`, then `node tests/e2e/smoke.mjs`, `node tests/e2e/all-commands.mjs` (executes every command and menu variant), `node tests/e2e/visual.mjs`, `node tests/e2e/io.mjs`, `node tests/e2e/ai.mjs` (AI features against a mock OpenAI/Anthropic/Gemini server) and `node tests/e2e/dictionaries.mjs` (downloads a real dictionary). The desktop app: `xvfb-run -a node tests/e2e/desktop.mjs`.
 
 ## Project language
 

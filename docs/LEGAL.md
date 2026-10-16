@@ -43,9 +43,13 @@ This file records how QuillForge provides a complete word-processing command set
 | Fonts: Carlito, Caladea, Gelasio, EB Garamond, Courier Prime, Libre Baskerville, Lato, Merriweather, Open Sans | SIL Open Font License 1.1 |
 | Fonts: Tinos, Arimo, Cousine | Apache 2.0 |
 | Word Recovery engine, S2 File Identifier, ImmortalInflate (ported) | by socrtwo, used with the author's permission |
+| hunspell-asm (Hunspell compiled to WebAssembly, for downloaded dictionaries) | MIT; Hunspell itself is tri-licensed MPL 1.1 / GPL 2 / LGPL 2.1 and used under MPL 1.1, unmodified (source: https://github.com/hunspell/hunspell) |
+| Electron (desktop apps only; includes Chromium) | MIT; Chromium's licenses ship with each desktop build as `LICENSES.chromium.html` |
 | Transformers.js 4.2.0 (loaded from cdn.jsdelivr.net only when the on-device model is used; not bundled) | Apache 2.0 |
 
 The build writes the full license text of every bundled npm package (including the dependencies of dependencies) to `third-party-notices.txt`; the app shows it in **Help ▸ Third-Party Notices**. The Android app also contains AndroidX libraries (Apache 2.0).
+
+**Spelling dictionaries for other languages** (Review ▸ Spelling Dictionaries) are not shipped with QuillForge. They are downloaded only at the user's request, from the npm packages of the wooorm/dictionaries project, and kept on the user's device. Each one keeps its own license (GPL, LGPL, MPL, BSD, MIT, Apache, CC BY-SA and others), and the wizard shows it before download. The catalog in `src/proof/dictionary-catalog.json` contains only names, versions, licenses and checksums.
 
 On-device models are downloaded by the user from the Hugging Face Hub, not shipped with the app. Their licenses are Qwen2.5 0.5B Instruct (Apache 2.0), SmolLM2 360M Instruct (Apache 2.0), Gemma 3 270M (Gemma Terms of Use) and Llama 3.2 1B Instruct (Llama 3.2 Community License).
 

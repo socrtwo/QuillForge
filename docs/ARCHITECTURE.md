@@ -49,9 +49,18 @@ src/
                           local (Transformers.js worker), oauth (OpenRouter PKCE), features (AI tab as data),
                           apply (word-level diff edits, Markdown blocks, comments, tracked AI edits)
   util/sanitize.ts        HTML/URL sanitizing for document- and clipboard-controlled content
-  proof/                  spelling worker (nspell + SCOWL en_US/en_GB/en_CA/en_AU, loaded on demand; "any variety"
-                          = US or GB accepts) and grammar rules (grammarMatches, pure and unit-tested)
-  platform/native.ts      JS side of the QuillNative Capacitor plugin, with browser fallbacks
+  proof/                  spelling worker: bundled English with nspell + SCOWL en_US/en_GB/en_CA/en_AU ("any
+                          variety" = US or GB accepts); downloaded languages with Hunspell (WebAssembly);
+                          grammar rules (grammarMatches, pure and unit-tested)
+  platform/native.ts      one bridge, three back ends: the Android QuillNative plugin, the desktop
+                          preload (window.quillDesktop), and browser/iOS fallbacks (iOS saves to Files)
+  proof/dictionaries.ts   downloadable dictionaries: catalog (dictionary-catalog.json), jsDelivr or
+                          npm-tarball download, SHA-256 / SHA-512 checks, IndexedDB, language matching
+  ui/dictWizard.ts        Spelling Dictionaries wizard
+electron/                 desktop app: main.cjs (app:// protocol, CSP, sandboxed renderer, dialogs,
+                          granted-file list, safeStorage keys, OAuth loopback, CORS-free HTTP) and preload.cjs
+ios/                      Capacitor iOS project (Xcode); saved files go to the app's Documents folder
+public/                   web app manifest, service worker (offline PWA), icons
 android/                  Capacitor project + QuillNativePlugin.java (SAF open/save/write-back, print, share, intents,
                           Keystore secrets, clipboard, OAuth loopback via AiSupport.java)
 ```

@@ -1,6 +1,6 @@
 # QuillForge Command Reference
 
-QuillForge ships **819 commands**. Every one can be placed on the Quick Access Bar, added to a custom tab, bound to a keyboard shortcut, recorded in a macro, or found with command search (Alt+Q).
+QuillForge ships **820 commands**. Every one can be placed on the Quick Access Bar, added to a custom tab, bound to a keyboard shortcut, recorded in a macro, or found with command search (Alt+Q).
 
 435 of them are "Commands Not in the Tabs" — reachable through the Quick Access Bar chooser, Customize Tabs, the command search, or menus — mirroring how desktop suites expose their full command library.
 
@@ -581,7 +581,7 @@ This file is generated from the source by `npm run catalog`.
 | Insert Merge Field | Write & Insert Fields |  | `mail.insertField` | has options menu |
 | Rules | Write & Insert Fields |  | `mail.rules` | has options menu |
 
-## Review (47)
+## Review (48)
 
 | Command | Group | Shortcut | ID | Notes |
 |---|---|---|---|---|
@@ -611,6 +611,7 @@ This file is generated from the source by `npm run catalog`.
 | Do Not Check Spelling | Language |  | `fmt.noProof` | not in tabs |
 | English Spelling | Language |  | `review.spellDialect` | has options menu |
 | Set Proofing Language | Language |  | `fmt.language` |  |
+| Spelling Dictionaries… | Language |  | `review.dictionaries` |  |
 | Translate Selection (online) | Language |  | `review.translate` |  |
 | Check Spelling as You Type | Proofing |  | `review.toggleSpell` | not in tabs |
 | Define (Dictionary) | Proofing |  | `review.define` | not in tabs |
