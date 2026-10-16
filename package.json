@@ -7,12 +7,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/gen-notices.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "e2e": "node tests/e2e/smoke.mjs",
     "catalog": "vite-node scripts/gen-catalog.ts",
+    "notices": "node scripts/gen-notices.mjs",
     "cap:sync": "npx cap sync android",
     "android:build": "npm run build && npx cap sync android && cd android && ./gradlew assembleRelease"
   },

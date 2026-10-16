@@ -442,6 +442,7 @@ textarea { width: 100%; resize: vertical; font-family: ui-monospace, "Cousine", 
 .qf-dialog-preview { background: #fff; color: #000; border: 1px solid var(--border); border-radius: 6px; padding: 10px; min-height: 60px; max-height: 220px; overflow: auto; text-align: center; }
 .qf-dialog-preview svg { max-width: 100%; height: auto; }
 .qf-msg p { margin: 6px 0; line-height: 1.45; }
+.qf-notices { max-height: 60vh; max-width: min(720px, 86vw); overflow: auto; white-space: pre-wrap; font: 12px/1.4 ui-monospace, 'Cousine', monospace; margin: 0; }
 .qf-stats { border-collapse: collapse; width: 100%; font-size: 14px; }
 .qf-stats td { padding: 5px 8px; border-bottom: 1px solid var(--border); }
 .qf-stats td:last-child { text-align: right; font-variant-numeric: tabular-nums; }

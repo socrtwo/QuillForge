@@ -528,8 +528,16 @@ def([
       h('p', null, h('b', null, `QuillForge ${__APP_VERSION__}`), ' — an original, open-source word processor (MIT License).'),
       h('p', null, `${commandCount()} commands, every one available to the Quick Access Bar, custom tabs, keyboard shortcuts, macros and command search.`),
       h('p', null, 'QuillForge is not affiliated with, endorsed by, or sponsored by Microsoft, Google, Apple, Corel, The Document Foundation, or any other vendor. Product names are used only to describe file-format compatibility.'),
-      h('p', null, 'Open-source components: ProseMirror (MIT), prosemirror-tables (MIT), JSZip (MIT/GPLv3 dual), KaTeX (MIT), nspell (MIT) with the SCOWL en_US Hunspell dictionary (BSD-style), Material Symbols (Apache 2.0), Capacitor (MIT), fonts Carlito, Caladea, Gelasio, EB Garamond, Courier Prime, Libre Baskerville, Lato, Merriweather, Open Sans (SIL OFL 1.1) and Tinos, Arimo, Cousine (Apache 2.0).'),
+      h('p', null, 'Open-source components: ProseMirror (MIT), prosemirror-tables (MIT), JSZip (MIT/GPLv3 dual), KaTeX (MIT), nspell (MIT) with the SCOWL American, British, Canadian and Australian English Hunspell dictionaries (MIT and BSD-style), Material Symbols (Apache 2.0), Capacitor (MIT), fonts Carlito, Caladea, Gelasio, EB Garamond, Courier Prime, Libre Baskerville, Lato, Merriweather, Open Sans (SIL OFL 1.1) and Tinos, Arimo, Cousine (Apache 2.0). Their licenses are in Help ▸ Third-Party Notices.'),
     )),
+  },
+  {
+    id: 'help.notices', label: 'Third-Party Notices', icon: 'license', tab: 'Help', group: 'Help', noRecord: true,
+    run: async () => {
+      let text = '';
+      try { const r = await fetch('./third-party-notices.txt'); if (r.ok) text = await r.text(); } catch { /* offline web build without the file */ }
+      await alertDialog('Third-Party Notices', h('pre', { class: 'qf-notices' }, text || 'The notices file is missing from this build. The licenses are listed at https://github.com/socrtwo/QuillForge/blob/main/docs/LEGAL.md.'));
+    },
   },
   { id: 'help.feedback', label: 'Report an Issue', icon: 'bug_report', tab: 'Help', group: 'Help', noRecord: true, run: () => openExternal('https://github.com/socrtwo/QuillForge/issues') },
   { id: 'help.whatsNew', label: 'What’s New', icon: 'new_releases', tab: 'Help', group: 'Help', noRecord: true, run: () => alertDialog('What’s New in 0.2', 'Damaged documents now open: the Word Recovery engine salvages .docx/.doc/.odt files (File ▸ Open and Repair, Recover Text from Any File, Recovery Report). New AI tab with 67 commands, a free on-device model, and a setup wizard for free and paid AI providers. Word 97–2003 .doc files open. Security and stability fixes from a full code review. Version 0.1 introduced the full command library, customizable Quick Access Bar and tabs, Print Layout, DOCX/ODT/RTF/HTML/Markdown/EPUB/TXT, track changes, comments, references, mail merge and macros.') },

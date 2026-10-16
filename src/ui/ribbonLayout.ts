@@ -132,7 +132,7 @@ export const DEFAULT_TABS: RibbonTab[] = [
   },
   {
     id: 'help', label: 'Help', groups: [
-      G('help', 'Help', ['view.commandSearch', 'help.shortcuts', 'help.commands', 'help.tour', 'help.whatsNew', 'help.feedback', 'help.about']),
+      G('help', 'Help', ['view.commandSearch', 'help.shortcuts', 'help.commands', 'help.tour', 'help.whatsNew', 'help.feedback', 'help.notices', 'help.about']),
     ],
   },
   {

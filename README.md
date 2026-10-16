@@ -100,7 +100,7 @@ Keys are stored encrypted on the device (Android Keystore), and nothing is sent 
 npm ci
 npm run dev          # web app at http://localhost:5173
 npm test             # unit tests (vitest)
-npm run build        # production web build in dist/
+npm run build        # production web build in dist/ (first writes public/third-party-notices.txt)
 npm run android:build   # build + cap sync + gradle assembleRelease (needs Android SDK)
 ```
 

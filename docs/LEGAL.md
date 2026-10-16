@@ -45,6 +45,8 @@ This file records how QuillForge provides a complete word-processing command set
 | Word Recovery engine, S2 File Identifier, ImmortalInflate (ported) | by socrtwo, used with the author's permission |
 | Transformers.js 4.2.0 (loaded from cdn.jsdelivr.net only when the on-device model is used; not bundled) | Apache 2.0 |
 
+The build writes the full license text of every bundled npm package (including the dependencies of dependencies) to `third-party-notices.txt`; the app shows it in **Help ▸ Third-Party Notices**. The Android app also contains AndroidX libraries (Apache 2.0).
+
 On-device models are downloaded by the user from the Hugging Face Hub, not shipped with the app. Their licenses are Qwen2.5 0.5B Instruct (Apache 2.0), SmolLM2 360M Instruct (Apache 2.0), Gemma 3 270M (Gemma Terms of Use) and Llama 3.2 1B Instruct (Llama 3.2 Community License).
 
 Online services that are called only when the user invokes the matching command: Datamuse (thesaurus), Free Dictionary API (definitions), Google Translate (opened in the browser), and the AI provider the user configured (AI commands only).

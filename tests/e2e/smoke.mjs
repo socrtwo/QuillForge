@@ -34,6 +34,28 @@ await run('desktop-home', { width: 1280, height: 800 }, async (page) => {
   const style = await page.evaluate(() => window.qf.view.state.doc.child(1).attrs.style);
   if (style !== 'Heading 1') throw new Error('markdown heading failed: ' + style);
 });
+await run('desktop-spelling-varieties', { width: 1280, height: 800 }, async (page) => {
+  const res = await page.evaluate(async () => {
+    const app = window.qf;
+    app.view.dispatch(app.state.tr.insertText('The colour and color of the organisation and organization. I will recieve it. A honest man waited a hour.'));
+    const flagged = async (d) => {
+      await app.exec('review.spellDialect', d);
+      const issues = await app.proofer.run(app.tab);
+      return issues.map((i) => i.kind + ':' + app.state.doc.textBetween(i.from, i.to)).join(' ');
+    };
+    return { any: await flagged('any'), us: await flagged('en-US'), gb: await flagged('en-GB') };
+  });
+  const want = {
+    any: 'spell:recieve grammar:A honest grammar:a hour',
+    us: 'spell:colour spell:organisation spell:recieve grammar:A honest grammar:a hour',
+    gb: 'spell:color spell:recieve grammar:A honest grammar:a hour',
+  };
+  for (const k of Object.keys(want)) if (res[k] !== want[k]) throw new Error(`${k}: got "${res[k]}", want "${want[k]}"`);
+  await page.evaluate(() => { window.qf.exec('help.notices'); });
+  await page.waitForSelector('.qf-notices');
+  const notices = await page.textContent('.qf-notices');
+  for (const pkg of ['dictionary-en-gb', 'prosemirror-model', 'jszip', 'SIL OPEN FONT LICENSE']) if (!notices.includes(pkg)) throw new Error('notices missing ' + pkg);
+});
 await run('desktop-commands', { width: 1280, height: 800 }, async (page) => {
   const res = await page.evaluate(async () => {
     const app = window.qf;
