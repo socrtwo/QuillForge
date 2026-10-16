@@ -21,7 +21,7 @@ import { resolveStyles, effectiveStyle } from '../editor/styles';
 import type { ExportOptions } from './index';
 import {
   S, bytesToBase64, base64ToBytes, canonicalStyleName, collectFootnotes, docSettings, docTitle, escapeXml, extForMime, finishDoc,
-  htmlToTextLines, imagePixelSize, inlineAtomText, isoNow, lengthToPt, makeBlob, markSet, mimeForName, newSettings, para, parseDataUrl,
+  htmlToTextLines, imagePixelSize, inlineAtomText, isoNow, lengthToPt, listStart, makeBlob, markSet, mimeForName, newSettings, para, parseDataUrl,
   prepareDoc, r2, resolveFontName, sniffImageMime, toDataUrl, toHexColor, utf8Decode, type NoteInfo,
 } from './serialize';
 
@@ -67,7 +67,14 @@ export function odfName(name: string): string {
 }
 
 function decodeOdfName(name: string): string {
-  return name.replace(/_([0-9a-fA-F]{2,6})_/g, (_m, h) => String.fromCodePoint(parseInt(h, 16)));
+  // A name like "Memo_202401_" is not an escape: keep anything that is not a valid code point.
+  return name.replace(/_([0-9a-fA-F]{2,6})_/g, (m, h) => { const cp = parseInt(h, 16); return cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff) ? m : String.fromCodePoint(cp); });
+}
+
+/** Spaces written by <text:s text:c="n"/>: n is document data (negative counts throw, huge ones exhaust memory). */
+function spaceCount(el: Element): number {
+  const n = parseInt(att(el, 'text', 'c') || '1', 10);
+  return Number.isFinite(n) ? Math.max(1, Math.min(n, 1000)) : 1;
 }
 
 const NUM_FORMAT: Record<string, string> = { decimal: '1', 'lower-alpha': 'a', 'upper-alpha': 'A', 'lower-roman': 'i', 'upper-roman': 'I', 'decimal-zero': '1' };
@@ -316,7 +323,8 @@ class OdtWriter {
   picture(src: string): { href: string; bytes: Uint8Array | null; mime: string } | null {
     const d = parseDataUrl(src);
     if (!d) return src ? { href: src, bytes: null, mime: mimeForName(src) } : null;
-    const mime = sniffImageMime(d.bytes) || d.mime;
+    // The data URL's own type is document data: keep it only when it is a plain image type.
+    const mime = sniffImageMime(d.bytes) || (/^image\/[\w.+-]+$/.test(d.mime) ? d.mime : 'application/octet-stream');
     let pic = this.pictures.get(src);
     if (!pic) {
       pic = { path: `Pictures/image${this.pictures.size + 1}.${extForMime(mime)}`, bytes: d.bytes, mime };
@@ -339,7 +347,7 @@ class OdtWriter {
     if (a.wrap === 'left' || a.wrap === 'right' || a.wrap === 'center') { anchor = 'char'; style = `fr_${a.wrap}`; }
     const img = this.flat && pic.bytes
       ? `<draw:image><office:binary-data>${bytesToBase64(pic.bytes)}</office:binary-data></draw:image>`
-      : `<draw:image xlink:href="${x(pic.href)}" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"${pic.bytes ? ` draw:mime-type="${pic.mime}"` : ''}/>`;
+      : `<draw:image xlink:href="${x(pic.href)}" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"${pic.bytes ? ` draw:mime-type="${x(pic.mime)}"` : ''}/>`;
     const title = a.title ? `<svg:title>${x(a.title)}</svg:title>` : '';
     const desc = a.alt ? `<svg:desc>${x(a.alt)}</svg:desc>` : '';
     return `<draw:frame draw:style-name="${style}" draw:name="Image${id}" text:anchor-type="${anchor}" svg:width="${pt(w)}" svg:height="${pt(h)}" draw:z-index="${id}">${img}${title}${desc}</draw:frame>`;
@@ -497,7 +505,7 @@ class OdtWriter {
       if (depth > 9) return;
       if (!levels[depth]) {
         levels[depth] = list.type === S.nodes.ordered_list
-          ? { kind: 'ordered', format: list.attrs.format || 'decimal', bullet: '', suffix: list.attrs.suffix ?? '.', start: list.attrs.order ?? 1 }
+          ? { kind: 'ordered', format: list.attrs.format || 'decimal', bullet: '', suffix: list.attrs.suffix ?? '.', start: Math.max(1, listStart(list.attrs.order)) }
           : list.type === S.nodes.task_list ? { kind: 'task', format: '', bullet: '', suffix: '', start: 1 }
             : { kind: 'bullet', format: '', bullet: ({ disc: '•', circle: '◦', square: '▪', none: '' } as Record<string, string>)[list.attrs.bullet] ?? String(list.attrs.bullet || '•').slice(0, 2), suffix: '', start: 1 };
       }
@@ -538,7 +546,8 @@ class OdtWriter {
         if (b.type === S.nodes.bullet_list || b.type === S.nodes.ordered_list || b.type === S.nodes.task_list) body += this.list(b, false);
         else body += this.block(b, null);
       });
-      const start = first && node.type === S.nodes.ordered_list && (node.attrs.order ?? 1) !== 1 ? ` text:start-value="${node.attrs.order}"` : '';
+      const order = Math.max(1, listStart(node.attrs.order)); // text:start-value is a positive integer
+      const start = first && node.type === S.nodes.ordered_list && order !== 1 ? ` text:start-value="${order}"` : '';
       first = false;
       items.push(`<text:list-item${start}>${body}</text:list-item>`);
     });
@@ -845,7 +854,7 @@ export async function exportOdtBytes(doc: PMNode, opts: ExportOptions): Promise<
   ];
   for (const pic of w.pictures.values()) {
     zip.file(pic.path, pic.bytes);
-    entries.push(`<manifest:file-entry manifest:full-path="${x(pic.path)}" manifest:media-type="${pic.mime}"/>`);
+    entries.push(`<manifest:file-entry manifest:full-path="${x(pic.path)}" manifest:media-type="${x(pic.mime)}"/>`);
   }
   zip.file('META-INF/manifest.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<manifest:manifest xmlns:manifest="${NS.manifest}" manifest:version="1.3">${entries.join('')}</manifest:manifest>`);
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', mimeType: MIME });
@@ -1215,7 +1224,7 @@ class OdtReader {
           this.inline(c, href ? markSet([...marks, S.marks.link.create({ href, title: att(c, 'office', 'title') })]) : marks, out, ws, hf);
           break;
         }
-        case 'text:s': { const k = parseInt(att(c, 'text', 'c') || '1', 10) || 1; this.emitText(' '.repeat(Math.min(k, 1000)), marks, out); ws.last = false; break; }
+        case 'text:s': this.emitText(' '.repeat(spaceCount(c)), marks, out); ws.last = false; break;
         case 'text:tab': this.emitText('\t', marks, out); ws.last = false; break;
         case 'text:line-break': out.push(S.nodes.hard_break.create()); ws.last = true; break;
         case 'text:soft-page-break': break;
@@ -1341,7 +1350,7 @@ class OdtReader {
         if (n.nodeType === 3) s += (n.textContent || '').replace(/[ \t\r\n]+/g, ' ');
         else if (n.nodeType === 1) {
           const q = qn(n as Element);
-          if (q === 'text:s') s += ' '.repeat(parseInt(att(n as Element, 'text', 'c') || '1', 10) || 1);
+          if (q === 'text:s') s += ' '.repeat(spaceCount(n as Element));
           else if (q === 'text:tab') s += '\t';
           else if (q === 'text:line-break') s += '\n';
           else if (q === 'text:note' || q === 'office:annotation') { /* skip */ }

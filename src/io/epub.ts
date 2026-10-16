@@ -115,7 +115,8 @@ export async function exportEpubBytes(doc: PMNode, opts: ExportOptions): Promise
     if (!d) { if (/^https?:/i.test(src)) remote = true; return src; }
     let img = images.get(src);
     if (!img) {
-      const mime = sniffImageMime(d.bytes) || d.mime;
+      // The data URL's own type is document data: keep it only when it is a plain image type.
+      const mime = sniffImageMime(d.bytes) || (/^image\/[\w.+-]+$/.test(d.mime) ? d.mime : 'application/octet-stream');
       const n = images.size + 1;
       img = { path: `images/image${n}.${extForMime(mime)}`, bytes: d.bytes, mime, id: `img${n}` };
       images.set(src, img);
@@ -167,7 +168,7 @@ export async function exportEpubBytes(doc: PMNode, opts: ExportOptions): Promise
     '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>',
     '<item id="css" href="styles.css" media-type="text/css"/>',
     ...chapterXml.map((c, i) => `<item id="chapter${i + 1}" href="${c.file}" media-type="application/xhtml+xml"${c.remote ? ' properties="remote-resources"' : ''}/>`),
-    ...[...images.values()].map((im) => `<item id="${im.id}" href="${im.path}" media-type="${im.mime}"/>`),
+    ...[...images.values()].map((im) => `<item id="${im.id}" href="${im.path}" media-type="${x(im.mime)}"/>`),
   ].join('\n    ');
   const spine = chapterXml.map((_c, i) => `<itemref idref="chapter${i + 1}"/>`).join('\n    ');
   const opf = `<?xml version="1.0" encoding="UTF-8"?>
@@ -332,7 +333,8 @@ export async function importEpub(data: ArrayBuffer, name: string): Promise<PMNod
         }
       }
       let html = d.contentType === 'text/html' ? (body as HTMLElement).innerHTML : Array.from(body.childNodes).map((n) => ser.serializeToString(n)).join('');
-      html = html.replace(/ xmlns(:\w+)?="[^"]*"/g, '');
+      // Namespace declarations come off the tags only: the same characters in text are content.
+      html = html.replace(/<[^>]*>/g, (tag) => tag.replace(/ xmlns(:\w+)?="[^"]*"/g, ''));
       parts.push(`<div class="epub-chapter" id="${pre}top">${html}</div>`);
     }
     const merged = parseHtmlDocument(`<!DOCTYPE html><html><body>${parts.join('\n')}</body></html>`);

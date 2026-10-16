@@ -22,7 +22,7 @@ import type { StyleDef } from '../editor/settings';
 import type { ExportOptions } from './index';
 import {
   S, buildNestedLists, bytesToHex, canonicalStyleName, collectFootnotes, docSettings, docTitle, finishDoc, hexToBytes, htmlToTextLines,
-  imagePixelSize, inlineAtomText, makeBlob, markSet, markerFormat, newSettings, para, parseDataUrl, prepareDoc, resolveFontName,
+  imagePixelSize, inlineAtomText, listStart, makeBlob, markSet, markerFormat, newSettings, para, parseDataUrl, prepareDoc, resolveFontName,
   sniffImageMime, toDataUrl, toHexColor, normalizeImportedFormatting, type FlatListItem, type NoteInfo,
 } from './serialize';
 
@@ -338,7 +338,7 @@ class RtfWriter {
       if (!levels[depth]) {
         const t = list.type;
         levels[depth] = t === S.nodes.ordered_list
-          ? { kind: 'ordered', format: list.attrs.format || 'decimal', start: list.attrs.order ?? 1, bullet: '', suffix: list.attrs.suffix ?? '.' }
+          ? { kind: 'ordered', format: list.attrs.format || 'decimal', start: listStart(list.attrs.order), bullet: '', suffix: list.attrs.suffix ?? '.' }
           : t === S.nodes.task_list ? { kind: 'task', format: 'none', start: 1, bullet: '', suffix: '' }
             : { kind: 'bullet', format: 'bullet', start: 1, bullet: bulletChar(list.attrs.bullet), suffix: '' };
       }
@@ -371,7 +371,7 @@ class RtfWriter {
 
   list(node: PMNode, depth: number, def: { ls: number; levels: ListLevelDef[] }, intbl: boolean): string {
     let out = '';
-    let n = node.type === S.nodes.ordered_list ? (node.attrs.order ?? 1) : 1;
+    let n = node.type === S.nodes.ordered_list ? listStart(node.attrs.order) : 1;
     const lvl = def.levels[Math.min(depth, 8)];
     node.forEach((item) => {
       let marker: string;
@@ -721,11 +721,16 @@ const FIELD_TYPES = new Set(['DATE', 'TIME', 'CREATEDATE', 'SAVEDATE', 'PRINTDAT
 
 interface ListDef { id: number; levels: { nfc: number; start: number }[] }
 
-class RtfReader {
+/** Group nesting kept as separate states; deeper groups (only crafted files) reuse the deepest. */
+export const RTF_MAX_DEPTH = 1000;
+
+export class RtfReader {
   s: string;
   pos = 0;
   settings = newSettings();
   groups: Group[] = [];
+  /** Open groups beyond RTF_MAX_DEPTH. */
+  overflow = 0;
   g: Group;
   fonts = new Map<number, { name: string; charset: number }>();
   fontEntry: { num: number; name: string; charset: number } | null = null;
@@ -1260,7 +1265,8 @@ class RtfReader {
       case 'result': if (this.groups.length && this.groups[this.groups.length - 1].dest !== 'skip') g.dest = 'body'; return;
       case 'shp': case 'shprslt': case 'shpgrp': return;
       case 'bin': {
-        const n = Math.max(0, p);
+        // The declared length can exceed what the file holds: never allocate more than remains.
+        const n = Math.min(Math.max(0, p), this.s.length - this.pos);
         if (g.dest === 'pict' && this.pict) {
           const chunk = new Uint8Array(n);
           for (let k = 0; k < n && this.pos + k < this.s.length; k++) chunk[k] = this.s.charCodeAt(this.pos + k) & 0xff;
@@ -1531,8 +1537,9 @@ class RtfReader {
     let guard = 0;
     while (this.pos < len && guard++ < 50_000_000) {
       const ch = s[this.pos];
-      if (ch === '{') { this.pushGroup(); this.pos++; starred = false; continue; }
-      if (ch === '}') { if (this.groups.length) this.popGroup(); this.pos++; starred = false; continue; }
+      // Groups nested deeper than any real document share the deepest state (each level copies it).
+      if (ch === '{') { if (this.groups.length < RTF_MAX_DEPTH) this.pushGroup(); else this.overflow++; this.pos++; starred = false; continue; }
+      if (ch === '}') { if (this.overflow) this.overflow--; else if (this.groups.length) this.popGroup(); this.pos++; starred = false; continue; }
       if (ch === '\\') {
         const nx = s[this.pos + 1];
         if (nx === undefined) { this.pos++; continue; }

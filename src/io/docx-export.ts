@@ -25,6 +25,7 @@ import {
   cssBorderToOoxml, cssColorToHex, esc, exportFontName, extForMime, highlightName, imageSize, parseDataUrl, ptToTwip,
   sniffImageMime, styleIdFor, svgSize, wordStyleName, type OoxmlBorder,
 } from './ooxml-util';
+import { listStart } from './serialize';
 
 const N = schema.nodes;
 const M = schema.marks;
@@ -234,10 +235,28 @@ function textRun(text: string, rPr: string, deleted = false): string {
   return inner ? `<w:r>${rPr}${inner}</w:r>` : '';
 }
 
-function bookmarkName(name: string): string {
-  let n = String(name || 'bookmark').replace(/[^A-Za-z0-9_]/g, '_');
-  if (!/^[A-Za-z_]/.test(n)) n = 'bm_' + n;
-  return n.slice(0, 40);
+/**
+ * Word bookmark names (letters, digits and _, at most 40 characters) for the document's own names.
+ * Letters of every script are kept, and each name gets a result of its own, so bookmarks whose
+ * names differ only in characters Word does not allow stay distinct and links still find them.
+ */
+class BookmarkNames {
+  private byName = new Map<string, string>();
+  private used = new Set<string>();
+  get(name: string): string {
+    const key = String(name || 'bookmark');
+    const known = this.byName.get(key);
+    if (known) return known;
+    const cut = (s: string, n: number) => s.slice(0, n).replace(/[\uD800-\uDBFF]$/, '');
+    let base = key.replace(/[^\p{L}\p{N}_]/gu, '_');
+    if (!/^[\p{L}_]/u.test(base)) base = 'bm_' + base;
+    base = cut(base, 40);
+    let n = base;
+    for (let k = 2; this.used.has(n); k++) n = cut(base, 40 - String(k).length - 1) + '_' + k;
+    this.used.add(n);
+    this.byName.set(key, n);
+    return n;
+  }
 }
 
 /** Lines of text from a gen_block's cached HTML, with a best-effort outline level. */
@@ -593,7 +612,7 @@ const ORDER_CYCLE = ['decimal', 'lower-alpha', 'lower-roman'];
 
 function levelOf(list: PMNode): LevelSpec {
   if (list.type === N.task_list) return { kind: 'task', bullet: 'none', format: 'decimal', suffix: '', outline: false, start: 1 };
-  if (list.type === N.ordered_list) return { kind: 'ordered', bullet: 'disc', format: list.attrs.format || 'decimal', suffix: list.attrs.suffix ?? '.', outline: !!list.attrs.outline, start: list.attrs.order ?? 1 };
+  if (list.type === N.ordered_list) return { kind: 'ordered', bullet: 'disc', format: list.attrs.format || 'decimal', suffix: list.attrs.suffix ?? '.', outline: !!list.attrs.outline, start: listStart(list.attrs.order) };
   return { kind: 'bullet', bullet: list.attrs.bullet || 'disc', format: 'decimal', suffix: '', outline: false, start: 1 };
 }
 
@@ -704,6 +723,7 @@ class DocxWriter {
   textWidthTw: number;
   hasTOC = false;
   contentTypes = new Map<string, string>();
+  bookmarks = new BookmarkNames();
 
   constructor(private doc: PMNode, private opts: ExportOptions) {
     this.settings = normalizeSettings(doc.attrs.settings);
@@ -972,7 +992,7 @@ class DocxWriter {
           if (link && link.attrs.href) {
             const href = String(link.attrs.href);
             const tip = link.attrs.title ? ` w:tooltip="${esc(link.attrs.title)}"` : '';
-            if (href.startsWith('#')) out += `<w:hyperlink w:anchor="${esc(bookmarkName(href.slice(1)))}"${tip} w:history="1">`;
+            if (href.startsWith('#')) out += `<w:hyperlink w:anchor="${esc(this.bookmarks.get(href.slice(1)))}"${tip} w:history="1">`;
             else out += `<w:hyperlink r:id="${this.rels.add(REL.hyperlink, href, true)}"${tip} w:history="1">`;
             curLink = linkKey;
           }
@@ -1038,7 +1058,7 @@ class DocxWriter {
       case 'citation': return textRun(a.cache || '(citation)', rPr(), deleted);
       case 'bookmark': {
         const id = this.annot++;
-        return `<w:bookmarkStart w:id="${id}" w:name="${esc(bookmarkName(a.name))}"/><w:bookmarkEnd w:id="${id}"/>`;
+        return `<w:bookmarkStart w:id="${id}" w:name="${esc(this.bookmarks.get(a.name))}"/><w:bookmarkEnd w:id="${id}"/>`;
       }
       case 'index_entry': {
         let instr = `XE "${String(a.term || '').replace(/"/g, '')}${a.sub ? ':' + String(a.sub).replace(/"/g, '') : ''}"`;

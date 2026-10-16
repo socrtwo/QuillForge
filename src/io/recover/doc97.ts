@@ -357,13 +357,16 @@ function readPieces(wd: Uint8Array, tbl: Uint8Array, fcClx: number, lcbClx: numb
   const n = Math.floor((lcb - 4) / 12);
   if (n <= 0 || q + lcb > tbl.length + 12) return null;
   const parts: string[] = [];
-  for (let k = 0; k < n; k++) {
+  // Each character comes from its own byte(s) of the WordDocument stream, so the text is never
+  // longer than the stream; damaged or crafted tables whose pieces overlap must not multiply it.
+  let budget = wd.length;
+  for (let k = 0; k < n && budget > 0; k++) {
     const cpStart = u32(tbl, q + k * 4), cpEnd = u32(tbl, q + (k + 1) * 4);
     const pcd = q + (n + 1) * 4 + k * 8;
     let fc = u32(tbl, pcd + 2);
     const compressed = (fc & 0x40000000) !== 0;
     fc &= 0x3fffffff;
-    const count = Math.max(0, Math.min(cpEnd - cpStart, 1 << 24));
+    const count = Math.max(0, Math.min(cpEnd - cpStart, 1 << 24, budget));
     let s = '';
     if (compressed) {
       const off = fc >>> 1;
@@ -374,6 +377,7 @@ function readPieces(wd: Uint8Array, tbl: Uint8Array, fcClx: number, lcbClx: numb
       for (let i = fc; i < stop; i += 2) s += String.fromCharCode(wd[i] | (wd[i + 1] << 8));
     }
     parts.push(s);
+    budget -= s.length;
   }
   return parts.join('');
 }

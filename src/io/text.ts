@@ -10,7 +10,7 @@
 import type { Node as PMNode } from 'prosemirror-model';
 import { formatNumber } from '../editor/plugins/decorations';
 import type { ExportOptions } from './index';
-import { S, collectFootnotes, decodeTextBytes, finishDoc, htmlToTextLines, inlineAtomText, makeBlob, newSettings, para, prepareDoc, type NoteInfo } from './serialize';
+import { S, collectFootnotes, decodeTextBytes, finishDoc, htmlToTextLines, inlineAtomText, listStart, makeBlob, newSettings, para, prepareDoc, type NoteInfo } from './serialize';
 
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u0008\u000B\u000E-\u001F\u007F]/g;
@@ -114,7 +114,7 @@ function blocksToLines(node: PMNode, ctx: Ctx, out: string[]): void {
   if (t === S.nodes.math_block) { out.push(ctx.indent + node.attrs.latex); return; }
   if (t === S.nodes.gen_block) { for (const l of htmlToTextLines(node.attrs.cache || '')) out.push(ctx.indent + l); return; }
   if (t === S.nodes.bullet_list || t === S.nodes.ordered_list || t === S.nodes.task_list) {
-    let n = t === S.nodes.ordered_list ? (node.attrs.order ?? 1) : 1;
+    let n = t === S.nodes.ordered_list ? listStart(node.attrs.order) : 1;
     node.forEach((item) => {
       let prefix = '• ';
       if (t === S.nodes.ordered_list) prefix = `${formatNumber(n++, node.attrs.format || 'decimal')}${node.attrs.suffix ?? '.'} `;

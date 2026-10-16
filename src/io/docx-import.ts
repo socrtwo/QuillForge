@@ -27,6 +27,7 @@ import {
   cssBorderToOoxml, cssColorToHex, exportFontName, isBuiltinStyleName, mimeForExt, onOff, ooxmlBorderToCss,
   ooxmlColorToCss, parseFieldInstr, parseTwips, round2, stripInvalidXml, tableStyleFor, type FieldInstr,
 } from './ooxml-util';
+import { safeCssValue, safeNum } from '../util/sanitize';
 
 const S = schema.nodes;
 const MK = schema.marks;
@@ -451,7 +452,7 @@ class DocxImporter {
     return {
       numFmt: val(l, 'numFmt') || 'decimal',
       lvlText: val(l, 'lvlText') ?? '',
-      start: parseInt(val(l, 'start') || '1', 10),
+      start: intAttr(kid(l, 'start'), 'val') ?? 1, // a non-numeric value would number the list "NaN"
       font: attr(rFonts, 'ascii') || attr(rFonts, 'hAnsi'),
     };
   }
@@ -461,7 +462,7 @@ class DocxImporter {
     for (const a of kidsNamed(root, 'abstractNum')) {
       const id = attr(a, 'abstractNumId') || '';
       const lv = new Map<number, LvlDef>();
-      for (const l of kidsNamed(a, 'lvl')) lv.set(parseInt(attr(l, 'ilvl') || '0', 10), this.parseLvl(l));
+      for (const l of kidsNamed(a, 'lvl')) lv.set(intAttr(l, 'ilvl') ?? 0, this.parseLvl(l));
       this.abstracts.set(id, lv);
       const link = val(a, 'numStyleLink');
       if (link) this.abstractStyleLink.set(id, link);
@@ -470,10 +471,9 @@ class DocxImporter {
       const id = attr(n, 'numId') || '';
       const overrides = new Map<number, { start?: number; lvl?: LvlDef }>();
       for (const o of kidsNamed(n, 'lvlOverride')) {
-        const ilvl = parseInt(attr(o, 'ilvl') || '0', 10);
-        const so = val(o, 'startOverride');
+        const ilvl = intAttr(o, 'ilvl') ?? 0;
         const l = kid(o, 'lvl');
-        overrides.set(ilvl, { start: so != null ? parseInt(so, 10) : undefined, lvl: l ? this.parseLvl(l) : undefined });
+        overrides.set(ilvl, { start: intAttr(kid(o, 'startOverride'), 'val') ?? undefined, lvl: l ? this.parseLvl(l) : undefined });
       }
       this.nums.set(id, { abstractId: val(n, 'abstractNumId') || '', overrides });
     }
@@ -774,10 +774,10 @@ class DocxImporter {
     const content = kid(sdt, 'sdtContent');
     const tag = val(pr, 'tag') || '';
     if (tag.startsWith('qf:textbox')) {
-      let opts: Record<string, any> = {};
+      let opts: unknown = {};
       try { opts = JSON.parse(tag.slice('qf:textbox'.length).replace(/^:/, '') || '{}'); } catch { /* */ }
       const blocks = this.blocksOf(content).map((b) => (b.type === S.paragraph && (b.attrs.border || b.attrs.bg) ? b.type.create({ ...b.attrs, border: null, bg: null }, b.content, b.marks) : b));
-      items.push({ node: S.text_box.create(opts, blocks.length ? blocks : [emptyPara()]) });
+      items.push({ node: S.text_box.create(textBoxOpts(opts), blocks.length ? blocks : [emptyPara()]) });
       return;
     }
     this.collectBlocks(kids(content), items);
@@ -810,9 +810,8 @@ class DocxImporter {
   private listInfo(pPr: Element | null): ListInfo | null {
     const numPr = kid(pPr, 'numPr');
     const directNum = val(numPr, 'numId');
-    const directLvl = val(numPr, 'ilvl');
     let numId = directNum;
-    let ilvl = directLvl != null ? parseInt(directLvl, 10) : null;
+    let ilvl = intAttr(kid(numPr, 'ilvl'), 'val'); // null when absent or not a number (NaN would pass the clamp below)
     if (numId == null) {
       let sid = val(pPr, 'pStyle') || this.defaultParaStyle;
       for (let guard = 0; sid && guard < 12; guard++) {
@@ -1599,6 +1598,23 @@ class DocxImporter {
 
 // ------------------------------------------------------------------------------------------
 // Property parsing helpers (shared by paragraphs and styles)
+
+/**
+ * Text-box options from a "qf:textbox:{json}" content-control tag. The tag is document data and
+ * the values end up in a style attribute: only well-formed values of the known options pass.
+ */
+function textBoxOpts(raw: unknown): Record<string, unknown> {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  if (o.float === 'left' || o.float === 'right' || o.float === 'none') out.float = o.float;
+  for (const k of ['width', 'border', 'bg'] as const) { if (o[k] === null) out[k] = null; else { const v = safeCssValue(o[k]); if (v) out[k] = v; } }
+  if (o.padding != null) out.padding = safeNum(o.padding, 6, 0, 200);
+  if (o.radius != null) out.radius = safeNum(o.radius, 0, 0, 500);
+  if (o.rotate != null) out.rotate = safeNum(o.rotate, 0, -360, 360);
+  if (typeof o.shadow === 'boolean') out.shadow = o.shadow;
+  if (typeof o.kind === 'string' && /^[a-z][\w-]{0,30}$/i.test(o.kind)) out.kind = o.kind;
+  return out;
+}
 
 function bordersJson(pBdr: Element | null): string | null {
   if (!pBdr) return null;

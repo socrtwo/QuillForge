@@ -475,7 +475,8 @@ export function extractTextFromRtf(bytes: Uint8Array | string): string {
       if (!m) { i += 2; continue; }
       const word = m[1], arg = m[2] != null ? parseInt(m[2], 10) : null;
       i += 1 + m[0].length;
-      if (word === 'bin' && arg) { i += arg; continue; }
+      // Skip binary data; a zero or negative length skips nothing (stepping back would loop forever).
+      if (word === 'bin') { if (arg != null && arg > 0) i += arg; continue; }
       if (SKIP_DEST.test(word)) { skip = true; continue; }
       if (skip) continue;
       if (word === 'uc' && arg != null) uc = arg;

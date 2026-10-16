@@ -90,3 +90,16 @@ export function safeNum(v: unknown, fallback: number, min = -1e6, max = 1e6): nu
   const n = Number(v);
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 }
+
+/**
+ * One CSS property value from document data ("1px solid #444", "35%", "var(--qf-accent1)"), or
+ * null. No ; : quotes, slashes or braces, so it cannot add declarations or rules, and only
+ * var/calc/color functions, so it cannot load anything.
+ */
+export function safeCssValue(v: unknown, max = 120): string | null {
+  if (typeof v !== 'string' && typeof v !== 'number') return null;
+  const s = String(v).trim();
+  if (!s || s.length > max || !/^[#\w\s.,%()+-]+$/.test(s)) return null;
+  for (const m of s.matchAll(/([\w-]*)\s*\(/g)) if (!/^(var|calc|rgba?|hsla?)$/i.test(m[1])) return null;
+  return s;
+}

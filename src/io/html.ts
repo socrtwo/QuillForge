@@ -284,6 +284,8 @@ export function cleanHtmlDom(root: HTMLElement): void {
   stripActiveContent(root);
   const raw = root.innerHTML;
   const isWord = /mso-|class="?Mso|urn:schemas-microsoft-com/i.test(raw);
+  // <ol start=""> (or any non-number) would give the list a NaN start.
+  root.querySelectorAll('ol[start]').forEach((ol) => { if (!/^\s*-?\d+\s*$/.test(ol.getAttribute('start') || '')) ol.removeAttribute('start'); });
 
   // Math first (MathJax uses <script type="math/tex">).
   root.querySelectorAll('script[type^="math/tex"]').forEach((s) => {

@@ -10,6 +10,7 @@
  * - nested-list builder used by importers that only know "paragraph at level n"
  */
 import { stripInvalidXml } from './ooxml-util';
+import { sanitizeGeneratedHtml } from '../util/sanitize';
 import { DOMSerializer, Fragment, Mark, type Node as PMNode, type NodeType, type DOMOutputSpec } from 'prosemirror-model';
 import { EditorState } from 'prosemirror-state';
 import { fixTables } from 'prosemirror-tables';
@@ -568,7 +569,8 @@ export function renderHtml(content: Fragment, notes: NoteInfo[], opts: RenderOpt
     const div = tdoc.createElement('div');
     div.className = 'generated';
     div.setAttribute('data-kind', n.attrs.kind);
-    div.innerHTML = n.attrs.cache || '';
+    // The cache comes from the document (a .qfd can hold anything): same allow-list as the editor.
+    div.innerHTML = sanitizeGeneratedHtml(n.attrs.cache || '');
     return div;
   };
   nodes.footnote = (n) => {
@@ -611,6 +613,7 @@ export function renderHtml(content: Fragment, notes: NoteInfo[], opts: RenderOpt
       const code = el.firstElementChild;
       if (lang && code && code.tagName === 'CODE') code.setAttribute('class', `language-${lang.replace(/\s+/g, '-')}`);
     }
+    if (el.tagName === 'OL' && el.hasAttribute('start') && !/^-?\d+$/.test(el.getAttribute('start') || '')) el.removeAttribute('start');
     if (el.tagName === 'UL' && el.getAttribute('data-type') === 'task') el.setAttribute('class', 'task-list');
     if (el.tagName === 'LI' && el.hasAttribute('data-checked') && el.parentElement?.getAttribute('data-type') === 'task') {
       const box = tdoc.createElement('input');
@@ -629,9 +632,14 @@ export function renderHtml(content: Fragment, notes: NoteInfo[], opts: RenderOpt
 export function toXhtml(el: Element): string {
   const ser = new XMLSerializer();
   let out = '';
-  el.childNodes.forEach((c) => { out += ser.serializeToString(c); });
+  el.childNodes.forEach((c) => {
+    const s = ser.serializeToString(c);
+    // Each top-level element declares the XHTML namespace, which the page's <html> already does.
+    // Only that start tag is touched: the same characters in text are content.
+    out += c.nodeType === 1 ? s.replace(/^(<[^\s/>]+) xmlns="http:\/\/www\.w3\.org\/1999\/xhtml"/, '$1') : s;
+  });
   // XHTML must be well-formed XML: drop characters XML 1.0 forbids (control chars, lone surrogates, U+FFFE/F).
-  return stripInvalidXml(out.replace(/ xmlns="http:\/\/www\.w3\.org\/1999\/xhtml"/g, ''));
+  return stripInvalidXml(out);
 }
 
 /** Base CSS shared by HTML and EPUB exports (layout, tables, lists, notes). */
@@ -905,6 +913,12 @@ function romanValue(s: string): number {
     n += a < b ? -a : a;
   }
   return n || 1;
+}
+
+/** An ordered list's start number from document data (imports can carry NaN or text): an integer, else 1. */
+export function listStart(v: unknown): number {
+  const n = typeof v === 'number' ? v : parseFloat(String(v ?? ''));
+  return Number.isFinite(n) ? Math.round(n) : 1;
 }
 
 /** Points ↔ other units. */
