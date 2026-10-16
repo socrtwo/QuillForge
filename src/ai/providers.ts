@@ -174,7 +174,7 @@ export const PROVIDERS: ProviderDef[] = [
     keyPattern: /\bpplx-[a-zA-Z0-9]{48}\b/,
     links: { signup: 'https://www.perplexity.ai/', keys: 'https://www.perplexity.ai/account/api', billing: 'https://www.perplexity.ai/account/api', docs: 'https://docs.perplexity.ai/' },
     free: 'paid', freeNote: 'Paid; answers cite live web sources (useful for Find Sources).',
-    keyViewable: false, models: { fast: 'sonar', quality: 'sonar-pro' }, cors: 'no', notes: 'Browsers cannot call this API directly; it works in the Android app.',
+    keyViewable: false, models: { fast: 'sonar', quality: 'sonar-pro' }, cors: 'no', notes: 'Browsers cannot call this API directly; it works in the Android, iOS and desktop apps.',
   },
   {
     id: 'together', name: 'Together AI', kind: 'openai', baseUrl: 'https://api.together.xyz/v1', needsKey: true,
@@ -216,7 +216,7 @@ export const PROVIDERS: ProviderDef[] = [
     keyPattern: /\bnvapi-[\w-]{40,}/,
     links: { signup: 'https://build.nvidia.com/', keys: 'https://build.nvidia.com/settings/api-keys', docs: 'https://docs.api.nvidia.com/' },
     free: 'free', freeNote: 'Free for development and testing with the NVIDIA Developer Program (about 40 requests per minute).',
-    keyViewable: false, models: { fast: 'nvidia/nemotron-3.5-lightning-30b-a3b', quality: 'moonshotai/kimi-k3' }, cors: 'no', notes: 'Browsers cannot call this API directly; it works in the Android app.',
+    keyViewable: false, models: { fast: 'nvidia/nemotron-3.5-lightning-30b-a3b', quality: 'moonshotai/kimi-k3' }, cors: 'no', notes: 'Browsers cannot call this API directly; it works in the Android, iOS and desktop apps.',
   },
   {
     id: 'cloudflare', name: 'Cloudflare Workers AI', kind: 'openai', baseUrl: 'https://api.cloudflare.com/client/v4/accounts/{accountId}/ai/v1', needsKey: true,
@@ -224,7 +224,7 @@ export const PROVIDERS: ProviderDef[] = [
     fields: [{ key: 'accountId', label: 'Account ID', placeholder: '32-character account ID', help: 'Shown on the right of the Cloudflare dashboard overview.' }],
     links: { signup: 'https://dash.cloudflare.com/sign-up', keys: 'https://dash.cloudflare.com/profile/api-tokens', docs: 'https://developers.cloudflare.com/workers-ai/' },
     free: 'free', freeNote: 'Free plan: 10,000 Neurons per day. Create an API token with the Workers AI permission.',
-    keyViewable: false, models: { fast: '@cf/zai-org/glm-5.3-flash', quality: '@cf/zai-org/glm-5.3' }, cors: 'no', notes: 'Browsers cannot call this API directly; it works in the Android app.',
+    keyViewable: false, models: { fast: '@cf/zai-org/glm-5.3-flash', quality: '@cf/zai-org/glm-5.3' }, cors: 'no', notes: 'Browsers cannot call this API directly; it works in the Android, iOS and desktop apps.',
   },
   {
     id: 'azure', name: 'Azure OpenAI / AI Foundry', kind: 'openai', baseUrl: 'https://{resource}.openai.azure.com/openai/v1', needsKey: true,

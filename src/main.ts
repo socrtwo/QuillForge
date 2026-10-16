@@ -9,7 +9,7 @@ import { App } from './app';
 import { Shell } from './ui/shell';
 import { schema } from './editor/schema';
 import { wordAt } from './editor/ops';
-import { launchFile, onFileOpened, onBackButton, isNative } from './platform/native';
+import { launchFile, onFileOpened, onBackButton, isNative, isDesktop, isCapacitor } from './platform/native';
 import { closeMenus, inDialog, toast } from './ui/dialog';
 import { kvKeys } from './util/store';
 import { allCommands, getCommand } from './commands/registry';
@@ -57,6 +57,12 @@ async function start() {
 }
 start();
 
+// Web build served over http(s): register the service worker so the app works offline and can be
+// installed (ChromeOS, desktop Chrome/Edge, Android Chrome). Not used inside the Android, iOS or desktop apps.
+if (!isNative() && !isCapacitor() && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !import.meta.env.DEV) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(() => undefined); });
+}
+
 onBackButton(() => {
   if (document.querySelector('.qf-menu')) { closeMenus(); return true; }
   if (inDialog()) { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); return true; }
@@ -70,7 +76,8 @@ onBackButton(() => {
 
 window.addEventListener('beforeunload', (e) => {
   app.saveDrafts();
-  if (!isNative() && app.docs.some((d) => d.dirty)) { e.preventDefault(); e.returnValue = ''; }
+  // In the desktop app this makes the main process ask before closing (will-prevent-unload).
+  if ((!isNative() || isDesktop()) && app.docs.some((d) => d.dirty)) { e.preventDefault(); e.returnValue = ''; }
 });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') app.saveDrafts(); });
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => app.ui.applyPrefs());

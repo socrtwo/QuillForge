@@ -160,3 +160,5 @@ android/capacitor-cordova-android-plugins/
 *.jks
 test-results/
 public/third-party-notices.txt
+build/
+release/

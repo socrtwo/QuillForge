@@ -1,8 +1,12 @@
 /**
- * Platform bridge. On Android the `QuillNative` Capacitor plugin (android/app/src/main/java/.../QuillNativePlugin.java)
- * provides the Storage Access Framework (real Open / Save As dialogs, write-back to the same file),
- * the system print service (which also offers "Save as PDF"), sharing, and files opened from other apps.
- * In a browser the same API falls back to <input type=file>, downloads and window.print().
+ * Platform bridge. One API, three back ends:
+ * - Android: the `QuillNative` Capacitor plugin (android/app/src/main/java/.../QuillNativePlugin.java)
+ *   provides the Storage Access Framework (real Open / Save As dialogs, write-back to the same file),
+ *   the system print service (which also offers "Save as PDF"), sharing, and files opened from other apps.
+ * - Desktop (Windows, macOS, Linux, Raspberry Pi OS): the Electron preload (electron/preload.cjs)
+ *   exposes the same interface as `window.quillDesktop`, backed by native file dialogs and the file system.
+ * - Browser and iOS: <input type=file>, the File System Access API or downloads, and window.print().
+ *   On iOS, saved files go to the app's Documents folder (Files ▸ On My iPhone ▸ QuillForge).
  */
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { download, pickFile } from '../ui/dom';
@@ -40,10 +44,37 @@ interface QuillNativePlugin {
   stopLoopback(): Promise<void>;
 }
 
-const Native = registerPlugin<QuillNativePlugin>('QuillNative');
+/** The desktop bridge adds what Android gets from Capacitor itself. */
+interface DesktopBridge extends QuillNativePlugin {
+  /** 'win32' | 'darwin' | 'linux' */
+  platform: string;
+  openExternal(opts: { url: string }): Promise<void>;
+  /** HTTP from the main process (no CORS), for AI providers that block browsers. */
+  http(opts: { url: string; method: string; headers: Record<string, string>; data?: unknown }): Promise<{ status: number; text: string }>;
+}
 
-export const isNative = (): boolean => Capacitor.isNativePlatform();
-export const platformName = (): string => Capacitor.getPlatform();
+const desktop: DesktopBridge | undefined = typeof window !== 'undefined' ? (window as any).quillDesktop : undefined;
+const Native: QuillNativePlugin = desktop || registerPlugin<QuillNativePlugin>('QuillNative');
+
+/** Running in the Capacitor app shell (Android or iOS). */
+export const isCapacitor = (): boolean => Capacitor.isNativePlatform();
+/** A native bridge is present: real file dialogs, write-back, secure storage, OAuth loopback (Android app or desktop app). */
+export const isNative = (): boolean => !!desktop || (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('QuillNative'));
+export const isDesktop = (): boolean => !!desktop;
+export const isIOS = (): boolean => Capacitor.getPlatform() === 'ios';
+/** 'android' | 'ios' | 'web' | 'windows' | 'macos' | 'linux' */
+export const platformName = (): string => (desktop ? ({ win32: 'windows', darwin: 'macos' } as Record<string, string>)[desktop.platform] || 'linux' : Capacitor.getPlatform());
+/** Desktop HTTP without CORS, or null when not on desktop. */
+export const desktopHttp = desktop ? (o: { url: string; method: string; headers: Record<string, string>; data?: unknown }) => desktop.http(o) : null;
+
+// iOS: files live in the app's Documents folder, which the Files app shows.
+const IOS_PREFIX = 'ios-doc:';
+async function iosWrite(blob: Blob, name: string): Promise<string> {
+  const { Filesystem, Directory } = await import('@capacitor/filesystem');
+  const safe = name.replace(/[\\/:*?"<>|]/g, '_') || 'document';
+  await Filesystem.writeFile({ path: safe, data: b64FromBuffer(await blob.arrayBuffer()), directory: Directory.Documents });
+  return safe;
+}
 
 export function b64FromBuffer(buf: ArrayBuffer): string {
   const u8 = new Uint8Array(buf);
@@ -71,11 +102,20 @@ export async function openDocument(accept: string, mimeTypes: string[]): Promise
   return { name: files[0].name, data: await files[0].arrayBuffer(), uri: null, mime: files[0].type };
 }
 
+function toastSaved(name: string): void {
+  import('../ui/dialog').then(({ toast }) => toast(`Saved "${name}" to Files ▸ On My iPhone ▸ QuillForge`)).catch(() => undefined);
+}
+
 export async function saveAs(blob: Blob, name: string): Promise<{ uri: string | null; name: string } | null> {
   if (isNative()) {
     const r = await Native.saveAs({ name, mime: blob.type || 'application/octet-stream', data: b64FromBuffer(await blob.arrayBuffer()) });
     if (r.canceled) return null;
     return { uri: r.uri || null, name: r.name || name };
+  }
+  if (isIOS()) {
+    const n = await iosWrite(blob, name);
+    toastSaved(n);
+    return { uri: IOS_PREFIX + n, name: n };
   }
   const anyWin = window as any;
   if (anyWin.showSaveFilePicker) {
@@ -105,12 +145,20 @@ export async function writeBack(uri: string, blob: Blob): Promise<boolean> {
     await w.close();
     return true;
   }
+  if (uri.startsWith(IOS_PREFIX)) { await iosWrite(blob, uri.slice(IOS_PREFIX.length)); return true; }
   if (!isNative()) return false;
   const r = await Native.writeUri({ uri, data: b64FromBuffer(await blob.arrayBuffer()) });
   return !!r.ok;
 }
 
 export async function readUri(uri: string): Promise<OpenedFile | null> {
+  if (uri.startsWith(IOS_PREFIX)) {
+    try {
+      const { Filesystem, Directory } = await import('@capacitor/filesystem');
+      const r = await Filesystem.readFile({ path: uri.slice(IOS_PREFIX.length), directory: Directory.Documents });
+      return { name: uri.slice(IOS_PREFIX.length), data: bufferFromB64(typeof r.data === 'string' ? r.data : b64FromBuffer(await (r.data as Blob).arrayBuffer())), uri };
+    } catch { return null; }
+  }
   if (!isNative()) return null;
   try {
     const r = await Native.readUri({ uri });
@@ -128,6 +176,13 @@ export async function printDocument(jobName: string): Promise<void> {
 export async function shareFile(blob: Blob, name: string, title?: string): Promise<void> {
   if (isNative()) {
     await Native.share({ name, mime: blob.type || 'application/octet-stream', data: b64FromBuffer(await blob.arrayBuffer()), title });
+    return;
+  }
+  if (isIOS()) {
+    const { Filesystem, Directory } = await import('@capacitor/filesystem');
+    const { Share } = await import('@capacitor/share');
+    const w = await Filesystem.writeFile({ path: name.replace(/[\\/:*?"<>|]/g, '_') || 'document', data: b64FromBuffer(await blob.arrayBuffer()), directory: Directory.Cache });
+    await Share.share({ title: title || name, files: [w.uri] });
     return;
   }
   const file = new File([blob], name, { type: blob.type });
@@ -164,12 +219,13 @@ export async function keepAwake(on: boolean): Promise<void> {
 export function openExternal(url: string): void {
   // Only hand ordinary web/mail/phone addresses to the system; never navigate this WebView to script.
   if (!/^(https?|mailto|tel|ftp|sms|geo):/i.test(url.trim())) return;
-  if (isNative()) { window.location.href = url; return; }
+  if (desktop) { void desktop.openExternal({ url }); return; }
+  if (isCapacitor()) { window.location.href = url; return; }
   window.open(url, '_blank', 'noopener');
 }
 
 export async function onBackButton(cb: () => boolean): Promise<void> {
-  if (!isNative()) return;
+  if (!isCapacitor() || isIOS()) return;
   const { App } = await import('@capacitor/app');
   App.addListener('backButton', () => { if (!cb()) App.minimizeApp(); });
 }
@@ -227,7 +283,7 @@ export function onAppResume(cb: () => void): () => void {
   const vis = () => { if (document.visibilityState === 'visible') cb(); };
   document.addEventListener('visibilitychange', vis);
   let remove: (() => void) | null = null;
-  if (isNative()) {
+  if (isCapacitor()) {
     import('@capacitor/app').then(({ App }) => App.addListener('resume', cb)).then((h) => { remove = () => h.remove(); }).catch(() => undefined);
   }
   return () => { document.removeEventListener('visibilitychange', vis); remove?.(); };

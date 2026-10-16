@@ -15,7 +15,7 @@ import type { App } from '../app';
 import { PROVIDERS, providerById, detectKey, FREE_LABEL, type ProviderDef } from '../ai/providers';
 import { aiSettings, saveAiSettings, getApiKey, setApiKey, deleteApiKey, maskKey, resolveBaseUrl, type ProviderConfig } from '../ai/store';
 import { listModels, pickModels, chat, AiError } from '../ai/client';
-import { openExternal, readClipboardText, writeClipboardText, onAppResume, isNative } from '../platform/native';
+import { openExternal, readClipboardText, writeClipboardText, onAppResume, isNative, isCapacitor } from '../platform/native';
 
 const SECTIONS: { title: string; help: string; ids: string[] }[] = [
   { title: 'Free, no account', help: 'Runs on this device. Nothing you write leaves it.', ids: ['device', 'builtin'] },
@@ -60,7 +60,7 @@ export async function openAiSetup(app: App, opts: { provider?: string; reason?: 
     root.append(h('button', { class: 'qf-link', onclick: showChooser }, '‹ All providers'));
     root.append(h('h3', null, p.name, ' ', h('span', { class: `qf-ai-badge qf-ai-${p.free}` }, FREE_LABEL[p.free])), h('p', { class: 'qf-help' }, p.freeNote));
     if (p.notes) root.append(h('p', { class: 'qf-warn' }, p.notes));
-    if (p.cors === 'no' && !isNative()) root.append(h('p', { class: 'qf-warn' }, 'This service blocks calls from web browsers. Set it up in the Android app, or choose another provider here.'));
+    if (p.cors === 'no' && !isNative() && !isCapacitor()) root.append(h('p', { class: 'qf-warn' }, 'This service blocks calls from web browsers. Set it up in the Android, iOS or desktop app, or choose another provider here.'));
     if (p.kind === 'local') return showDevice(p);
     if (p.kind === 'builtin') return showBuiltin(p);
     showKeyed(p);

@@ -2,11 +2,12 @@
  * Provider-neutral chat client: OpenAI-compatible, Anthropic Messages, Gemini, Chrome's
  * built-in model, and the on-device model. Streams where the platform allows.
  *
- * HTTP goes through fetch (streaming). In the Android app, when a provider blocks browser
+ * HTTP goes through fetch (streaming). In the Android, iOS and desktop apps, when a provider blocks browser
  * CORS (or fetch fails at the network layer), the request is retried through Capacitor's
  * native HTTP without streaming.
  */
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
+import { desktopHttp } from '../platform/native';
 import { resolveProvider, recordUsage, type ResolvedProvider } from './store';
 import type { ProviderDef } from './providers';
 
@@ -32,7 +33,8 @@ export class AiError extends Error {
   constructor(message: string, public code: 'no-provider' | 'auth' | 'quota' | 'model' | 'network' | 'cors' | 'aborted' | 'unsupported' | 'other' = 'other', public status?: number) { super(message); }
 }
 
-const isNativeApp = () => Capacitor.isNativePlatform();
+/** Native HTTP (no CORS) exists: the Android or iOS app, or the desktop app. */
+const isNativeApp = () => Capacitor.isNativePlatform() || !!desktopHttp;
 
 // ------------------------------------------------------------------------------------------
 // HTTP
@@ -41,6 +43,7 @@ interface HttpReq { url: string; method?: 'GET' | 'POST'; headers: Record<string
 interface HttpRes { status: number; text: string }
 
 async function viaNative(r: HttpReq): Promise<HttpRes> {
+  if (desktopHttp) return desktopHttp({ url: r.url, method: r.method || 'GET', headers: r.headers, data: r.body });
   const res = await CapacitorHttp.request({ url: r.url, method: r.method || 'GET', headers: r.headers, data: r.body, responseType: 'text', connectTimeout: 30000, readTimeout: 180000 });
   return { status: res.status, text: typeof res.data === 'string' ? res.data : JSON.stringify(res.data) };
 }
@@ -59,7 +62,7 @@ async function http(def: ProviderDef, r: HttpReq): Promise<HttpRes> {
 }
 
 function networkError(def: ProviderDef, e: unknown): AiError {
-  if (def.cors === 'no') return new AiError(`${def.name} cannot be called from a web browser (it does not allow cross-origin requests). Use the Android app, or another provider.`, 'cors');
+  if (def.cors === 'no') return new AiError(`${def.name} cannot be called from a web browser (it does not allow cross-origin requests). Use the Android, iOS or desktop app, or another provider.`, 'cors');
   if (def.kind === 'openai' && /localhost|127\.0\.0\.1|192\.168\.|10\./.test(def.baseUrl)) {
     return new AiError(`Could not reach the local server. Is it running, and is cross-origin access enabled? (${String((e as Error)?.message || e)})`, 'network');
   }
