@@ -6,6 +6,7 @@ Every release on the [Releases](https://github.com/socrtwo/QuillForge/releases) 
 |---|---|---|
 | Windows 10/11 (x64) | `QuillForge-<v>-windows-x64-setup.exe` | Installer; per-user, no admin rights needed |
 | Windows on ARM | `QuillForge-<v>-windows-arm64-setup.exe` | |
+| Windows, either | `QuillForge-<v>-windows-setup.exe` | One installer for x64 and ARM (twice the size) |
 | Windows, no install | `QuillForge-<v>-windows-portable.exe` | Runs from a USB stick or any folder |
 | macOS 11+ | `QuillForge-<v>-mac-universal.dmg` (or `.zip`) | One app for Apple silicon and Intel |
 | Linux x64 | `QuillForge-<v>-linux-x86_64.AppImage` or `QuillForge-<v>-linux-amd64.deb` | |
