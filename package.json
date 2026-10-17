@@ -1,8 +1,8 @@
 {
-  "name": "quillforge",
+  "name": "quillpen",
   "version": "0.3.0",
   "private": true,
-  "description": "QuillForge: an original open-source word processor with a complete, customizable command library.",
+  "description": "QuillPen: an original open-source word processor with a complete, customizable command library.",
   "license": "MIT",
   "type": "module",
   "scripts": {

@@ -8,7 +8,7 @@ const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message + ' @ ' + (e.stack || '').split('\n')[1]));
 page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
-await page.addInitScript(() => { localStorage.setItem('quillforge.prefs.v1', JSON.stringify({ firstRun: false })); window.print = () => {}; window.open = () => null; HTMLInputElement.prototype.click = function () { if (this.type === 'file') { this.dispatchEvent(new Event('cancel')); return; } }; });
+await page.addInitScript(() => { localStorage.setItem('quillpen.prefs.v1', JSON.stringify({ firstRun: false })); window.print = () => {}; window.open = () => null; HTMLInputElement.prototype.click = function () { if (this.type === 'file') { this.dispatchEvent(new Event('cancel')); return; } }; });
 await page.goto(URL);
 await page.waitForFunction(() => window.qf && window.qf.view);
 const SKIP = new Set(['file.exit', 'review.readAloud', 'review.dictate', 'view.fullScreen', 'view.teleprompter', 'file.closeAll', 'help.tour']);

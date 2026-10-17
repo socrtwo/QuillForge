@@ -24,7 +24,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- "Open with QuillForge" for documents identified by MIME type
+            <!-- "Open with QuillPen" for documents identified by MIME type
                  (a mimeType-only <data> matches content: and file: URIs). -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -82,6 +82,10 @@
                 <data android:pathPattern=".*\\.markdown" />
                 <data android:pathPattern=".*\\..*\\.markdown" />
                 <data android:pathPattern=".*\\..*\\..*\\.markdown" />
+                <data android:pathPattern=".*\\.qpd" />
+                <data android:pathPattern=".*\\..*\\.qpd" />
+                <data android:pathPattern=".*\\..*\\..*\\.qpd" />
+                <!-- rename:keep: documents saved by QuillForge, the app's former name -->
                 <data android:pathPattern=".*\\.qfd" />
                 <data android:pathPattern=".*\\..*\\.qfd" />
                 <data android:pathPattern=".*\\..*\\..*\\.qfd" />

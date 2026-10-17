@@ -6,7 +6,7 @@
  * - Desktop (Windows, macOS, Linux, Raspberry Pi OS): the Electron preload (electron/preload.cjs)
  *   exposes the same interface as `window.quillDesktop`, backed by native file dialogs and the file system.
  * - Browser and iOS: <input type=file>, the File System Access API or downloads, and window.print().
- *   On iOS, saved files go to the app's Documents folder (Files ▸ On My iPhone ▸ QuillForge).
+ *   On iOS, saved files go to the app's Documents folder (Files ▸ On My iPhone ▸ QuillPen).
  */
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { download, pickFile } from '../ui/dom';
@@ -122,7 +122,7 @@ export async function openDocument(accept: string, mimeTypes: string[]): Promise
 }
 
 function toastSaved(name: string): void {
-  import('../ui/dialog').then(({ toast }) => toast(`Saved "${name}" to Files ▸ On My iPhone ▸ QuillForge`)).catch(() => undefined);
+  import('../ui/dialog').then(({ toast }) => toast(`Saved "${name}" to Files ▸ On My iPhone ▸ QuillPen`)).catch(() => undefined);
 }
 
 export async function saveAs(blob: Blob, name: string): Promise<{ uri: string | null; name: string } | null> {
@@ -262,7 +262,8 @@ export async function onBackButton(cb: () => boolean): Promise<void> {
 
 // Files are identified by content, so the picker offers every type it can (and "All files").
 export const OPEN_ACCEPT = [...new Set([
-  ...'docx docm dotx dotm doc dot wbk asd odt ott fodt rtf html htm md markdown txt epub qfd json'.split(' '),
+  ...'docx docm dotx dotm doc dot wbk asd odt ott fodt rtf html htm md markdown txt epub qpd json'.split(' '),
+  'qfd', 'qfde', // rename:keep — QuillPen was named QuillForge; its .qfd/.qfde files still open
   ...'wpd wp wp4 wp5 wp6 wpt wps wri lwp sam mcw cwk wn ws ws4 ws5 ws6 ws7 xy xyw rft dca hwp sdw'.split(' '),
   ...'csv tsv xlsx xlsm xls ods dbf wk1 wks pptx ppt odp key eml emlx mbox msg'.split(' '),
   ...OPEN_EXTENSIONS_B,

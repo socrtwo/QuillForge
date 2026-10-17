@@ -6,7 +6,7 @@ const browser = await chromium.launch(exe ? { executablePath: exe } : {});
 const page = await browser.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
-await page.addInitScript(() => localStorage.setItem('quillforge.prefs.v1', JSON.stringify({ firstRun: false })));
+await page.addInitScript(() => localStorage.setItem('quillpen.prefs.v1', JSON.stringify({ firstRun: false })));
 await page.goto(process.env.QF_URL || 'http://localhost:4173/');
 await page.waitForFunction(() => window.qf && window.__qfIO);
 const res = await page.evaluate(async () => {

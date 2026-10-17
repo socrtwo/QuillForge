@@ -1,12 +1,12 @@
 /**
  * HTML and URL sanitizing for document-controlled content.
  *
- * Documents come from anywhere (DOCX/HTML/EPUB/.qfd imports, the clipboard), and on Android
+ * Documents come from anywhere (DOCX/HTML/EPUB/.qpd imports, the clipboard), and on Android
  * the WebView origin can reach the native bridge, so any string from a document that ends up
  * in innerHTML or navigation must pass through here.
  */
 
-/** Schemes QuillForge will hand to the system browser or mail/phone apps. */
+/** Schemes QuillPen will hand to the system browser or mail/phone apps. */
 const SAFE_SCHEMES = /^(https?|mailto|tel|ftp|sms|geo):/i;
 
 export function isSafeExternalUrl(url: string): boolean {
@@ -51,7 +51,7 @@ const SAFE_STYLE = /^[\w\s:;.,%#()'"-]*$/;
 
 /**
  * Allow-list sanitizer for generated-block caches (TOC, index, bibliography...): only the
- * tags and attributes QuillForge itself generates survive.
+ * tags and attributes QuillPen itself generates survive.
  */
 export function sanitizeGeneratedHtml(html: string): string {
   if (!html) return '';

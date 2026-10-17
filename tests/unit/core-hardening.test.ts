@@ -1,5 +1,5 @@
 /**
- * @vitest-environment-options { "url": "https://quillforge.test/" }
+ * @vitest-environment-options { "url": "https://quillpen.test/" }
  */
 // Regression tests for the core review findings (editor, AI, platform bridge, Android config).
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
@@ -269,7 +269,7 @@ describe('6. document style data cannot break out of the stylesheet', () => {
 describe('7. Stop works on the native HTTP path', () => {
   beforeEach(() => { reloadAiSettings(); });
   it('rejects at once and drops the late answer', async () => {
-    localStorage.setItem('quillforge.ai.v1', JSON.stringify({ active: 'perplexity', providers: { perplexity: { id: 'perplexity', model: 'sonar' } } }));
+    localStorage.setItem('quillpen.ai.v1', JSON.stringify({ active: 'perplexity', providers: { perplexity: { id: 'perplexity', model: 'sonar' } } }));
     reloadAiSettings();
     await setApiKey('perplexity', 'pplx-test');
     vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
@@ -306,7 +306,7 @@ describe('8. dragging an image handle resizes the image', () => {
 
 describe('9. cut-off answers are not treated as complete', () => {
   beforeEach(() => {
-    localStorage.setItem('quillforge.ai.v1', JSON.stringify({ active: 'groq', providers: { groq: { id: 'groq', model: 'openai/gpt-oss-120b' } } }));
+    localStorage.setItem('quillpen.ai.v1', JSON.stringify({ active: 'groq', providers: { groq: { id: 'groq', model: 'openai/gpt-oss-120b' } } }));
     reloadAiSettings();
   });
   it('flags finish_reason "length" and in-stream errors', async () => {
@@ -371,7 +371,7 @@ describe('13. local AI servers: plain http only on this device', () => {
   it('the help text and the error say so', async () => {
     expect(providerById('ollama')!.fields![0].help).not.toMatch(/OLLAMA_HOST=0\.0\.0\.0/);
     expect(providerById('ollama')!.fields![0].help).toMatch(/only for a server on this device/);
-    localStorage.setItem('quillforge.ai.v1', JSON.stringify({ active: 'ollama', providers: { ollama: { id: 'ollama', model: 'qwen3', baseUrl: 'http://192.168.1.5:11434/v1' } } }));
+    localStorage.setItem('quillpen.ai.v1', JSON.stringify({ active: 'ollama', providers: { ollama: { id: 'ollama', model: 'qwen3', baseUrl: 'http://192.168.1.5:11434/v1' } } }));
     reloadAiSettings();
     vi.stubGlobal('fetch', async () => { throw new TypeError('Failed to fetch'); });
     await expect(chat({ messages: [{ role: 'user', content: 'x' }] })).rejects.toThrow(/only for a server on this device/);
@@ -400,7 +400,7 @@ describe('15. OpenRouter sign-in accepts only its own redirect', () => {
   it('the browser callback needs the state of the sign-in this browser started', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ key: 'sk-or-v1-x' }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
-    localStorage.setItem('quillforge.oauth.openrouter', JSON.stringify({ verifier: 'v', nonce: 'RIGHT' }));
+    localStorage.setItem('quillpen.oauth.openrouter', JSON.stringify({ verifier: 'v', nonce: 'RIGHT' }));
     const saved: string[] = [];
     history.replaceState(null, '', '/?qf-oauth=openrouter&code=C&qf-state=WRONG');
     expect(await handleOAuthRedirect(async (k) => { saved.push(k); })).toBe(false);

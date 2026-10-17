@@ -16,14 +16,14 @@ cpSync(join(root, 'dist'), join(out, 'dist'), { recursive: true });
 for (const f of ['main.cjs', 'preload.cjs']) cpSync(join(root, 'electron', f), join(out, 'electron', f));
 cpSync(join(root, 'resources/icon-512.png'), join(out, 'electron/icon.png'));
 writeFileSync(join(out, 'package.json'), JSON.stringify({
-  name: 'quillforge',
-  productName: 'QuillForge',
+  name: 'quillpen',
+  productName: 'QuillPen',
   version: pkg.version,
   description: pkg.description,
-  homepage: 'https://github.com/socrtwo/QuillForge',
+  homepage: 'https://github.com/socrtwo/QuillPen',
   author: { name: 'socrtwo', email: 'socrtwo@users.noreply.github.com' },
   license: pkg.license,
   main: 'electron/main.cjs',
-  desktopName: 'quillforge.desktop',
+  desktopName: 'quillpen.desktop',
 }, null, 2));
 console.log('staged', out);

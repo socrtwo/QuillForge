@@ -239,12 +239,12 @@ describe('preferences', () => {
     expect(sanitizePrefs([1, 2])).toEqual({});
   });
   it('a damaged stored file still loads', () => {
-    localStorage.setItem('quillforge.prefs.v1', JSON.stringify({ customTabs: null, qat: 5, theme: 'dark' }));
+    localStorage.setItem('quillpen.prefs.v1', JSON.stringify({ customTabs: null, qat: 5, theme: 'dark' }));
     const p = loadPrefs();
     expect(p.customTabs).toEqual([]);
     expect(p.qat).toEqual(defaultPrefs().qat);
     expect(p.theme).toBe('dark');
-    localStorage.removeItem('quillforge.prefs.v1');
+    localStorage.removeItem('quillpen.prefs.v1');
   });
 });
 

@@ -1,4 +1,4 @@
-// QuillForge desktop app (Windows, macOS, Linux, Raspberry Pi OS): Electron main process.
+// QuillPen desktop app (Windows, macOS, Linux, Raspberry Pi OS): Electron main process.
 //
 // The web build (dist/) is served from the privileged app:// scheme so module workers, fetch and
 // IndexedDB behave as on the web. The renderer is sandboxed with context isolation and no Node;
@@ -9,19 +9,29 @@
 const { app, BrowserWindow, protocol, net, ipcMain, dialog, shell, clipboard, safeStorage, powerSaveBlocker, Menu } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
+
+// QuillPen was formerly named QuillForge: on the first start after the rename, copy the old data
+// folder (settings, drafts, granted files, stored keys) to the new one before anything writes there.
+try {
+  const userData = app.getPath('userData');
+  const legacy = path.join(path.dirname(userData), 'QuillForge'); // rename:keep
+  if (!fs.existsSync(userData) && fs.existsSync(legacy)) fs.cpSync(legacy, userData, { recursive: true });
+} catch { /* first run, or no access: start fresh */ }
 const http = require('node:http');
 const { pathToFileURL, fileURLToPath } = require('node:url');
 
 const DIST = path.join(__dirname, '..', 'dist');
 const SCHEME = 'app';
-const ORIGIN = `${SCHEME}://quillforge`;
-const OPENABLE = ['docx', 'docm', 'dotx', 'dotm', 'doc', 'dot', 'wbk', 'asd', 'odt', 'ott', 'fodt', 'rtf', 'html', 'htm', 'md', 'markdown', 'txt', 'epub', 'qfd', 'qfde', 'json',
+// The page's origin keeps the app's former name so settings, drafts and keys stored by earlier
+// versions stay readable.
+const ORIGIN = `${SCHEME}://quillforge`; // rename:keep
+const OPENABLE = ['docx', 'docm', 'dotx', 'dotm', 'doc', 'dot', 'wbk', 'asd', 'odt', 'ott', 'fodt', 'rtf', 'html', 'htm', 'md', 'markdown', 'txt', 'epub', 'qpd', 'qpde', 'json', // rename:keep — QuillPen was named QuillForge; its .qfd/.qfde files still open
   // Legacy word processors (opened by content, so the extension is only a hint)
   'wpd', 'wp', 'wp4', 'wp5', 'wp6', 'wpt', 'wps', 'wri', 'lwp', 'sam', 'mcw', 'cwk', 'wn', 'ws', 'ws4', 'ws5', 'ws6', 'ws7', 'xy', 'xyw', 'rft', 'dca', 'hwp',
   // Spreadsheets, presentations and email (imported as documents, or handed to the sister apps)
   'csv', 'tsv', 'xlsx', 'xls', 'ods', 'dbf', 'wk1', 'wks', 'pptx', 'ppt', 'odp', 'eml', 'emlx', 'mbox', 'mht', 'mhtml', 'msg',
   // XML, archive and text-markup formats
-  'xml', 'wml', 'sxw', 'stw', 'abw', 'zabw', 'kwd', 'pages', 'hwpx', 'fb2', 'fbz', 'dbk', 'rtfd', 'tex', 'latex', 'rst', 'textile', 'adoc', 'asciidoc', 'org', 'man', 'roff'];
+  'xml', 'wml', 'sxw', 'stw', 'abw', 'zabw', 'kwd', 'pages', 'hwpx', 'fb2', 'fbz', 'dbk', 'rtfd', 'tex', 'latex', 'rst', 'textile', 'adoc', 'asciidoc', 'org', 'man', 'roff', 'qfd', 'qfde'];
 
 protocol.registerSchemesAsPrivileged([{ scheme: SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 
@@ -50,7 +60,7 @@ function grant(p) {
 function grantedPath(uri) {
   if (typeof uri !== 'string' || !uri.startsWith('file:')) throw new Error('Not a file address');
   const p = path.resolve(fileURLToPath(uri));
-  if (!grants.has(p)) throw new Error('QuillForge has no permission for this file; open it again.');
+  if (!grants.has(p)) throw new Error('QuillPen has no permission for this file; open it again.');
   return p;
 }
 const MIME = { csv: 'text/csv', eml: 'message/rfc822', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', odt: 'application/vnd.oasis.opendocument.text', rtf: 'application/rtf', html: 'text/html', htm: 'text/html', md: 'text/markdown', txt: 'text/plain', epub: 'application/epub+zip', doc: 'application/msword', json: 'application/json' };
@@ -206,7 +216,7 @@ function registerIpc() {
     if (typeof uri === 'string' && uri.startsWith('file:')) p = grantedPath(uri);
     else {
       // A file without a path on disk (opened from the web build or a recovered copy): write a temporary copy.
-      const dir = path.join(app.getPath('temp'), 'quillforge-open');
+      const dir = path.join(app.getPath('temp'), 'quillpen-open');
       fs.mkdirSync(dir, { recursive: true });
       p = path.join(dir, path.basename(String(name || 'document')).replace(/[\\/:*?"<>|]/g, '_'));
       fs.writeFileSync(p, Buffer.from(String(data || ''), 'base64'));
@@ -274,7 +284,7 @@ function createWindow() {
     height: 860,
     minWidth: 360,
     minHeight: 480,
-    title: 'QuillForge',
+    title: 'QuillPen',
     backgroundColor: '#ffffff',
     autoHideMenuBar: process.platform !== 'darwin',
     icon: path.join(__dirname, 'icon.png'),
@@ -284,7 +294,7 @@ function createWindow() {
       sandbox: true,
       nodeIntegration: false,
       webSecurity: true,
-      spellcheck: false, // QuillForge has its own spelling checker
+      spellcheck: false, // QuillPen has its own spelling checker
     },
   });
   // Links open in the system browser; the window never navigates away from the app.
@@ -292,7 +302,7 @@ function createWindow() {
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(ORIGIN)) { e.preventDefault(); if (safeUrl(url)) void shell.openExternal(url); } });
   // The page asks before unloading with unsaved documents: confirm here, as the browser would.
   win.webContents.on('will-prevent-unload', (e) => {
-    const choice = dialog.showMessageBoxSync(win, { type: 'question', buttons: ['Close without saving', 'Cancel'], defaultId: 1, cancelId: 1, title: 'Unsaved changes', message: 'Some documents have unsaved changes. Close QuillForge anyway?' });
+    const choice = dialog.showMessageBoxSync(win, { type: 'question', buttons: ['Close without saving', 'Cancel'], defaultId: 1, cancelId: 1, title: 'Unsaved changes', message: 'Some documents have unsaved changes. Close QuillPen anyway?' });
     if (choice === 0) e.preventDefault();
   });
   win.on('closed', () => { win = null; });

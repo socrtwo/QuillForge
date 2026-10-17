@@ -5,11 +5,11 @@
 // armv7l (Raspberry Pi OS 32-bit).
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
-  appId: 'io.github.socrtwo.quillforge',
-  productName: 'QuillForge',
-  copyright: 'QuillForge contributors, MIT License',
+  appId: 'io.github.socrtwo.quillpen',
+  productName: 'QuillPen',
+  copyright: 'QuillPen contributors, MIT License',
   directories: { app: 'build/desktop-app', output: 'release', buildResources: 'resources' },
-  artifactName: 'QuillForge-${version}-${os}-${arch}.${ext}',
+  artifactName: 'QuillPen-${version}-${os}-${arch}.${ext}',
   asar: true,
   // Everything the app needs is bundled into dist/ by Vite; ship no node_modules.
   files: ['dist/**/*', 'electron/**/*', 'package.json', '!**/node_modules/**'],
@@ -22,7 +22,8 @@ module.exports = {
     { ext: 'odt', name: 'OpenDocument Text', role: 'Editor', mimeType: 'application/vnd.oasis.opendocument.text' },
     { ext: 'rtf', name: 'Rich Text Document', role: 'Editor', mimeType: 'application/rtf' },
     { ext: 'doc', name: 'Word 97-2003 Document', role: 'Viewer', mimeType: 'application/msword' },
-    { ext: 'qfd', name: 'QuillForge Document', role: 'Editor' },
+    { ext: 'qpd', name: 'QuillPen Document', role: 'Editor' },
+    { ext: 'qfd', name: 'QuillPen Document (QuillForge)', role: 'Editor' }, // rename:keep — QuillPen was named QuillForge; its .qfd/.qfde files still open
     { ext: ['wpd', 'wp5', 'wp6'], name: 'WordPerfect Document', role: 'Viewer', mimeType: 'application/vnd.wordperfect' },
     { ext: 'wps', name: 'Microsoft Works Document', role: 'Viewer', mimeType: 'application/vnd.ms-works' },
     { ext: 'wri', name: 'Windows Write Document', role: 'Viewer', mimeType: 'application/x-mswrite' },
@@ -33,8 +34,8 @@ module.exports = {
   win: {
     target: [{ target: 'nsis', arch: ['x64', 'arm64'] }, { target: 'portable', arch: ['x64'] }],
   },
-  nsis: { oneClick: false, perMachine: false, allowToChangeInstallationDirectory: true, artifactName: 'QuillForge-${version}-windows-${arch}-setup.${ext}' },
-  portable: { artifactName: 'QuillForge-${version}-windows-portable.${ext}' },
+  nsis: { oneClick: false, perMachine: false, allowToChangeInstallationDirectory: true, artifactName: 'QuillPen-${version}-windows-${arch}-setup.${ext}' },
+  portable: { artifactName: 'QuillPen-${version}-windows-portable.${ext}' },
   mac: {
     target: [{ target: 'dmg', arch: ['universal'] }, { target: 'zip', arch: ['universal'] }],
     category: 'public.app-category.productivity',
@@ -49,7 +50,7 @@ module.exports = {
     category: 'Office',
     synopsis: 'Word processor with a complete, customizable command library',
     maintainer: 'socrtwo <socrtwo@users.noreply.github.com>',
-    executableName: 'quillforge',
+    executableName: 'quillpen',
     syncDesktopName: true,
   },
   publish: null,

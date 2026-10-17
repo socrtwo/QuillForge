@@ -13,7 +13,7 @@ async function run(name, viewport, fn) {
   const errors = [];
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
-  await page.addInitScript(() => localStorage.setItem('quillforge.prefs.v1', JSON.stringify({ firstRun: false })));
+  await page.addInitScript(() => localStorage.setItem('quillpen.prefs.v1', JSON.stringify({ firstRun: false })));
   await page.goto(URL);
   await page.waitForFunction(() => window.qf && window.qf.view);
   try { await fn(page); } catch (e) { errors.push('test: ' + (e.stack || e)); }

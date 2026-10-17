@@ -90,7 +90,7 @@ export const BUILTIN_STYLES: StyleDef[] = [
 
 /** Style sets reshape the built-in styles (Design ▸ Style Set). */
 export const STYLE_SETS: Record<string, Record<string, any> & { _fonts?: [string, string] }> = {
-  QuillForge: { _fonts: ['Carlito', 'Carlito'] },
+  QuillPen: { _fonts: ['Carlito', 'Carlito'] },
   Classic: {
     _fonts: ['Tinos', 'Tinos'],
     Normal: { size: 12, spaceAfter: 0, lineHeight: '1.15' },
@@ -157,7 +157,7 @@ export const STYLE_SETS: Record<string, Record<string, any> & { _fonts?: [string
 };
 
 export const THEMES: Record<string, { headingFont: string; bodyFont: string; accent: string[] }> = {
-  QuillForge: { headingFont: 'Carlito', bodyFont: 'Carlito', accent: ['#2b579a', '#c0504d', '#9bbb59', '#8064a2', '#4bacc6', '#f79646'] },
+  QuillPen: { headingFont: 'Carlito', bodyFont: 'Carlito', accent: ['#2b579a', '#c0504d', '#9bbb59', '#8064a2', '#4bacc6', '#f79646'] },
   Slate: { headingFont: 'Arimo', bodyFont: 'Arimo', accent: ['#3f4f5f', '#6f8fa8', '#b7c9d8', '#9c6644', '#c58f6a', '#e0b590'] },
   Ink: { headingFont: 'Tinos', bodyFont: 'Tinos', accent: ['#1b1b1b', '#5c5c5c', '#8a8a8a', '#a33', '#336', '#363'] },
   Forest: { headingFont: 'Gelasio', bodyFont: 'Lato', accent: ['#2e6b30', '#7a9e3b', '#c7b24b', '#8a5a2b', '#3b6e8a', '#9a3d3d'] },
@@ -172,7 +172,7 @@ export const THEMES: Record<string, { headingFont: string; bodyFont: string; acc
 export function resolveStyles(settings: DocSettings): Record<string, StyleDef> {
   const map: Record<string, StyleDef> = {};
   for (const s of BUILTIN_STYLES) map[s.name] = { ...s };
-  const set = STYLE_SETS[settings.styleSet] || STYLE_SETS.QuillForge;
+  const set = STYLE_SETS[settings.styleSet] || STYLE_SETS.QuillPen;
   for (const [name, over] of Object.entries(set)) {
     if (name === '_fonts' || !over) continue;
     map[name] = { ...(map[name] || { name, type: 'paragraph' }), ...(over as Partial<StyleDef>) } as StyleDef;
@@ -196,7 +196,7 @@ export function effectiveStyle(map: Record<string, StyleDef>, name: string, dept
   return merged;
 }
 
-// Style values come from documents (.docx styles, .qfd files): nothing may end a string, a
+// Style values come from documents (.docx styles, .qpd files): nothing may end a string, a
 // declaration or a rule, or load a resource, in the stylesheet built from them.
 
 /** Text for inside a double-quoted CSS string. */
@@ -214,11 +214,11 @@ const cssNum = (v: unknown): number | null => (v == null || v === '' || !Number.
 
 export function fontStack(name: string | undefined, settings: DocSettings): string {
   if (!name) return '';
-  const set = STYLE_SETS[settings.styleSet] || STYLE_SETS.QuillForge;
+  const set = STYLE_SETS[settings.styleSet] || STYLE_SETS.QuillPen;
   const fonts = set._fonts || [settings.theme.headingFont, settings.theme.bodyFont];
   let fam = name;
-  if (name === '+heading') fam = settings.styleSet === 'QuillForge' ? settings.theme.headingFont : fonts[0];
-  if (name === '+body') fam = settings.styleSet === 'QuillForge' ? settings.theme.bodyFont : fonts[1];
+  if (name === '+heading') fam = settings.styleSet === 'QuillPen' ? settings.theme.headingFont : fonts[0];
+  if (name === '+body') fam = settings.styleSet === 'QuillPen' ? settings.theme.bodyFont : fonts[1];
   return `"${cssString(fam)}", ${genericFor(String(fam))}`;
 }
 

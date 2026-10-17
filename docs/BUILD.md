@@ -1,4 +1,4 @@
-# Building QuillForge
+# Building QuillPen
 
 All platforms share one web build (`npm run build` → `dist/`). Each platform wraps it:
 
@@ -65,7 +65,7 @@ You can build the APK on a 64-bit ARM phone or tablet with 4 GB of RAM or more, 
 ```bash
 pkg install -y curl
 termux-setup-storage        # optional: lets the script copy the APK to Downloads
-curl -fsSLO https://raw.githubusercontent.com/socrtwo/QuillForge/main/scripts/termux-build.sh
+curl -fsSLO https://raw.githubusercontent.com/socrtwo/QuillPen/main/scripts/termux-build.sh
 bash termux-build.sh
 ```
 
@@ -74,7 +74,7 @@ Options (environment variables):
 | Variable | Default | Meaning |
 |---|---|---|
 | `QF_BRANCH` | `main` | Branch to build |
-| `QF_DIR` | `~/QuillForge` | Checkout folder |
+| `QF_DIR` | `~/QuillPen` | Checkout folder |
 | `ANDROID_HOME` | `~/android-sdk` | SDK folder |
 | `QF_HEAP` | `1536m` | Gradle heap; lower it (`1024m`) if the build is killed for memory |
 
@@ -84,12 +84,12 @@ The manual steps the script performs, if you prefer to run them yourself:
 
 ```bash
 pkg update -y && pkg install -y git nodejs-lts openjdk-21 aapt aapt2 unzip wget zip
-git clone --depth 1 https://github.com/socrtwo/QuillForge && cd QuillForge
+git clone --depth 1 https://github.com/socrtwo/QuillPen && cd QuillPen
 ELECTRON_SKIP_BINARY_DOWNLOAD=1 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm ci
 npm run build
 mkdir -p ~/android-sdk/cmdline-tools && cd ~/android-sdk/cmdline-tools
 wget https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
-unzip commandlinetools-linux-*_latest.zip && mv cmdline-tools latest && cd ~/QuillForge
+unzip commandlinetools-linux-*_latest.zip && mv cmdline-tools latest && cd ~/QuillPen
 export ANDROID_HOME=~/android-sdk JAVA_HOME=$PREFIX/lib/jvm/java-21-openjdk
 yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
 $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0"

@@ -1,6 +1,6 @@
 # Architecture
 
-QuillForge is a TypeScript web application. The Android release packages it with Capacitor, and the same build runs in a desktop browser.
+QuillPen is a TypeScript web application. The Android release packages it with Capacitor, and the same build runs in a desktop browser.
 
 ```
 src/

@@ -1,6 +1,6 @@
 {
-  "name": "QuillForge",
-  "short_name": "QuillForge",
+  "name": "QuillPen",
+  "short_name": "QuillPen",
   "description": "An open-source word processor with a complete, customizable command library.",
   "id": "./",
   "start_url": "./",

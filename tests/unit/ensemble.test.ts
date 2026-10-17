@@ -322,7 +322,7 @@ describe('chat() with several AIs', () => {
   });
 
   it('settings (and their export) never contain keys', () => {
-    const stored = localStorage.getItem('quillforge.ai.v1') || '';
+    const stored = localStorage.getItem('quillpen.ai.v1') || '';
     expect(stored).toContain('"ensemble"');
     expect(stored).not.toContain('SECRET_TEST_KEY');
     expect(JSON.stringify(aiSettings())).not.toContain('SECRET_TEST_KEY');

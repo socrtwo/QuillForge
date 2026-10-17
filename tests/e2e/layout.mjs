@@ -151,7 +151,7 @@ async function newPage(sc, query = '') {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.addInitScript((I) => {
-    localStorage.setItem('quillforge.prefs.v1', JSON.stringify({ firstRun: false }));
+    localStorage.setItem('quillpen.prefs.v1', JSON.stringify({ firstRun: false }));
     window.print = () => {}; window.open = () => null;
     HTMLInputElement.prototype.showPicker = function () {};
     const click = HTMLInputElement.prototype.click;

@@ -1,5 +1,5 @@
 /**
- * QuillForge document schema.
+ * QuillPen document schema.
  *
  * Design notes
  * - One `paragraph` node carries a `style` attribute (Normal, Heading 1..9, Title, Quote...).

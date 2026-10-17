@@ -312,10 +312,10 @@ export function toHexColor(c: string | null | undefined, settings?: DocSettings)
 export function resolveFontName(name: string | undefined | null, settings: DocSettings): string | null {
   if (!name) return null;
   if (name !== '+heading' && name !== '+body') return name;
-  const set = STYLE_SETS[settings.styleSet] || STYLE_SETS.QuillForge;
+  const set = STYLE_SETS[settings.styleSet] || STYLE_SETS.QuillPen;
   const fonts = set._fonts || [settings.theme.headingFont, settings.theme.bodyFont];
-  if (name === '+heading') return settings.styleSet === 'QuillForge' ? settings.theme.headingFont : fonts[0];
-  return settings.styleSet === 'QuillForge' ? settings.theme.bodyFont : fonts[1];
+  if (name === '+heading') return settings.styleSet === 'QuillPen' ? settings.theme.headingFont : fonts[0];
+  return settings.styleSet === 'QuillPen' ? settings.theme.bodyFont : fonts[1];
 }
 
 export function isMonospaceFont(f: string | null | undefined): boolean {
@@ -342,7 +342,7 @@ const STYLE_ALIASES: Record<string, string> = {
   'contents 1': 'TOC 1', 'contents 2': 'TOC 2', 'contents 3': 'TOC 3', 'toc 1': 'TOC 1', 'toc 2': 'TOC 2', 'toc 3': 'TOC 3',
 };
 
-/** Map a style name from another application onto a QuillForge built-in style name, or null. */
+/** Map a style name from another application onto a QuillPen built-in style name, or null. */
 export function canonicalStyleName(name: string | null | undefined): string | null {
   if (!name) return null;
   const n = name.replace(/_20_/g, ' ').replace(/_5f_/g, '_').replace(/\s+/g, ' ').trim();
@@ -562,7 +562,7 @@ export function renderHtml(content: Fragment, notes: NoteInfo[], opts: RenderOpt
     const div = tdoc.createElement('div');
     div.className = 'generated';
     div.setAttribute('data-kind', n.attrs.kind);
-    // The cache comes from the document (a .qfd can hold anything): same allow-list as the editor.
+    // The cache comes from the document (a .qpd can hold anything): same allow-list as the editor.
     div.innerHTML = sanitizeGeneratedHtml(n.attrs.cache || '');
     return div;
   };
@@ -997,7 +997,7 @@ export function normalizeImportedFormatting(blocks: PMNode[], settings: DocSetti
   };
   const domSize = dominant(sizeCount, total);
   if (domSize != null && domSize > 0) settings.styles = { ...settings.styles, Normal: { ...(settings.styles.Normal || {}), name: 'Normal', type: 'paragraph', size: domSize } as any };
-  if (settings.styleSet === 'QuillForge') {
+  if (settings.styleSet === 'QuillPen') {
     const domFont = dominant(fontCount, total);
     const domHead = dominant(headFont, headTotal);
     const body = domFont || defaultFont;

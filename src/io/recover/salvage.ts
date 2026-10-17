@@ -340,7 +340,7 @@ export function balanceXml(input: string): string {
   if (rootIdx >= 0) {
     const missing = [...used].filter((p) => p !== 'xml' && p !== 'xmlns' && !declared.has(p));
     if (missing.length) {
-      const decl = missing.map((p) => ` xmlns:${p}="${KNOWN_NS[p] || `urn:quillforge:recovered:${p}`}"`).join('');
+      const decl = missing.map((p) => ` xmlns:${p}="${KNOWN_NS[p] || `urn:quillpen:recovered:${p}`}"`).join('');
       out[rootIdx] = out[rootIdx].replace(/(\/?>)$/, `${decl}$1`);
     }
   }

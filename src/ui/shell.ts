@@ -927,7 +927,7 @@ export class Shell {
 
   async tour(): Promise<void> {
     const steps = [
-      ['Everything is a command', 'Every feature of QuillForge is a command you can find with the search button (or Alt+Q), place on the Quick Access Bar, put on your own tab, assign a key, or record in a macro.'],
+      ['Everything is a command', 'Every feature of QuillPen is a command you can find with the search button (or Alt+Q), place on the Quick Access Bar, put on your own tab, assign a key, or record in a macro.'],
       ['Quick Access Bar', 'Tap ▾ at the end of the Quick Access Bar to add common commands, or choose More Commands… to pick from the full library. Long-press any ribbon button to add it. Options lets you move the bar to the bottom, near the keyboard.'],
       ['Views', 'Use Mobile View for comfortable phone editing and Print Layout to see real pages with headers, footers, and footnotes. The buttons at the bottom right switch views.'],
       ['Type “/”', 'At the start of an empty line, type / to insert headings, lists, tables, pictures, equations, and more. Markdown shortcuts such as # Heading, - bullet, and **bold** work too.'],

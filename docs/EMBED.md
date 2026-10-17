@@ -5,7 +5,7 @@ inside QuillPost's own window. The first part of this file is the suite protocol
 shared specification (both apps implement it exactly); the second part describes this app's side and how to
 try it locally.
 
-The application is still called QuillForge in this repository; the protocol and the Android authority already
+The application is still called QuillPen in this repository; the protocol and the Android authority already
 use the final name, QuillPen.
 
 ---
@@ -104,7 +104,7 @@ the editor uses in place of common fonts are listed after the original (`Calibri
 
 ### Android
 
-`android/app/src/main/java/io/github/socrtwo/quillforge/EmbedAssetsProvider.java` is an exported, read-only
+`android/app/src/main/java/io/github/socrtwo/quillpen/EmbedAssetsProvider.java` is an exported, read-only
 ContentProvider registered in `AndroidManifest.xml` with the authority `${applicationId}.embed` (in code:
 `BuildConfig.APPLICATION_ID + ".embed"`, which needs `buildFeatures { buildConfig = true }`). Once the
 application id is `io.github.socrtwo.quillpen`, that is `io.github.socrtwo.quillpen.embed`, as the protocol

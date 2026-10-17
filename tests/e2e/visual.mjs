@@ -8,7 +8,7 @@ const errors = [];
 async function open(viewport) {
   const page = await browser.newPage({ viewport });
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.addInitScript(() => localStorage.setItem('quillforge.prefs.v1', JSON.stringify({ firstRun: false, spellcheck: false, grammar: false })));
+  await page.addInitScript(() => localStorage.setItem('quillpen.prefs.v1', JSON.stringify({ firstRun: false, spellcheck: false, grammar: false })));
   await page.goto(URL);
   await page.waitForFunction(() => window.qf && window.qf.view);
   return page;

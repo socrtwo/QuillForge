@@ -1,6 +1,6 @@
 # File formats
 
-QuillForge identifies every file by its **content**, not its name (`src/io/sniff.ts`): magic numbers,
+QuillPen identifies every file by its **content**, not its name (`src/io/sniff.ts`): magic numbers,
 compound-file (OLE2) stream names, ZIP entry names and `mimetype` entries, XML root elements and
 namespaces, RTF/HTML/MIME headers, and text heuristics (byte-order marks, UTF-16 without a BOM,
 UTF-8 validity, markup). The extension only breaks ties between equally likely formats. When the

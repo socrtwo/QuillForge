@@ -9,7 +9,7 @@ const browser = await chromium.launch(exe ? { executablePath: exe } : {});
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, ignoreHTTPSErrors: !!process.env.QF_IGNORE_HTTPS_ERRORS });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
-await page.addInitScript(() => localStorage.setItem('quillforge.prefs.v1', JSON.stringify({ firstRun: false })));
+await page.addInitScript(() => localStorage.setItem('quillpen.prefs.v1', JSON.stringify({ firstRun: false })));
 await page.goto(URL);
 await page.waitForFunction(() => window.qf && window.qf.view);
 let failures = 0;

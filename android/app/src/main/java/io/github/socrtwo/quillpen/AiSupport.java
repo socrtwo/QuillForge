@@ -1,4 +1,4 @@
-package io.github.socrtwo.quillforge;
+package io.github.socrtwo.quillpen;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -32,8 +32,8 @@ import javax.crypto.spec.GCMParameterSpec;
 final class AiSupport {
 
     private static final String TAG = "QuillNative";
-    private static final String KEY_ALIAS = "quillforge.secrets.v1";
-    private static final String PREFS = "quillforge.secure";
+    private static final String KEY_ALIAS = "quillpen.secrets.v1";
+    private static final String PREFS = "quillpen.secure";
 
     private AiSupport() {}
 
@@ -114,7 +114,7 @@ final class AiSupport {
             this.server = new ServerSocket(0, 4, InetAddress.getByName("127.0.0.1"));
             this.server.setSoTimeout(1000);
             this.deadline = System.currentTimeMillis() + Math.max(10_000L, timeoutMs);
-            this.html = html != null ? html : "<!doctype html><body><p>You can return to QuillForge.</p></body>";
+            this.html = html != null ? html : "<!doctype html><body><p>You can return to QuillPen.</p></body>";
             this.expectedPath = expectedPath;
             this.callback = callback;
         }

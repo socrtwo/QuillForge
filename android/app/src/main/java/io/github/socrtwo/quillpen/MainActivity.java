@@ -1,4 +1,4 @@
-package io.github.socrtwo.quillforge;
+package io.github.socrtwo.quillpen;
 
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;

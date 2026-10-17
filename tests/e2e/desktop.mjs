@@ -13,7 +13,7 @@ fs.copyFileSync(path.join(root, 'tests/fixtures/recovery/sample.docx'), doc);
 const secret = path.join(tmp, 'not-granted.txt');
 fs.writeFileSync(secret, 'private');
 
-// QF_ELECTRON_EXE tests a packaged build (e.g. release/linux-unpacked/quillforge) instead.
+// QF_ELECTRON_EXE tests a packaged build (e.g. release/linux-unpacked/quillpen) instead.
 const exe = process.env.QF_ELECTRON_EXE;
 const app = await electron.launch({
   ...(exe ? { executablePath: exe } : {}),
@@ -27,7 +27,7 @@ try {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.waitForFunction(() => window.qf && window.qf.view, null, { timeout: 30000 });
-  check('loads from app://', page.url().startsWith('app://quillforge/'), page.url());
+  check('loads from app://', page.url().startsWith('app://quillpen/'), page.url());
   check('bridge is exposed', await page.evaluate(() => typeof window.quillDesktop?.openDocument === 'function' && !('require' in window)));
 
   // The file given on the command line opens.

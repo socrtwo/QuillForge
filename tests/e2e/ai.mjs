@@ -91,10 +91,10 @@ const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 await page.addInitScript((port) => {
-  localStorage.setItem('quillforge.prefs.v1', JSON.stringify({ firstRun: false }));
+  localStorage.setItem('quillpen.prefs.v1', JSON.stringify({ firstRun: false }));
   if (!sessionStorage.getItem('ai-init')) {
     sessionStorage.setItem('ai-init', '1');
-    localStorage.setItem('quillforge.ai.v1', JSON.stringify({
+    localStorage.setItem('quillpen.ai.v1', JSON.stringify({
       active: 'custom', confirmDocument: false, privacyAck: ['custom', 'anthropic', 'gemini'], trackAsRevisions: false,
       providers: { custom: { id: 'custom', model: 'mock-large', fastModel: 'mock-mini', baseUrl: `http://localhost:${port}/v1` } },
     }));
@@ -297,9 +297,9 @@ await check('Setup wizard: chooser, provider page, key test and save', async () 
   await page.locator('.qf-ai-wizard button', { hasText: 'Test & Save' }).click();
   await page.waitForSelector('text=is ready', { timeout: 8000 });
   await page.screenshot({ path: `${OUT}/ai-wizard-done.png` });
-  const models = await page.evaluate(() => JSON.parse(localStorage.getItem('quillforge.ai.v1')).providers.custom.models);
+  const models = await page.evaluate(() => JSON.parse(localStorage.getItem('quillpen.ai.v1')).providers.custom.models);
   if (!models.includes('mock-mini')) throw new Error(JSON.stringify(models));
-  const keyInStorage = await page.evaluate(() => localStorage.getItem('quillforge.ai.v1').includes('test-key'));
+  const keyInStorage = await page.evaluate(() => localStorage.getItem('quillpen.ai.v1').includes('test-key'));
   if (keyInStorage) throw new Error('API key leaked into localStorage settings');
 });
 

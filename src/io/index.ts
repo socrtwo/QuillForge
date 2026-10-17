@@ -116,7 +116,7 @@ export const FORMATS: FormatDef[] = [
     export: async (doc, o) => (await import('./odt')).exportFodt(doc, o),
   },
   {
-    id: 'qfd', label: 'QuillForge Document (.qfd)', ext: ['qfd', 'json'], mime: 'application/json', canImport: true, canExport: true,
+    id: 'qpd', label: 'QuillPen Document (.qpd)', ext: ['qpd', 'qfd', 'json'], mime: 'application/json', canImport: true, canExport: true, // rename:keep — QuillPen was named QuillForge; its .qfd/.qfde files still open
     import: async (d) => (await import('./native')).importNative(d),
     export: async (doc) => (await import('./native')).exportNative(doc),
   },

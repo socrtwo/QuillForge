@@ -1,4 +1,4 @@
-/** QuillForge application core: document tabs, dispatch pipeline, command execution. */
+/** QuillPen application core: document tabs, dispatch pipeline, command execution. */
 import { isSafeExternalUrl } from './util/sanitize';
 import { normalizeTables } from './editor/normalize';
 import { EditorState, TextSelection, type Transaction } from 'prosemirror-state';
@@ -234,7 +234,7 @@ export class App {
     for (const d of this.docs) d.el.classList.toggle('qf-hidden-tab', d !== tab);
     this.ui.tabsChanged();
     this.refresh();
-    document.title = `${tab.displayName}${tab.dirty ? ' •' : ''} – QuillForge`;
+    document.title = `${tab.displayName}${tab.dirty ? ' •' : ''} – QuillPen`;
   }
 
   closeTab(tab: DocTab): void {
@@ -283,7 +283,7 @@ export class App {
       else this.editPositions[this.editPositions.length - 1] = head;
       // noDirty: derived updates (field values refreshed on open) are not user edits.
       if (!tr.getMeta('noDirty')) {
-        if (!tab.dirty) { tab.dirty = true; this.ui.tabsChanged(); document.title = `${tab.displayName} • – QuillForge`; }
+        if (!tab.dirty) { tab.dirty = true; this.ui.tabsChanged(); document.title = `${tab.displayName} • – QuillPen`; }
         this.scheduleAutosave();
         for (const fn of this.docChangeListeners) fn(tab);
       }

@@ -1,4 +1,4 @@
-package io.github.socrtwo.quillforge;
+package io.github.socrtwo.quillpen;
 
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
@@ -45,7 +45,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Native document plumbing for QuillForge on Android.
+ * Native document plumbing for QuillPen on Android.
  *
  * JS contract (all binary payloads are base64 strings without line breaks):
  * <ul>
@@ -179,7 +179,7 @@ public class QuillNativePlugin extends Plugin {
                 if ((text == null || text.isEmpty()) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     cm.clearPrimaryClip();
                 } else {
-                    ClipData clip = ClipData.newPlainText("QuillForge", text);
+                    ClipData clip = ClipData.newPlainText("QuillPen", text);
                     if (sensitive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         PersistableBundle extras = new PersistableBundle();
                         extras.putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true);
@@ -213,7 +213,7 @@ public class QuillNativePlugin extends Plugin {
                 call.reject("Could not start the sign-in listener: " + e.getMessage(), asException(e));
                 return;
             }
-            Thread t = new Thread(loopback, "quillforge-oauth");
+            Thread t = new Thread(loopback, "quillpen-oauth");
             t.setDaemon(true);
             t.start();
             JSObject ret = new JSObject();
@@ -370,7 +370,7 @@ public class QuillNativePlugin extends Plugin {
 
     @PluginMethod
     public void print(PluginCall call) {
-        final String jobName = call.getString("jobName", "QuillForge document");
+        final String jobName = call.getString("jobName", "QuillPen document");
         final Activity activity = getActivity();
         if (activity == null) {
             call.reject("Printing is not available right now");
@@ -472,7 +472,7 @@ public class QuillNativePlugin extends Plugin {
         final String mime = call.getString("mime", "application/octet-stream");
         final String data = call.getString("data");
         if (!isSisterPackage(pkg)) {
-            call.reject("Not a QuillForge sister app");
+            call.reject("Not a QuillPen sister app");
             return;
         }
         final Context context = getContext();
@@ -778,8 +778,8 @@ public class QuillNativePlugin extends Plugin {
                 return "text/html";
             case "epub":
                 return "application/epub+zip";
-            case "qfd":
-                return "application/x-quillforge";
+            case "qpd":
+                return "application/x-quillpen";
             default:
                 return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext);
         }

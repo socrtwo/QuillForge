@@ -262,11 +262,11 @@ def([
           { key: 'h', label: 'Heading font', type: 'combo', options: ALL_FONTS, value: app.settings.theme.headingFont },
           { key: 'b', label: 'Body font', type: 'combo', options: ALL_FONTS, value: app.settings.theme.bodyFont },
         ] });
-        if (r) app.updateSettings((s) => { s.theme.headingFont = r.h; s.theme.bodyFont = r.b; s.styleSet = 'QuillForge'; });
+        if (r) app.updateSettings((s) => { s.theme.headingFont = r.h; s.theme.bodyFont = r.b; s.styleSet = 'QuillPen'; });
         return;
       }
       const t = THEMES[arg];
-      if (t) app.updateSettings((s) => { s.theme.headingFont = t.headingFont; s.theme.bodyFont = t.bodyFont; s.styleSet = 'QuillForge'; });
+      if (t) app.updateSettings((s) => { s.theme.headingFont = t.headingFont; s.theme.bodyFont = t.bodyFont; s.styleSet = 'QuillPen'; });
     },
     menu: () => [...Object.keys(THEMES).map((k) => ({ id: 'design.fonts', arg: k, label: `${THEMES[k].headingFont} / ${THEMES[k].bodyFont}`, preview: `font-family:"${THEMES[k].headingFont}"` })), { separator: true }, { id: 'design.fonts', arg: 'custom', label: 'Customize Fonts…' }],
   },
@@ -283,7 +283,7 @@ def([
     id: 'design.effects', label: 'Theme Effects', icon: 'auto_awesome', tab: 'Design', group: 'Document Formatting', edits: true,
     run: () => toast('Theme effects apply to shapes: edit a shape to set fill, outline, and shadow.'),
   },
-  { id: 'design.setDefault', label: 'Set as Default', icon: 'check', tab: 'Design', group: 'Document Formatting', run: (app) => { const s = app.settings; localStorage.setItem('quillforge.defaultDesign', JSON.stringify({ styleSet: s.styleSet, theme: s.theme, styles: s.styles })); toast('Saved as the default design for new documents'); } },
+  { id: 'design.setDefault', label: 'Set as Default', icon: 'check', tab: 'Design', group: 'Document Formatting', run: (app) => { const s = app.settings; localStorage.setItem('quillpen.defaultDesign', JSON.stringify({ styleSet: s.styleSet, theme: s.theme, styles: s.styles })); toast('Saved as the default design for new documents'); } },
   {
     id: 'design.watermark', label: 'Watermark', icon: 'water_drop', tab: 'Design', group: 'Page Background', kind: 'menu', edits: true, popular: true,
     run: async (app, arg) => {

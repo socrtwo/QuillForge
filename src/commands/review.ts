@@ -517,6 +517,6 @@ export function combineTr(state: EditorState, other: PMNode, label: string): Tra
 
 /** Hash used for Restrict Editing passwords (also used by Developer ▸ Protect for Form Filling). */
 export async function sha(s: string): Promise<string> {
-  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('quillforge:' + s));
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('quillpen:' + s));
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }

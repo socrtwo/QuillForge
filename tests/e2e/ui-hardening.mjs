@@ -18,7 +18,7 @@ async function run(name, viewport, fn, init) {
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
-  await page.addInitScript(() => { if (!sessionStorage.getItem('qf-init')) { sessionStorage.setItem('qf-init', '1'); localStorage.setItem('quillforge.prefs.v1', JSON.stringify({ firstRun: false })); } });
+  await page.addInitScript(() => { if (!sessionStorage.getItem('qf-init')) { sessionStorage.setItem('qf-init', '1'); localStorage.setItem('quillpen.prefs.v1', JSON.stringify({ firstRun: false })); } });
   if (init) await page.addInitScript(init);
   await page.goto(URL);
   await page.waitForFunction(() => window.qf && window.qf.view);

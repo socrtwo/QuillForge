@@ -120,7 +120,7 @@ export function defaultPrefs(): Prefs {
   };
 }
 
-const KEY = 'quillforge.prefs.v1';
+const KEY = 'quillpen.prefs.v1';
 
 export function loadPrefs(): Prefs {
   const d = defaultPrefs();
