@@ -11,6 +11,10 @@
 export interface SniffRule {
   /** FORMATS id the rule selects. */
   id: string;
+  /** Human-readable format name. */
+  label: string;
+  /** Extensions the format normally uses (lower case, no dot). */
+  ext: string[];
   /** Confidence 0–1 that `bytes` (the whole file or at least its first 64 KB) is this format. */
   detect(bytes: Uint8Array, name: string): number;
 }
@@ -296,24 +300,24 @@ export function detectTroff(u8: Uint8Array, name: string): number {
 }
 
 export const SNIFF_RULES_B: SniffRule[] = [
-  { id: 'wordml', detect: detectWordml2003 },
-  { id: 'flatopc', detect: detectFlatOpc },
-  { id: 'fodt', detect: detectFlatOdt },
-  { id: 'sxw', detect: detectStarWriter },
-  { id: 'abw', detect: detectAbiWord },
-  { id: 'kwd', detect: detectKWord },
-  { id: 'pages', detect: detectPages },
-  { id: 'hwpx', detect: detectHwpx },
-  { id: 'fb2', detect: detectFictionBook },
-  { id: 'docbook', detect: detectDocBook },
-  { id: 'rtfd', detect: detectRtfd },
-  { id: 'mhtml', detect: detectMhtml },
-  { id: 'latex', detect: detectLatex },
-  { id: 'rst', detect: detectRst },
-  { id: 'textile', detect: detectTextile },
-  { id: 'asciidoc', detect: detectAsciiDoc },
-  { id: 'org', detect: detectOrg },
-  { id: 'man', detect: detectTroff },
+  { id: 'wordml', label: 'Word 2003 XML document', ext: ['xml', 'wml'], detect: detectWordml2003 },
+  { id: 'flatopc', label: 'Word XML document (Flat OPC)', ext: ['xml'], detect: detectFlatOpc },
+  { id: 'fodt', label: 'Flat OpenDocument text', ext: ['fodt', 'xml'], detect: detectFlatOdt },
+  { id: 'sxw', label: 'OpenOffice.org 1.x text document', ext: ['sxw', 'stw', 'sxg'], detect: detectStarWriter },
+  { id: 'abw', label: 'AbiWord document', ext: ['abw', 'zabw', 'awt'], detect: detectAbiWord },
+  { id: 'kwd', label: 'KWord / Calligra Words document', ext: ['kwd', 'kwt'], detect: detectKWord },
+  { id: 'pages', label: 'Apple Pages document', ext: ['pages'], detect: detectPages },
+  { id: 'hwpx', label: 'Hangul HWPX document', ext: ['hwpx', 'hwpt'], detect: detectHwpx },
+  { id: 'fb2', label: 'FictionBook e-book', ext: ['fb2', 'fbz'], detect: detectFictionBook },
+  { id: 'docbook', label: 'DocBook document', ext: ['dbk', 'docbook', 'xml'], detect: detectDocBook },
+  { id: 'rtfd', label: 'Rich Text Format with attachments (RTFD)', ext: ['rtfd'], detect: detectRtfd },
+  { id: 'mhtml', label: 'Web archive (MHTML)', ext: ['mht', 'mhtml'], detect: detectMhtml },
+  { id: 'latex', label: 'LaTeX document', ext: ['tex', 'latex', 'ltx'], detect: detectLatex },
+  { id: 'rst', label: 'reStructuredText document', ext: ['rst', 'rest'], detect: detectRst },
+  { id: 'textile', label: 'Textile document', ext: ['textile'], detect: detectTextile },
+  { id: 'asciidoc', label: 'AsciiDoc document', ext: ['adoc', 'asciidoc', 'asc'], detect: detectAsciiDoc },
+  { id: 'org', label: 'Org-mode document', ext: ['org'], detect: detectOrg },
+  { id: 'man', label: 'troff / man page', ext: ['man', 'roff', 'mdoc', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'n'], detect: detectTroff },
 ];
 
 /** Best matching format id from SNIFF_RULES_B, or null when no rule is confident enough. */
@@ -329,9 +333,17 @@ export function sniffB(data: ArrayBuffer | Uint8Array, name: string, threshold =
   return best;
 }
 
+/**
+ * The rules in the shape of a general content sniffer's registry ({ format, label, category,
+ * ext, test(ctx) }), for merging with registerSniffer().
+ */
+export function snifferRulesB(): { format: string; label: string; category: 'document'; ext: string[]; test: (ctx: { bytes: Uint8Array; name: string }) => number }[] {
+  return SNIFF_RULES_B.map((r) => ({ format: r.id, label: r.label, category: 'document' as const, ext: r.ext, test: (ctx: { bytes: Uint8Array; name: string }) => r.detect(ctx.bytes, ctx.name) }));
+}
+
 /** File-picker extensions and MIME types for these formats (for platform open dialogs). */
 export const OPEN_EXTENSIONS_B = ['xml', 'wml', 'sxw', 'stw', 'sxg', 'abw', 'zabw', 'awt', 'kwd', 'kwt', 'pages', 'hwpx', 'fb2', 'fbz', 'dbk', 'docbook',
-  'rtfd', 'mht', 'mhtml', 'tex', 'latex', 'ltx', 'rst', 'rest', 'textile', 'adoc', 'asciidoc', 'org', 'man', 'roff', 'mdoc', 'xhtml', 'uot'];
+  'rtfd', 'mht', 'mhtml', 'tex', 'latex', 'ltx', 'rst', 'rest', 'textile', 'adoc', 'asciidoc', 'org', 'man', 'roff', 'mdoc', 'xhtml'];
 export const OPEN_MIMES_B = ['application/xml', 'text/xml', 'application/vnd.ms-word.wordml', 'application/vnd.sun.xml.writer', 'application/x-abiword',
   'application/x-kword', 'application/vnd.apple.pages', 'application/x-iwork-pages-sffpages', 'application/hwp+zip', 'application/x-fictionbook+xml',
   'application/docbook+xml', 'multipart/related', 'message/rfc822', 'application/x-tex', 'text/x-tex', 'text/x-rst', 'text/x-textile', 'text/x-asciidoc',
