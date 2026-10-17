@@ -41,6 +41,15 @@ src/
     panes.ts              task panes (navigation, styles, find, comments, revisions, spelling, Reveal Codes…)
     dialog.ts             declarative dialog builder, menus, color pickers, toasts
   io/                     format converters: docx, odt/fodt, rtf, html, markdown, text, epub, native
+    sniff.ts              content-based identification (rule table; registerSniffer() for format modules)
+    cfb.ts                compound file (OLE2, MS-CFB) reader shared by every binary Office-era format
+    formats-legacy.ts     import-only FormatDefs for the legacy and cross-category converters
+    legacy/               historical word processors: Word 1/2/6/95/97 binary (word.ts), Word for DOS/Write/Mac,
+                          WordPerfect, Works, Lotus (Ami Pro, Word Pro), Mac (MacWrite, WriteNow, ClarisWorks),
+                          character-mode (WordStar, XyWrite, DCA-RFT, MultiMate), Hangul HWP 5; builder.ts turns
+                          their runs into schema nodes; extract.ts feeds the recovery report's legacy text method
+    convert/              spreadsheets → tables (sheets.ts), presentations → slide sections (slides.ts),
+                          email → message documents (email.ts)
     recover/              damaged-document recovery (Word Recovery port): fileid (S2 identifier), inflate
                           (ImmortalInflate + CRC + resync), salvage (ZIP scan, XML fixes/healing, extractors),
                           doc97 (OLE2 + FIB + piece table), index (pipeline, package rebuild, report)
@@ -72,6 +81,8 @@ android/                  Capacitor project + QuillNativePlugin.java (SAF open/s
 - **Spacing uses padding.** Paragraph space before/after renders as padding, so it adds up the way desktop word processors do and block heights can be summed exactly for pagination.
 - **Settings live in the document.** Page setup, headers/footers, comments and sources are part of `doc.attrs.settings`. They undo and redo with the text and travel with the file.
 - **Tracked changes are transaction post-processing.** User transactions are diffed with prosemirror-changeset. Deleted ranges are re-inserted with a deletion mark, and inserted ranges get an insertion mark.
+- **Content decides the format.** sniff() scores every rule against the bytes; the extension only breaks ties. A file whose name disagrees opens by content with a note, and non-document files (spreadsheets, slides, email) go through a choice between the sister app and an import.
+- **Legacy readers share one back end.** Each reader decodes its own records into character and paragraph property objects and hands them to DocBuilder, which builds marks, lists, tables, notes and page settings and runs the same normalization as the DOCX importer.
 - **Recovery reuses the importers.** Salvaged and repaired parts are re-zipped into a valid package and opened with the normal DOCX/ODT converter, so recovery never needs its own document model.
 - **AI is data plus one runner.** Each AI feature declares its input, output and prompt; one runner (commands/ai.ts) gathers input, streams the answer and applies it. Edits within a paragraph are word-level diffs, so formatting and inline objects survive.
 - **Pagination is decoration-based.** No layout engine is reimplemented. The browser lays out a page-width column, and the pagination plugin measures it and inserts gap widgets, so editing stays native and fast.

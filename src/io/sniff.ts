@@ -522,7 +522,7 @@ const RULES: SniffRule[] = [
     return /<(head|body|meta|title|p|div|table)[\s>]/.test(t) && /<\/(p|div|body|html|table|title)>/.test(t) ? 0.5 : 0;
   }),
   R('latex', 'LaTeX document', DOC, ['tex', 'latex', 'ltx'], (c) => (!c.binary() && /\\documentclass|\\begin\{document\}/.test(c.text().slice(0, 8192)) ? 0.85 : 0)),
-  R('troff', 'troff / man page', DOC, ['man', 'ms', 'me', 'mm', 'roff', 't', '1', '2', '3', '4', '5', '6', '7', '8'], (c) => (!c.binary() && /^\.(TH|SH|PP|LP|NH|TL)\b/m.test(c.text().slice(0, 4096)) && (c.text().match(/^\.[A-Z]{1,2}\b/gm) || []).length > 3 ? 0.6 : 0)),
+  R('man', 'troff / man page', DOC, ['man', 'ms', 'me', 'mm', 'roff', 't', '1', '2', '3', '4', '5', '6', '7', '8'], (c) => (!c.binary() && /^\.(TH|SH|PP|LP|NH|TL)\b/m.test(c.text().slice(0, 4096)) && (c.text().match(/^\.[A-Z]{1,2}\b/gm) || []).length > 3 ? 0.6 : 0)),
   R('md', 'Markdown document', DOC, ['md', 'markdown', 'mdown', 'mkd', 'mkdn', 'txt.md'], (c) => {
     if (c.binary()) return 0;
     const t = c.text().slice(0, 8192);
@@ -614,7 +614,7 @@ const RULES: SniffRule[] = [
   R('dbx', 'Outlook Express folder', MAIL, ['dbx'], (c) => (c.u32le(0) === 0xfe12adcf ? 0.95 : 0)),
   R('emlx', 'Apple Mail message', MAIL, ['emlx', 'partial.emlx'], (c) => { const m = /^(\d{1,9})[ \t]*\r?\n/.exec(c.head); return m && mailHeaders(c.text().slice(m[0].length)).score >= 0.6 ? 0.9 : 0; }),
   R('mbox', 'Mailbox (mbox)', MAIL, ['mbox', 'mbx', 'mbs', 'mail'], (c) => (c.binary() ? 0 : /^From \S+.*\r?\n[A-Za-z-]+: /.test(c.head) ? 0.85 : /^From \S+ +(Mon|Tue|Wed|Thu|Fri|Sat|Sun) .*\d\d:\d\d/.test(c.head) ? 0.75 : 0)),
-  R('mht', 'Web archive (MHTML)', MAIL, ['mht', 'mhtml'], (c) => {
+  R('mhtml', 'Web archive (MHTML)', MAIL, ['mht', 'mhtml'], (c) => {
     if (c.binary()) return 0;
     const h = mailHeaders(c.text());
     if (/multipart\/related/.test(h.mime) || (/^MIME-Version:/im.test(c.head) && /Snapshot-Content-Location|Content-Location:/i.test(c.text().slice(0, 16384)) && /text\/html/i.test(c.text().slice(0, 16384)) && !/^(Received|Message-ID|Delivered-To):/im.test(c.head))) return { confidence: 0.92, label: 'Web archive (MHTML)', category: 'document' };

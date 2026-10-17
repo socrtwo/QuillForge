@@ -74,7 +74,7 @@ Ireland, India, South Africa and other countries that follow British spelling us
 
 **Developer.** Macro recorder (records commands and typing), a JavaScript macro editor with a document API, and content controls with form protection and CSV export of form data.
 
-**Files.** Import and export .docx, .odt, .fodt, .rtf, .html, Markdown (GFM), .txt, .epub, and the native .qfd format. Word 97–2003 .doc (plus .dot, .wbk and .asd) files open as text. AES-256 encrypted .qfde is also supported. PDF goes through the system print service ("Save as PDF"). Other features: autosave drafts with crash recovery, version history snapshots with compare and restore, document inspector, templates, and multiple open documents in tabs.
+**Files.** Import and export .docx, .odt, .fodt, .rtf, .html, Markdown (GFM), .txt, .epub, and the native .qfd format. Files are recognized by their content, whatever their name or extension: a WordPerfect file called .doc, or a file with no extension at all, opens as what it is, with a short note when the name disagrees. Historical word processors open with their formatting: Word 1.x–2003 for Windows (including 6.0/95 and East Asian editions), Word for DOS, Windows Write, Word for Macintosh, WordPerfect 4.2–X9, Microsoft Works, Kingsoft WPS, Ami Pro, Lotus Word Pro, MacWrite, WriteNow, ClarisWorks, WordStar, XyWrite, DisplayWrite (DCA-RFT), MultiMate and Hangul (HWP). Spreadsheets (Excel, OpenDocument, CSV, dBASE, Lotus 1-2-3), presentations (PowerPoint, OpenDocument) and email (.eml, .msg, mbox, MHTML, winmail.dat) can be handed to the sister apps QuillGrid, QuillStage and QuillPost, or imported as tables, slide sections or a message. See [docs/FORMATS.md](docs/FORMATS.md) for every format, its detection signature and its fidelity. AES-256 encrypted .qfde is also supported. PDF goes through the system print service ("Save as PDF"). Other features: autosave drafts with crash recovery, version history snapshots with compare and restore, document inspector, templates, and multiple open documents in tabs.
 
 ### Innovations from other word processors
 
@@ -115,7 +115,7 @@ Keys are stored encrypted on the device (Android Keystore), and nothing is sent 
 - Grammar rules are English-only.
 - Charts and diagrams are stored as images with editable data. Other suites see them as pictures.
 - DOCX fidelity was verified with LibreOffice, pandoc and python-docx. It has not been tested in Microsoft Word itself.
-- .doc files open as text and paragraph structure only (no character or paragraph formatting).
+- Legacy formats are imported, not saved: saving makes a new .docx (or another current format). Some rarely used features of those formats are not imported; docs/FORMATS.md lists them.
 - Recovery: text after a damage point inside one deflate stream is unreliable and is set apart as "unverified". Encrypted Office files are detected, not decrypted.
 - AI: the on-device model, Android OAuth listener and native clipboard and Keystore code have not yet been tried on a physical device. The AI request formats, streaming, errors and the wizard are tested against a mock server.
 

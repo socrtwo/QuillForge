@@ -353,7 +353,7 @@ function hwpRec(tag: number, level: number, data: Uint8Array): Uint8Array {
 }
 export function buildHwp(paras: { text: string; bold?: boolean; center?: boolean }[]): Uint8Array {
   const fh = new W().str('HWP Document File').pad(32).u32(0x05000000).u32(1).pad(256).out();
-  const face = cat([0], new W().u16(5).out(), utf16('Batang'));
+  const face = cat([0], new W().u16(6).out(), utf16('Batang'));
   const shape = (bold: boolean) => new W().pad(42).u32(1200).u32(bold ? 2 : 0).pad(56).out();
   const pshape = (center: boolean) => new W().u32(center ? 3 << 2 : 1 << 2).pad(54).out();
   const docinfo = cat(hwpRec(0x13, 1, face), hwpRec(0x15, 1, shape(false)), hwpRec(0x15, 1, shape(true)), hwpRec(0x19, 1, pshape(false)), hwpRec(0x19, 1, pshape(true)));

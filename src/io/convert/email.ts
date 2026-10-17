@@ -341,7 +341,7 @@ export async function importEmail(data: ArrayBuffer, name: string, kind: string)
     return b.build();
   }
   const m = parseMime(raw);
-  if (kind === 'mht') {
+  if (kind === 'mhtml') {
     // A web archive: the page itself, its pictures from the related parts.
     b.property('title', m.subject || name.replace(/\.[^.]+$/, ''));
     await bodyBlocks(b, m);
