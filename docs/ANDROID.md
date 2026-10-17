@@ -177,12 +177,18 @@ Notes:
 
 ## App icon
 
-The launcher icon (a pen nib forging a page on an anvil, navy `#2B4A7E` / amber `#F2A541`) is generated
-from one set of vector shapes by `node scripts/gen-android-icons.mjs`, which writes:
+The launcher icon is the Quill suite's word-processor icon (a white page with blue lines and a white quill on a
+blue tile, background `#2A57B8`). Its sources are `resources/icon.svg` (full tile), `resources/icon-foreground.svg`
+(adaptive-icon foreground) and `resources/icon-background.txt` (adaptive background colour), copied from the
+suite's icon set. `npm run icons` (`scripts/gen-android-icons.mjs`, then `scripts/gen-platform-icons.mjs`) writes:
 
-- `resources/icon.svg`, `resources/icon-foreground.svg`, `resources/icon-512.png`
-- adaptive icon vectors `res/drawable/ic_launcher_{foreground,background,monochrome}.xml`
-- legacy PNGs `res/mipmap-*/ic_launcher{,_round}.png` (for Android 7.x) rendered with Playwright Chromium
+- `res/drawable/ic_launcher_foreground.xml`, a vector converted from the foreground SVG
+- `res/values/ic_launcher_background.xml`, the background (and launch-screen) colour
+- `res/mipmap-anydpi-v26/ic_launcher{,_round}.xml`, the adaptive icon
+- `res/mipmap-*/ic_launcher_monochrome.png`, the themed-icon silhouette (Android 13+)
+- legacy PNGs `res/mipmap-*/ic_launcher{,_round}.png` (Android 7.x) and `resources/icon-512.png`
+- `resources/icon-1024.png` (desktop installers), `public/icons/*` (web app, including a maskable icon),
+  the iOS `AppIcon` (opaque, square corners) and `public/favicon.svg`
 
-Edit the shapes in the script and re-run it; do not hand-edit the generated files. The launch screen
-(`res/drawable/splash.xml`) shows the same foreground on navy.
+Replace the three source files and re-run `npm run icons`; do not hand-edit the generated files. The launch
+screen (`res/drawable/splash.xml`) shows the same foreground on the background colour.

@@ -121,7 +121,7 @@ xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -sd
 
 ## Icons
 
-`npm run icons` regenerates the Android launcher icons and the desktop, iOS and web-app PNGs from the vector source in `scripts/gen-android-icons.mjs`.
+`npm run icons` regenerates the Android launcher icons and the desktop, iOS and web-app PNGs from `resources/icon.svg`, `resources/icon-foreground.svg` and `resources/icon-background.txt` (see docs/ANDROID.md, *App icon*).
 
 ## Spelling dictionary catalog
 

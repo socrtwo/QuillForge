@@ -1,112 +1,33 @@
 #!/usr/bin/env node
-// Generates the QuillForge launcher icon in every format the Android app needs
-// from a single set of vector shapes (defined below in a 108x108 adaptive-icon
-// coordinate space; the 66dp safe zone is the circle centered at 54,54 r=33).
+// Generates the Android launcher icon from the suite icon sources in resources/:
+//   resources/icon.svg             full tile (legacy square icon, store icon)
+//   resources/icon-foreground.svg  adaptive-icon foreground (transparent, artwork inside the 66dp safe circle)
+//   resources/icon-background.txt  adaptive-icon background colour (#RRGGBB)
 //
 // Outputs:
-//   resources/icon.svg                                   full-bleed source artwork
-//   resources/icon-foreground.svg                        foreground layer only
-//   resources/icon-512.png                               store / README icon
-//   android/app/src/main/res/drawable/ic_launcher_foreground.xml   (vector)
-//   android/app/src/main/res/drawable/ic_launcher_background.xml   (vector)
-//   android/app/src/main/res/drawable/ic_launcher_monochrome.xml   (vector, themed icons)
-//   android/app/src/main/res/mipmap-*/ic_launcher.png, ic_launcher_round.png  (legacy, API 24-25)
+//   android/app/src/main/res/drawable/ic_launcher_foreground.xml        vector, converted from icon-foreground.svg
+//   android/app/src/main/res/values/ic_launcher_background.xml          background (and splash) colour
+//   android/app/src/main/res/mipmap-anydpi-v26/ic_launcher{,_round}.xml adaptive icon (colour + vector + monochrome)
+//   android/app/src/main/res/mipmap-*/ic_launcher_monochrome.png         themed-icon silhouette (Android 13+)
+//   android/app/src/main/res/mipmap-*/ic_launcher.png, ic_launcher_round.png   legacy icons (API 24-25)
+//   resources/icon-512.png                                               store / README / desktop window icon
 //
 // Usage: node scripts/gen-android-icons.mjs [--no-png]
-// PNG rendering uses Playwright's Chromium. Set CHROMIUM_PATH to override the browser binary.
+// The SVG-to-vector converter handles what the suite icons use: <g> with translate/scale transforms, fill and
+// opacity; <rect> (rounded); <path> with fill, stroke, stroke-width, line joins and caps. Anything else (gradients,
+// masks, text) stops the script so the vector never silently differs from the artwork.
+// PNG rendering uses Playwright's Chromium; CHROMIUM_PATH overrides the browser binary.
 
-import { mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const res = join(root, 'android/app/src/main/res');
-
-const NAVY = '#2B4A7E';
-const NAVY_DARK = '#1C3360';
-const AMBER = '#F2A541';
-const PAPER = '#FDF7EA';
-const PAPER_FOLD = '#E8DCC0';
-const LINE = '#B9C6DC';
-
-// --- Artwork (108x108 viewport) -------------------------------------------
-// Page with a folded corner.
-const page = 'M38,28 L63,28 L70,35 L70,63 L38,63 Z';
-const pageFold = 'M63,28 L63,35 L70,35 Z';
-// Faint ruled lines on the page, left of the nib.
-const pageLines = 'M41,35 L49,35 L49,36.6 L41,36.6 Z M41,40 L47,40 L47,41.6 L41,41.6 Z M41,45 L46,45 L46,46.6 L41,46.6 Z M41,50 L46.5,50 L46.5,51.6 L41,51.6 Z';
-// Fountain-pen / quill nib pointing down onto the anvil, with a breather hole
-// and a slit (cut out with evenOdd so the monochrome layer stays correct).
-const nibOuter = 'M54,64 L44.5,44 C43.6,38.5 45.5,33.5 49,30 L59,30 C62.5,33.5 64.4,38.5 63.5,44 Z';
-const nibHole = 'M54,39.2 A2.6,2.6 0 1,0 54,44.4 A2.6,2.6 0 1,0 54,39.2 Z';
-const nibSlit = 'M53.3,44.2 L54.7,44.2 L54.7,60 L53.3,60 Z';
-const nib = `${nibOuter} ${nibHole} ${nibSlit}`;
-// Nib collar (where the quill shaft would attach).
-const nibCollar = 'M48,25 L60,25 L60,30.5 L48,30.5 Z';
-// Anvil ("forge"): horn on the left, face, waist and foot.
-const anvil = 'M23,64 C30,64.5 34,64 39,64 L83,64 L83,70.5 L71,70.5 C67,71.5 65,74 65,77 L71,77 L71,81 L39,81 L39,77 L45,77 C45,74 43,71.5 39,70.5 C31,70 26,68 23,64 Z';
-// Sparks flying from the point where the nib meets the anvil.
-const sparks = 'M66,57.5 L71.5,54 L72.5,55.6 L67,59.1 Z M41,57.5 L35.5,54 L34.5,55.6 L40,59.1 Z M68.5,62.2 L75,61.4 L75.2,63.2 L68.7,64 Z M39.5,62.2 L33,61.4 L32.8,63.2 L39.3,64 Z';
-
-const fg = [
-  { d: page, fill: PAPER },
-  { d: pageFold, fill: PAPER_FOLD },
-  { d: pageLines, fill: LINE },
-  { d: nibCollar, fill: AMBER },
-  { d: nib, fill: NAVY_DARK, evenOdd: true },
-  { d: anvil, fill: AMBER },
-  { d: sparks, fill: AMBER },
-];
-// Monochrome (Android 13 themed icon): silhouettes only, page drawn as an outline frame.
-const pageFrame = `${page} M40.5,30.5 L62,30.5 L67.5,36 L67.5,60.5 L40.5,60.5 Z`;
-const mono = [
-  { d: pageFrame, fill: '#FFFFFF', evenOdd: true },
-  { d: nibCollar, fill: '#FFFFFF' },
-  { d: nib, fill: '#FFFFFF', evenOdd: true },
-  { d: anvil, fill: '#FFFFFF' },
-  { d: sparks, fill: '#FFFFFF' },
-];
-const bg = [
-  { d: 'M0,0 L108,0 L108,108 L0,108 Z', fill: NAVY },
-  // subtle diagonal glow
-  { d: 'M0,108 L108,0 L108,108 Z', fill: '#FFFFFF', alpha: 0.05 },
-];
-
-// --- Writers -----------------------------------------------------------------
-const svgPaths = (layers) =>
-  layers
-    .map(
-      (l) =>
-        `  <path d="${l.d}" fill="${l.fill}"${l.alpha != null ? ` fill-opacity="${l.alpha}"` : ''}${l.evenOdd ? ' fill-rule="evenodd"' : ''}/>`,
-    )
-    .join('\n');
-
-function svg(layers, { size = 108, viewBox = '0 0 108 108', clip = null } = {}) {
-  const clipDef =
-    clip === 'circle'
-      ? '<clipPath id="c"><circle cx="54" cy="54" r="36"/></clipPath>'
-      : clip === 'rounded'
-        ? '<clipPath id="c"><rect x="18" y="18" width="72" height="72" rx="13"/></clipPath>'
-        : '';
-  const open = clip ? `<defs>${clipDef}</defs>\n<g clip-path="url(#c)">` : '<g>';
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="${viewBox}">\n${open}\n${svgPaths(layers)}\n</g>\n</svg>\n`;
-}
-
-const hex = (c, alpha) => {
-  const h = c.replace('#', '').toUpperCase();
-  if (alpha == null) return `#${h}`;
-  const a = Math.round(alpha * 255).toString(16).padStart(2, '0').toUpperCase();
-  return `#${a}${h}`;
-};
-function vector(layers, comment) {
-  const paths = layers
-    .map(
-      (l) =>
-        `    <path\n        android:fillColor="${hex(l.fill, l.alpha)}"${l.evenOdd ? '\n        android:fillType="evenOdd"' : ''}\n        android:pathData="${l.d}" />`,
-    )
-    .join('\n');
-  return `<?xml version="1.0" encoding="utf-8"?>\n<!-- ${comment} Generated by scripts/gen-android-icons.mjs; edit the script, not this file. -->\n<vector xmlns:android="http://schemas.android.com/apk/res/android"\n    android:width="108dp"\n    android:height="108dp"\n    android:viewportWidth="108"\n    android:viewportHeight="108">\n${paths}\n</vector>\n`;
-}
+const fullSvg = readFileSync(join(root, 'resources/icon.svg'), 'utf8');
+const fgSvg = readFileSync(join(root, 'resources/icon-foreground.svg'), 'utf8');
+const BG = readFileSync(join(root, 'resources/icon-background.txt'), 'utf8').trim().toUpperCase();
+if (!/^#[0-9A-F]{6}$/.test(BG)) throw new Error(`resources/icon-background.txt: expected #RRGGBB, got "${BG}"`);
 
 function write(path, content) {
   mkdirSync(dirname(path), { recursive: true });
@@ -114,65 +35,145 @@ function write(path, content) {
   console.log('wrote', path.replace(root + '/', ''));
 }
 
-write(join(root, 'resources/icon.svg'), svg([...bg, ...fg], { size: 1024 }));
-write(join(root, 'resources/icon-foreground.svg'), svg(fg, { size: 1024 }));
-write(join(res, 'drawable/ic_launcher_foreground.xml'), vector(fg, 'QuillForge adaptive icon foreground.'));
-write(join(res, 'drawable/ic_launcher_background.xml'), vector(bg, 'QuillForge adaptive icon background.'));
-write(join(res, 'drawable/ic_launcher_monochrome.xml'), vector(mono, 'QuillForge themed (monochrome) icon.'));
+// --- SVG -> VectorDrawable ----------------------------------------------------------------
+function parseSvg(text) {
+  const rootNode = { name: '#root', attrs: {}, children: [] };
+  const stack = [rootNode];
+  const re = /<(\/?)([\w:-]+)((?:\s+[\w:-]+="[^"]*")*)\s*(\/?)>|<!--[\s\S]*?-->|<\?[\s\S]*?\?>/g;
+  let m;
+  while ((m = re.exec(text))) {
+    if (!m[2]) continue;
+    if (m[1]) { stack.pop(); continue; }
+    const attrs = {};
+    for (const a of m[3].matchAll(/([\w:-]+)="([^"]*)"/g)) attrs[a[1]] = a[2];
+    const node = { name: m[2], attrs, children: [] };
+    stack[stack.length - 1].children.push(node);
+    if (!m[4]) stack.push(node);
+  }
+  return rootNode.children[0];
+}
+const color = (c) => {
+  if (!c || c === 'none') return null;
+  let h = c.trim().replace('#', '').toUpperCase();
+  if (h.length === 3) h = h.split('').map((x) => x + x).join('');
+  if (!/^[0-9A-F]{6}$/.test(h)) throw new Error(`unsupported colour ${c}`);
+  return '#' + h;
+};
+function transformOf(t) {
+  // Composes translate()/scale() into p' = s*p + (tx, ty).
+  let s = 1, tx = 0, ty = 0;
+  const ops = [...(t || '').matchAll(/(translate|scale)\(([^)]*)\)/g)];
+  if ((t || '').replace(/(translate|scale)\([^)]*\)/g, '').trim()) throw new Error(`unsupported transform ${t}`);
+  // Applied right to left: the last operation acts on the point first.
+  const mats = ops.map(([, op, args]) => {
+    const n = args.trim().split(/[\s,]+/).map(Number);
+    return op === 'translate' ? { s: 1, tx: n[0], ty: n[1] ?? 0 } : (n[1] !== undefined && n[1] !== n[0] ? (() => { throw new Error('non-uniform scale'); })() : { s: n[0], tx: 0, ty: 0 });
+  });
+  for (const m of mats) { tx = tx + s * m.tx; ty = ty + s * m.ty; s = s * m.s; }
+  return { s, tx, ty };
+}
+const num = (v) => Number(Number(v).toFixed(3)).toString();
+function rectPath(a) {
+  const x = +a.x || 0, y = +a.y || 0, w = +a.width, h = +a.height;
+  let rx = a.rx != null ? +a.rx : a.ry != null ? +a.ry : 0;
+  rx = Math.min(rx, w / 2, h / 2);
+  if (!rx) return `M${num(x)},${num(y)} H${num(x + w)} V${num(y + h)} H${num(x)} Z`;
+  return `M${num(x + rx)},${num(y)} H${num(x + w - rx)} A${num(rx)},${num(rx)} 0 0 1 ${num(x + w)},${num(y + rx)} V${num(y + h - rx)} A${num(rx)},${num(rx)} 0 0 1 ${num(x + w - rx)},${num(y + h)} H${num(x + rx)} A${num(rx)},${num(rx)} 0 0 1 ${num(x)},${num(y + h - rx)} V${num(y + rx)} A${num(rx)},${num(rx)} 0 0 1 ${num(x + rx)},${num(y)} Z`;
+}
+function toVector(svgText, comment) {
+  const svg = parseSvg(svgText);
+  const [vx, vy, vw, vh] = (svg.attrs.viewBox || `0 0 ${svg.attrs.width} ${svg.attrs.height}`).split(/[\s,]+/).map(Number);
+  if (vx || vy) throw new Error('viewBox must start at 0 0');
+  const out = [];
+  const walk = (node, inh, depth) => {
+    const pad = '    '.repeat(depth);
+    const a = node.attrs;
+    const st = { ...inh };
+    if (a.fill !== undefined) st.fill = a.fill;
+    if (a.stroke !== undefined) st.stroke = a.stroke;
+    for (const k of ['stroke-width', 'stroke-linejoin', 'stroke-linecap']) if (a[k] !== undefined) st[k] = a[k];
+    if (a.opacity !== undefined) st.opacity = (inh.opacity ?? 1) * Number(a.opacity);
+    if (a['fill-opacity'] !== undefined) st.fillOpacity = Number(a['fill-opacity']);
+    switch (node.name) {
+      case 'svg': for (const c of node.children) walk(c, st, depth); return;
+      case 'g': {
+        const t = a.transform ? transformOf(a.transform) : null;
+        if (t) out.push(`${pad}<group android:scaleX="${num(t.s)}" android:scaleY="${num(t.s)}" android:translateX="${num(t.tx)}" android:translateY="${num(t.ty)}">`);
+        for (const c of node.children) walk(c, st, depth + (t ? 1 : 0));
+        if (t) out.push(`${pad}</group>`);
+        return;
+      }
+      case 'rect': case 'path': {
+        if (a.transform) throw new Error('transform on a shape is not supported; put it on a <g>');
+        const d = node.name === 'rect' ? rectPath(a) : a.d.replace(/\s+/g, ' ').trim();
+        const fill = color(st.fill ?? '#000');
+        const stroke = color(st.stroke);
+        const alpha = (st.opacity ?? 1);
+        const attrs = [];
+        if (fill) { attrs.push(`android:fillColor="${fill}"`); const fa = alpha * (st.fillOpacity ?? 1); if (fa !== 1) attrs.push(`android:fillAlpha="${num(fa)}"`); }
+        if (stroke) {
+          attrs.push(`android:strokeColor="${stroke}"`, `android:strokeWidth="${num(st['stroke-width'] ?? 1)}"`);
+          if (alpha !== 1) attrs.push(`android:strokeAlpha="${num(alpha)}"`);
+          if (st['stroke-linejoin']) attrs.push(`android:strokeLineJoin="${st['stroke-linejoin']}"`);
+          if (st['stroke-linecap']) attrs.push(`android:strokeLineCap="${st['stroke-linecap']}"`);
+        }
+        if (a['fill-rule'] === 'evenodd') attrs.push('android:fillType="evenOdd"');
+        out.push(`${pad}<path\n${pad}    ${attrs.join(`\n${pad}    `)}\n${pad}    android:pathData="${d}" />`);
+        return;
+      }
+      default: throw new Error(`<${node.name}> is not supported by the vector converter`);
+    }
+  };
+  walk(svg, {}, 1);
+  return `<?xml version="1.0" encoding="utf-8"?>\n<!-- ${comment} Generated by scripts/gen-android-icons.mjs from resources/; edit those, not this file. -->\n<vector xmlns:android="http://schemas.android.com/apk/res/android"\n    android:width="108dp"\n    android:height="108dp"\n    android:viewportWidth="${vw}"\n    android:viewportHeight="${vh}">\n${out.join('\n')}\n</vector>\n`;
+}
 
-// The Capacitor template ships a drawable-v24 foreground that would shadow ours,
-// plus PNG foregrounds referenced from mipmap; remove them.
-for (const p of ['drawable-v24/ic_launcher_foreground.xml']) {
+write(join(res, 'drawable/ic_launcher_foreground.xml'), toVector(fgSvg, 'Adaptive icon foreground.'));
+write(join(res, 'values/ic_launcher_background.xml'), `<?xml version="1.0" encoding="utf-8"?>\n<!-- Generated by scripts/gen-android-icons.mjs from resources/icon-background.txt. -->\n<resources>\n    <color name="ic_launcher_background">${BG}</color>\n    <color name="splash_background">${BG}</color>\n</resources>\n`);
+const adaptive = `<?xml version="1.0" encoding="utf-8"?>\n<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n    <background android:drawable="@color/ic_launcher_background" />\n    <foreground android:drawable="@drawable/ic_launcher_foreground" />\n    <monochrome android:drawable="@mipmap/ic_launcher_monochrome" />\n</adaptive-icon>\n`;
+write(join(res, 'mipmap-anydpi-v26/ic_launcher.xml'), adaptive);
+write(join(res, 'mipmap-anydpi-v26/ic_launcher_round.xml'), adaptive);
+// Replaced by the colour resource and the monochrome PNGs; the Capacitor template's drawable-v24 foreground
+// would shadow ours.
+for (const p of ['drawable/ic_launcher_background.xml', 'drawable/ic_launcher_monochrome.xml', 'drawable-v24/ic_launcher_foreground.xml']) {
   const f = join(res, p);
-  if (existsSync(f)) rmSync(f);
+  if (existsSync(f)) { rmSync(f); console.log('removed', f.replace(root + '/', '')); }
 }
 
 if (process.argv.includes('--no-png')) process.exit(0);
 
-// --- PNG rendering -------------------------------------------------------------
+// --- PNG rendering -------------------------------------------------------------------------
 const { chromium } = await import('playwright');
-const launchOpts = { headless: true };
-if (process.env.CHROMIUM_PATH) launchOpts.executablePath = process.env.CHROMIUM_PATH;
-let browser;
-try {
-  browser = await chromium.launch(launchOpts);
-} catch (err) {
-  // Fall back to any locally installed Playwright Chromium build.
-  const { readdirSync } = await import('node:fs');
-  const base = process.env.PLAYWRIGHT_BROWSERS_PATH || '/opt/pw-browsers';
-  const cand = existsSync(base)
-    ? readdirSync(base)
-        .filter((d) => d.startsWith('chromium-'))
-        .flatMap((d) => [join(base, d, 'chrome-linux64/chrome'), join(base, d, 'chrome-linux/chrome')])
-        .filter(existsSync)
-    : [];
-  if (!cand.length) throw err;
-  browser = await chromium.launch({ ...launchOpts, executablePath: cand[0] });
-}
-const pageCtx = await browser.newPage();
-
+const exe = [process.env.CHROMIUM_PATH, '/opt/pw-browsers/chromium', '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'].find((p) => p && existsSync(p) && statSync(p).isFile());
+const browser = await chromium.launch(exe ? { executablePath: exe } : {});
+const page = await browser.newPage();
+const inner = (svg) => svg.replace(/^[\s\S]*?<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
+const sized = (svg, px, viewBox) => svg.replace(/<svg[^>]*>/, (tag) => tag.replace(/\s(width|height|viewBox)="[^"]*"/g, '').replace('<svg', `<svg width="${px}" height="${px}" viewBox="${viewBox || '0 0 512 512'}"`));
 async function renderPng(svgText, px, out) {
-  await pageCtx.setViewportSize({ width: px, height: px });
-  const sized = svgText.replace(/width="\d+" height="\d+"/, `width="${px}" height="${px}"`);
-  await pageCtx.setContent(
-    `<!doctype html><html><head><style>html,body{margin:0;padding:0;background:transparent}svg{display:block}</style></head><body>${sized}</body></html>`,
-  );
-  const buf = await pageCtx.screenshot({ omitBackground: true, clip: { x: 0, y: 0, width: px, height: px } });
+  await page.setViewportSize({ width: px, height: px });
+  await page.setContent(`<!doctype html><html><head><style>html,body{margin:0;padding:0;background:transparent}svg{display:block}</style></head><body>${svgText}</body></html>`);
+  const buf = await page.screenshot({ omitBackground: true, clip: { x: 0, y: 0, width: px, height: px } });
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, buf);
   console.log('wrote', out.replace(root + '/', ''), `${px}px`);
 }
+// The 108dp adaptive canvas shows its central 72dp: in the 512-unit artwork that is 512*18/108 .. 512*90/108.
+const C = 512 * 18 / 108, W = 512 * 72 / 108;
+const crop = `${num(C)} ${num(C)} ${num(W)} ${num(W)}`;
+// Adaptive composition for the legacy round icon: background colour + foreground, cropped to what launchers show.
+const composed = (clip) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><clipPath id="c">${clip}</clipPath></defs><g clip-path="url(#c)"><rect width="512" height="512" fill="${BG}"/>${inner(fgSvg)}</g></svg>`;
+const round = composed(`<circle cx="256" cy="256" r="${num(W / 2)}"/>`);
+// Themed icon: the foreground's white parts, with the coloured details (text lines, quill outline) cut out.
+const monoInner = inner(fgSvg).replace(/(fill|stroke)="#(?![fF]{3}\b|[fF]{6}\b)[0-9a-fA-F]{3,6}"/g, '$1="#000"');
+const mono = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512"><rect width="512" height="512" fill="#000"/>${monoInner}</mask></defs><rect width="512" height="512" fill="#fff" mask="url(#m)"/></svg>`;
 
-// Legacy icons: crop to the central 72x72 of the 108 canvas (what launchers show).
-const legacySquare = svg([...bg, ...fg], { viewBox: '18 18 72 72', clip: 'rounded' });
-const legacyRound = svg([...bg, ...fg], { viewBox: '18 18 72 72', clip: 'circle' });
-const densities = { mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 };
-for (const [d, px] of Object.entries(densities)) {
-  await renderPng(legacySquare, px, join(res, `mipmap-${d}/ic_launcher.png`));
-  await renderPng(legacyRound, px, join(res, `mipmap-${d}/ic_launcher_round.png`));
+const densities = { mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4 };
+for (const [d, k] of Object.entries(densities)) {
+  await renderPng(sized(fullSvg, 48 * k), 48 * k, join(res, `mipmap-${d}/ic_launcher.png`));
+  await renderPng(sized(round, 48 * k, crop), 48 * k, join(res, `mipmap-${d}/ic_launcher_round.png`));
+  await renderPng(sized(mono, 108 * k), 108 * k, join(res, `mipmap-${d}/ic_launcher_monochrome.png`));
   const oldFg = join(res, `mipmap-${d}/ic_launcher_foreground.png`);
   if (existsSync(oldFg)) rmSync(oldFg);
 }
-await renderPng(svg([...bg, ...fg], { viewBox: '9 9 90 90' }), 512, join(root, 'resources/icon-512.png'));
-
+await renderPng(sized(fullSvg, 512), 512, join(root, 'resources/icon-512.png'));
 await browser.close();
