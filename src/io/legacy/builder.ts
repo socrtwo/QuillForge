@@ -122,7 +122,8 @@ export class DocBuilder {
 
   /** Close the current paragraph (an empty one if nothing was added). */
   endParagraph(pp: ParaProps = {}): void {
-    const attrs = paraAttrs(pp);
+    // In a list the list supplies the indent; the source's hanging indent would double it.
+    const attrs = paraAttrs(pp.list ? { ...pp, indentLeft: null, indentFirst: null, tabs: null } : pp);
     const p = S.nodes.paragraph.create(attrs, this.inl);
     this.inl = [];
     if (pp.list) this.cur.blocks.push({ kind: 'list', item: { level: pp.list.level ?? 0, ordered: pp.list.ordered, format: pp.list.format, start: pp.list.start, blocks: [p] } });
