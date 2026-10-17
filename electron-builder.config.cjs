@@ -14,6 +14,9 @@ module.exports = {
   // Everything the app needs is bundled into dist/ by Vite; ship no node_modules.
   files: ['dist/**/*', 'electron/**/*', 'package.json', '!**/node_modules/**'],
   icon: 'resources/icon-1024.png',
+  // The web build, unpacked next to app.asar as resources/embed/, so QuillPost desktop can run this editor
+  // inside its own window (docs/EMBED.md). Paths are relative to the project folder.
+  extraResources: [{ from: 'dist', to: 'embed', filter: ['**/*'] }],
   fileAssociations: [
     { ext: 'docx', name: 'Word Document', role: 'Editor', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
     { ext: 'odt', name: 'OpenDocument Text', role: 'Editor', mimeType: 'application/vnd.oasis.opendocument.text' },

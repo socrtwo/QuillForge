@@ -145,7 +145,7 @@ function cleanupScript() {
   window.scrollTo(0, 0); document.scrollingElement.scrollLeft = 0;
 }
 
-async function newPage(sc) {
+async function newPage(sc, query = '') {
   const ctx = await browser.newContext({ viewport: sc.viewport, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
   const page = await ctx.newPage();
   const errors = [];
@@ -164,8 +164,10 @@ async function newPage(sc) {
     const setInsets = () => { const s = document.documentElement.style; for (const k of ['top', 'right', 'bottom', 'left']) s.setProperty(`--safe-area-inset-${k}`, I[k] + 'px'); };
     document.addEventListener('DOMContentLoaded', setInsets);
   }, sc.insets);
-  await page.goto(URL);
+  await page.goto(URL + query);
   await page.waitForFunction(() => window.qf && window.qf.view, null, { timeout: 60000 });
+  // Icons are a ligature font: until it loads they render as their (wide) names and skew every measurement.
+  await page.evaluate(async () => { try { await document.fonts.ready; await document.fonts.load('24px "Material Symbols Outlined"', 'home'); } catch { /* measured anyway */ } }).catch(() => {});
   await page.waitForTimeout(500);
   return { ctx, page, errors };
 }
@@ -221,6 +223,15 @@ for (const sc of SCENARIOS) {
     await page.evaluate(cleanupScript).catch(() => {});
   }
   await ctx.close();
+  // QuillPost's embedded editor (?embed=compose): its Done/Cancel bar and frame.
+  {
+    const emb = await newPage(sc, '?embed=compose&host=quillpost&v=1');
+    const res = await emb.page.evaluate(measure, { sc, frame: true });
+    const bar = await emb.page.evaluate((sc) => { const b = document.querySelector('.qf-embed-bar'); if (!b) return 'missing'; const r = b.getBoundingClientRect(); return r.top < sc.insets.top - 0.5 || r.left < sc.insets.left - 0.5 || r.right > innerWidth - sc.insets.right + 0.5 ? `at ${Math.round(r.left)},${Math.round(r.top)}-${Math.round(r.right)},${Math.round(r.bottom)}` : ''; }, sc);
+    for (const d of res.defects) defects.push(`(embedded editor): ${d}`);
+    if (bar) defects.push(`(embedded editor): system-bars: Done/Cancel bar ${bar}`);
+    await emb.ctx.close();
+  }
   if (!menuIds) menuIds = showing; // later scenarios only re-open commands that show something
   const failing = new Set(defects.map((d) => d.split(': ')[0]));
   report[sc.name] = { checked: ids.length, showing: showing.length, failing: failing.size, defects };

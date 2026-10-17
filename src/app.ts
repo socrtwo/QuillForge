@@ -21,6 +21,7 @@ import { toast } from './ui/dialog';
 import { esc } from './ui/dom';
 import type { Shell } from './ui/shell';
 import { Proofer } from './proof/proofing';
+import { embedHidden } from './embed/hidden';
 
 export type ViewMode = 'print' | 'web' | 'mobile' | 'read' | 'outline' | 'draft' | 'focus';
 
@@ -77,6 +78,13 @@ export class App {
   keyIndex = new Map<string, string>();
   editPositions: number[] = [];
   proofer: Proofer;
+  /** Embedded editor for QuillPost (?embed=compose): no file commands, drafts or autosave (docs/EMBED.md). */
+  embedded = false;
+  /** Theme requested by the embedding app; overrides the preference without saving it. */
+  embedTheme: 'light' | 'dark' | null = null;
+  /** Done / Cancel of the embedded editor's bar (set by src/embed/mode.ts). */
+  embedControls: { done(): void; cancel(): void } | null = null;
+  private docChangeListeners = new Set<(tab: DocTab) => void>();
 
   constructor(public host: HTMLElement) {
     this.proofer = new Proofer(this);
@@ -89,6 +97,8 @@ export class App {
   get settings(): DocSettings { return this.active.settings; }
 
   onRefresh(fn: (app: App) => void): () => void { this.listeners.add(fn); return () => this.listeners.delete(fn); }
+  /** Called after every user edit (not for loads, field updates or other derived changes). */
+  onDocChange(fn: (tab: DocTab) => void): () => void { this.docChangeListeners.add(fn); return () => this.docChangeListeners.delete(fn); }
 
   savePrefs(): void { savePrefs(this.prefs); this.rebuildKeyIndex(); }
 
@@ -213,6 +223,8 @@ export class App {
 
   defaultViewMode(): ViewMode {
     const pref = this.prefs.defaultView;
+    // A message has no pages: the embedded editor reflows to the frame.
+    if (this.embedded) return window.innerWidth < 700 ? 'mobile' : 'web';
     if (pref !== 'auto') return pref;
     return window.innerWidth < 700 ? 'mobile' : 'print';
   }
@@ -273,6 +285,7 @@ export class App {
       if (!tr.getMeta('noDirty')) {
         if (!tab.dirty) { tab.dirty = true; this.ui.tabsChanged(); document.title = `${tab.displayName} • – QuillForge`; }
         this.scheduleAutosave();
+        for (const fn of this.docChangeListeners) fn(tab);
       }
       this.proofer.schedule(tab);
     }
@@ -319,6 +332,7 @@ export class App {
   exec(id: string, arg?: any): unknown {
     const c = getCommand(id);
     if (!c) { toast(`Unknown command: ${id}`); return false; }
+    if (this.embedded && embedHidden(id)) { toast(`${c.label} is not available while you edit a message.`); return false; }
     if (c.edits && !this.view.editable) {
       toast('The document is read-only.');
       return false;
@@ -506,11 +520,13 @@ export class App {
 
   scheduleAutosave(): void {
     // Throttle, not debounce: continuous typing must still save every few seconds.
-    if (!this.prefs.autosave || this.autosaveTimer) return;
+    if (this.embedded || !this.prefs.autosave || this.autosaveTimer) return;
     this.autosaveTimer = setTimeout(() => { this.autosaveTimer = null; void this.saveDrafts(); }, Math.max(3, this.prefs.autosaveSeconds) * 1000);
   }
 
   async saveDrafts(): Promise<void> {
+    // The embedding app owns an embedded message: nothing of it is stored here.
+    if (this.embedded) return;
     for (const tab of this.docs) {
       if (!tab.dirty) continue;
       await kvSet('draft:' + tab.id, {

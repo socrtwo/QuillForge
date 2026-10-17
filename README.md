@@ -133,7 +133,9 @@ npm run ios:sync        # web build into the Xcode project (ios/)
 
 CI (`.github/workflows/android.yml`) type-checks, tests, builds the web app, and produces an APK and AAB on every push. The **Release** workflow (`.github/workflows/release.yml`) builds every platform and publishes them together; run it from the Actions tab or push a tag `v*`. See [docs/BUILD.md](docs/BUILD.md).
 
-Browser checks: `npm run build && npx vite preview --port 4173`, then `node tests/e2e/smoke.mjs`, `node tests/e2e/all-commands.mjs` (executes every command and menu variant), `node tests/e2e/visual.mjs`, `node tests/e2e/io.mjs`, `node tests/e2e/ai.mjs` (AI features against a mock OpenAI/Anthropic/Gemini server) and `node tests/e2e/dictionaries.mjs` (downloads a real dictionary). The desktop app: `xvfb-run -a node tests/e2e/desktop.mjs`.
+Browser checks: `npm run build && npx vite preview --port 4173`, then `node tests/e2e/smoke.mjs`, `node tests/e2e/all-commands.mjs` (executes every command and menu variant), `node tests/e2e/visual.mjs`, `node tests/e2e/io.mjs`, `node tests/e2e/ai.mjs` (AI features against a mock OpenAI/Anthropic/Gemini server) and `node tests/e2e/dictionaries.mjs` (downloads a real dictionary). The desktop app: `xvfb-run -a node tests/e2e/desktop.mjs`. Layout on phones (system bars, keyboard, 320–915 px): `npm run e2e:layout` (starts its own dev server).
+
+QuillPost, the suite's email app, can use this editor for message bodies: see [docs/EMBED.md](docs/EMBED.md).
 
 ## Project language
 

@@ -92,6 +92,14 @@
 
         </activity>
 
+        <!-- Read-only access to the built web app (assets/public) for QuillPost's embedded editor
+             (docs/EMBED.md): content://<applicationId>.embed/index.html -->
+        <provider
+            android:name=".EmbedAssetsProvider"
+            android:authorities="${applicationId}.embed"
+            android:exported="true"
+            android:grantUriPermissions="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

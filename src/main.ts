@@ -13,6 +13,7 @@ import { wordAt } from './editor/ops';
 import { launchFile, onFileOpened, onBackButton, isNative, isDesktop, isCapacitor } from './platform/native';
 import { closeMenus, inDialog, toast } from './ui/dialog';
 import { installScrollCues } from './ui/scrollcue';
+import { embedModeFrom } from './embed/embed';
 import { kvKeys } from './util/store';
 import { allCommands, getCommand } from './commands/registry';
 
@@ -29,6 +30,8 @@ installScrollCues({
 
 const host = document.getElementById('app')!;
 const app = new App(host);
+// ?embed=compose: QuillPost's embedded message editor (docs/EMBED.md).
+app.embedded = embedModeFrom(location.search) === 'compose';
 app.ui = new Shell(app);
 app.rebuildKeyIndex();
 app.createTab();
@@ -39,6 +42,12 @@ app.createTab();
 (window as any).__qfAi = async () => ({ ...(await import('./ai/client')), ...(await import('./ai/store')), ...(await import('./ai/providers')) });
 
 async function start() {
+  if (app.embedded) {
+    // No launch files, draft recovery, sign-in callbacks or tour: the embedding app owns this document.
+    const { startEmbed } = await import('./embed/mode');
+    startEmbed(app);
+    return;
+  }
   // Browser build: this tab may be the OpenRouter sign-in callback opened by the AI setup wizard.
   if (!isNative() && /[?&]qf-oauth=/.test(location.search)) {
     try {
@@ -68,7 +77,7 @@ start();
 
 // Web build served over http(s): register the service worker so the app works offline and can be
 // installed (ChromeOS, desktop Chrome/Edge, Android Chrome). Not used inside the Android, iOS or desktop apps.
-if (!isNative() && !isCapacitor() && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !import.meta.env.DEV) {
+if (!isNative() && !isCapacitor() && !app.embedded && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !import.meta.env.DEV) {
   window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(() => undefined); });
 }
 
@@ -86,7 +95,7 @@ onBackButton(() => {
 window.addEventListener('beforeunload', (e) => {
   app.saveDrafts();
   // In the desktop app this makes the main process ask before closing (will-prevent-unload).
-  if ((!isNative() || isDesktop()) && app.docs.some((d) => d.dirty)) { e.preventDefault(); e.returnValue = ''; }
+  if ((!isNative() || isDesktop()) && !app.embedded && app.docs.some((d) => d.dirty)) { e.preventDefault(); e.returnValue = ''; }
 });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') app.saveDrafts(); });
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => app.ui.applyPrefs());

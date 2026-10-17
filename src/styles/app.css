@@ -610,6 +610,14 @@ body.qf-zen .qf-titlebar, body.qf-zen .qf-tabs, body.qf-zen .qf-ribbon, body.qf-
 .qf-zen-exit:hover, .qf-zen-exit:focus-visible { opacity: 1; }
 body.qf-zen .qf-zen-exit { display: inline-flex !important; }
 
+/* Embedded editor (QuillPost, ?embed=compose): Done/Cancel bar; no File screen, document name or new-document button. */
+.qf-embed-bar { display: flex; align-items: center; gap: 6px; flex: none; min-height: 40px; padding: 3px 8px; background: var(--surface2); border-bottom: 1px solid var(--border); font-size: 13.5px; }
+.qf-embed-bar > .qf-icon { color: var(--accent); }
+.qf-embed-title { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qf-embed-bar .qf-btn { min-height: 32px; padding: 4px 12px; }
+.qf-embed .qf-filebtn, .qf-embed .qf-title { display: none; }
+@media print { .qf-embed-bar { display: none !important; } }
+
 /* Print ------------------------------------------------------------------------------- */
 @media print {
   html, body { height: auto; overflow: visible; background: #fff; }

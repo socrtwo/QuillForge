@@ -279,7 +279,12 @@ function latexFromMath(el: Element): string {
 /** DOM-level clean-up of pasted or imported HTML (operates in place). */
 const safeDecode = (u: string) => { try { return decodeURIComponent(u); } catch { return u; } };
 
-export function cleanHtmlDom(root: HTMLElement): void {
+export interface CleanOptions {
+  /** Keep <img src="cid:…"> (inline attachments of an email body being edited for its mail app). */
+  keepCidImages?: boolean;
+}
+
+export function cleanHtmlDom(root: HTMLElement, opts: CleanOptions = {}): void {
   const doc = root.ownerDocument;
   stripActiveContent(root);
   const raw = root.innerHTML;
@@ -346,7 +351,7 @@ export function cleanHtmlDom(root: HTMLElement): void {
   });
   root.querySelectorAll('img').forEach((img) => {
     const src = img.getAttribute('src') || '';
-    if (!src || /^(file|cid|blob|about):/i.test(src)) img.remove();
+    if (!src || /^(file|blob|about):/i.test(src) || (/^cid:/i.test(src) && !opts.keepCidImages)) img.remove();
   });
 
   // Inline SVG → image.
@@ -623,7 +628,7 @@ export function htmlToBlocks(html: string): PMNode[] {
   }
 }
 
-export async function importHtml(data: ArrayBuffer, name: string): Promise<PMNode> {
+export async function importHtml(data: ArrayBuffer, name: string, opts: CleanOptions = {}): Promise<PMNode> {
   const settings = newSettings();
   let blocks: PMNode[] = [];
   try {
@@ -638,7 +643,7 @@ export async function importHtml(data: ArrayBuffer, name: string): Promise<PMNod
     if (meta('subject')) settings.properties.subject = meta('subject');
     const lang = d.documentElement.getAttribute('lang');
     if (lang) settings.language = lang;
-    cleanHtmlDom(d.body);
+    cleanHtmlDom(d.body, opts);
     blocks = normalizeImportedFormatting(domToBlocks(d.body), settings, null);
   } catch { /* fall through with what we have */ }
   void name;

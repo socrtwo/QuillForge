@@ -47,6 +47,10 @@ android {
             }
         }
     }
+    buildFeatures {
+        // BuildConfig.APPLICATION_ID names the embed provider's authority (EmbedAssetsProvider).
+        buildConfig = true
+    }
     buildTypes {
         release {
             minifyEnabled false
