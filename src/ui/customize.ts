@@ -76,7 +76,7 @@ export async function customizeQat(app: App): Promise<void> {
     ],
     buttons: [
       { label: 'Export…', onClick: () => { navigator.clipboard?.writeText(JSON.stringify({ qat })); toast('Quick Access Bar layout copied to clipboard'); } },
-      { label: 'Import…', onClick: async () => { const t = await promptDialog('Import', 'Paste a Quick Access Bar layout:', ''); if (!t) return; try { const j = JSON.parse(t); if (Array.isArray(j.qat)) { qat = j.qat; draw(); } } catch { toast('Invalid layout.'); } } },
+      { label: 'Import…', onClick: async () => { const t = await promptDialog('Import', 'Paste a Quick Access Bar layout:', ''); if (!t) return; try { const j = JSON.parse(t); if (Array.isArray(j.qat)) { qat = j.qat.filter((x: unknown) => typeof x === 'string'); draw(); } } catch { toast('Invalid layout.'); } } },
     ],
   });
   if (!r) return;
@@ -198,12 +198,13 @@ export async function customizeKeyboard(app: App, initialId?: string): Promise<v
     const c = allCommands().find((x) => (x.keys || []).map(canonicalKey).includes(k));
     return c?.id || null;
   };
-  const capture = h('input', { class: 'qf-key-capture', placeholder: 'Press new shortcut key…', readonly: true }) as HTMLInputElement;
-  const owner = h('div', { class: 'qf-help' });
+  const capture = h('input', { class: 'qf-key-capture', placeholder: 'Press new shortcut key…', readonly: true, 'data-capture-keys': true, 'aria-label': 'Press new shortcut key' }) as HTMLInputElement;
+  const owner = h('div', { class: 'qf-help', role: 'status' });
   capture.addEventListener('keydown', (e) => {
-    e.preventDefault(); e.stopPropagation();
     const k = keyName(e);
-    if (!k) return;
+    // Plain Tab and Shift+Tab move on (to Assign) and plain Escape closes the dialog: keyboard users are not trapped.
+    if (!k || k === 'Tab' || k === 'Shift-Tab' || k === 'Escape') return;
+    e.preventDefault(); e.stopPropagation();
     pending = canonicalKey(k);
     capture.value = prettyKey(pending);
     const o = ownerOf(pending);

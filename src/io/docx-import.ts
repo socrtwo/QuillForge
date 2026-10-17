@@ -3,7 +3,7 @@
  *
  * Reads word/document.xml and its companion parts (styles, numbering, footnotes, endnotes,
  * comments, headers/footers, settings, theme, docProps, media) with JSZip + DOMParser and
- * builds a QuillForge `doc` node. Elements are selected by localName so both Transitional
+ * builds a QuillPen `doc` node. Elements are selected by localName so both Transitional
  * and Strict OOXML namespaces work. Unknown markup is skipped, never fatal.
  *
  * Notes on mapping decisions
@@ -12,7 +12,7 @@
  *   wrapped in a `column_section` (continuous breaks bounding a columned section do not
  *   produce extra section_break nodes, which makes column sections round-trip).
  * - Styles: custom styles used by the document are imported into settings.styles; for
- *   built-in style names only the properties that differ from QuillForge's own definition
+ *   built-in style names only the properties that differ from QuillPen's own definition
  *   are imported as overrides.
  * - Complex fields are tracked with a stack that spans runs and paragraphs; TOC / INDEX /
  *   BIBLIOGRAPHY / TOA fields become `gen_block`s whose cache holds the cached result lines.
@@ -27,6 +27,7 @@ import {
   cssBorderToOoxml, cssColorToHex, exportFontName, isBuiltinStyleName, mimeForExt, onOff, ooxmlBorderToCss,
   ooxmlColorToCss, parseFieldInstr, parseTwips, round2, stripInvalidXml, tableStyleFor, type FieldInstr,
 } from './ooxml-util';
+import { safeCssValue, safeNum } from '../util/sanitize';
 
 const S = schema.nodes;
 const MK = schema.marks;
@@ -451,7 +452,7 @@ class DocxImporter {
     return {
       numFmt: val(l, 'numFmt') || 'decimal',
       lvlText: val(l, 'lvlText') ?? '',
-      start: parseInt(val(l, 'start') || '1', 10),
+      start: intAttr(kid(l, 'start'), 'val') ?? 1, // a non-numeric value would number the list "NaN"
       font: attr(rFonts, 'ascii') || attr(rFonts, 'hAnsi'),
     };
   }
@@ -461,7 +462,7 @@ class DocxImporter {
     for (const a of kidsNamed(root, 'abstractNum')) {
       const id = attr(a, 'abstractNumId') || '';
       const lv = new Map<number, LvlDef>();
-      for (const l of kidsNamed(a, 'lvl')) lv.set(parseInt(attr(l, 'ilvl') || '0', 10), this.parseLvl(l));
+      for (const l of kidsNamed(a, 'lvl')) lv.set(intAttr(l, 'ilvl') ?? 0, this.parseLvl(l));
       this.abstracts.set(id, lv);
       const link = val(a, 'numStyleLink');
       if (link) this.abstractStyleLink.set(id, link);
@@ -470,10 +471,9 @@ class DocxImporter {
       const id = attr(n, 'numId') || '';
       const overrides = new Map<number, { start?: number; lvl?: LvlDef }>();
       for (const o of kidsNamed(n, 'lvlOverride')) {
-        const ilvl = parseInt(attr(o, 'ilvl') || '0', 10);
-        const so = val(o, 'startOverride');
+        const ilvl = intAttr(o, 'ilvl') ?? 0;
         const l = kid(o, 'lvl');
-        overrides.set(ilvl, { start: so != null ? parseInt(so, 10) : undefined, lvl: l ? this.parseLvl(l) : undefined });
+        overrides.set(ilvl, { start: intAttr(kid(o, 'startOverride'), 'val') ?? undefined, lvl: l ? this.parseLvl(l) : undefined });
       }
       this.nums.set(id, { abstractId: val(n, 'abstractNumId') || '', overrides });
     }
@@ -774,10 +774,10 @@ class DocxImporter {
     const content = kid(sdt, 'sdtContent');
     const tag = val(pr, 'tag') || '';
     if (tag.startsWith('qf:textbox')) {
-      let opts: Record<string, any> = {};
+      let opts: unknown = {};
       try { opts = JSON.parse(tag.slice('qf:textbox'.length).replace(/^:/, '') || '{}'); } catch { /* */ }
       const blocks = this.blocksOf(content).map((b) => (b.type === S.paragraph && (b.attrs.border || b.attrs.bg) ? b.type.create({ ...b.attrs, border: null, bg: null }, b.content, b.marks) : b));
-      items.push({ node: S.text_box.create(opts, blocks.length ? blocks : [emptyPara()]) });
+      items.push({ node: S.text_box.create(textBoxOpts(opts), blocks.length ? blocks : [emptyPara()]) });
       return;
     }
     this.collectBlocks(kids(content), items);
@@ -810,9 +810,8 @@ class DocxImporter {
   private listInfo(pPr: Element | null): ListInfo | null {
     const numPr = kid(pPr, 'numPr');
     const directNum = val(numPr, 'numId');
-    const directLvl = val(numPr, 'ilvl');
     let numId = directNum;
-    let ilvl = directLvl != null ? parseInt(directLvl, 10) : null;
+    let ilvl = intAttr(kid(numPr, 'ilvl'), 'val'); // null when absent or not a number (NaN would pass the clamp below)
     if (numId == null) {
       let sid = val(pPr, 'pStyle') || this.defaultParaStyle;
       for (let guard = 0; sid && guard < 12; guard++) {
@@ -829,7 +828,12 @@ class DocxImporter {
   paragraph(p: Element, items: Item[]): void {
     const pPr = kid(p, 'pPr');
     const attrs = this.paraAttrs(pPr);
-    const list = this.listInfo(pPr);
+    let list = this.listInfo(pPr);
+    // Outline numbering without a number (LibreOffice's default chapter numbering) is not a list.
+    if (list && /^(Heading \d|Title)$/.test(attrs.style)) {
+      const def = this.levelDef(list.numId, list.ilvl);
+      if (def.kind === 'bullet' && def.bullet === 'none') list = null;
+    }
     if (list) {
       if (attrs.style === 'List Paragraph') attrs.style = 'Normal';
       attrs.indentLeft = null;
@@ -1415,7 +1419,7 @@ class DocxImporter {
       const it = items[k];
       if (!('node' in it)) continue;
       const n = it.node;
-      // Hidden spacer paragraph between two tables (written by QuillForge to keep them apart).
+      // Hidden spacer paragraph between two tables (written by QuillPen to keep them apart).
       if (n.type === S.paragraph && n.childCount === 0 && n.attrs.hidden && flat.length && flat[flat.length - 1].node.type === S.table) {
         const nx = items[k + 1];
         if (nx && 'node' in nx && nx.node.type === S.table) continue;
@@ -1599,6 +1603,23 @@ class DocxImporter {
 
 // ------------------------------------------------------------------------------------------
 // Property parsing helpers (shared by paragraphs and styles)
+
+/**
+ * Text-box options from a "qf:textbox:{json}" content-control tag. The tag is document data and
+ * the values end up in a style attribute: only well-formed values of the known options pass.
+ */
+function textBoxOpts(raw: unknown): Record<string, unknown> {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  if (o.float === 'left' || o.float === 'right' || o.float === 'none') out.float = o.float;
+  for (const k of ['width', 'border', 'bg'] as const) { if (o[k] === null) out[k] = null; else { const v = safeCssValue(o[k]); if (v) out[k] = v; } }
+  if (o.padding != null) out.padding = safeNum(o.padding, 6, 0, 200);
+  if (o.radius != null) out.radius = safeNum(o.radius, 0, 0, 500);
+  if (o.rotate != null) out.rotate = safeNum(o.rotate, 0, -360, 360);
+  if (typeof o.shadow === 'boolean') out.shadow = o.shadow;
+  if (typeof o.kind === 'string' && /^[a-z][\w-]{0,30}$/i.test(o.kind)) out.kind = o.kind;
+  return out;
+}
 
 function bordersJson(pBdr: Element | null): string | null {
   if (!pBdr) return null;
@@ -1973,9 +1994,13 @@ function plainMath(e: Element | null): string {
 // ------------------------------------------------------------------------------------------
 // Entry point
 
-/** Import a .docx / .docm / .dotx / .dotm file into a QuillForge document. */
+/** Import a .docx / .docm / .dotx / .dotm file into a QuillPen document. */
 export async function importDocx(data: ArrayBuffer, name: string): Promise<PMNode> {
-  const zip = await JSZip.loadAsync(data);
+  return importDocxZip(await JSZip.loadAsync(data), name);
+}
+
+/** Import an already-opened (or synthesized) WordprocessingML package. */
+export async function importDocxZip(zip: JSZip, name: string): Promise<PMNode> {
   const imp = new DocxImporter(new Package(zip), name);
   return imp.convert();
 }

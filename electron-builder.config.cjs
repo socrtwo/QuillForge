@@ -1,0 +1,57 @@
+// electron-builder configuration for the desktop releases.
+// Windows: NSIS installer (x64, arm64) and a portable .exe (x64).
+// macOS: universal (Apple silicon + Intel) .dmg and .zip, ad-hoc signed.
+// Linux: AppImage and .deb for x64, arm64 (Raspberry Pi OS 64-bit, ChromeOS Linux on ARM) and
+// armv7l (Raspberry Pi OS 32-bit).
+/** @type {import('electron-builder').Configuration} */
+module.exports = {
+  appId: 'io.github.socrtwo.quillpen',
+  productName: 'QuillPen',
+  copyright: 'QuillPen contributors, MIT License',
+  directories: { app: 'build/desktop-app', output: 'release', buildResources: 'resources' },
+  artifactName: 'QuillPen-${version}-${os}-${arch}.${ext}',
+  asar: true,
+  // Everything the app needs is bundled into dist/ by Vite; ship no node_modules.
+  files: ['dist/**/*', 'electron/**/*', 'package.json', '!**/node_modules/**'],
+  icon: 'resources/icon-1024.png',
+  // The web build, unpacked next to app.asar as resources/embed/, so QuillPost desktop can run this editor
+  // inside its own window (docs/EMBED.md). Paths are relative to the project folder.
+  extraResources: [{ from: 'dist', to: 'embed', filter: ['**/*'] }],
+  fileAssociations: [
+    { ext: 'docx', name: 'Word Document', role: 'Editor', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+    { ext: 'odt', name: 'OpenDocument Text', role: 'Editor', mimeType: 'application/vnd.oasis.opendocument.text' },
+    { ext: 'rtf', name: 'Rich Text Document', role: 'Editor', mimeType: 'application/rtf' },
+    { ext: 'doc', name: 'Word 97-2003 Document', role: 'Viewer', mimeType: 'application/msword' },
+    { ext: 'qpd', name: 'QuillPen Document', role: 'Editor' },
+    { ext: 'qfd', name: 'QuillPen Document (QuillForge)', role: 'Editor' }, // rename:keep — QuillPen was named QuillForge; its .qfd/.qfde files still open
+    { ext: ['wpd', 'wp5', 'wp6'], name: 'WordPerfect Document', role: 'Viewer', mimeType: 'application/vnd.wordperfect' },
+    { ext: 'wps', name: 'Microsoft Works Document', role: 'Viewer', mimeType: 'application/vnd.ms-works' },
+    { ext: 'wri', name: 'Windows Write Document', role: 'Viewer', mimeType: 'application/x-mswrite' },
+    { ext: ['lwp', 'sam'], name: 'Lotus Word Pro / Ami Pro Document', role: 'Viewer' },
+    { ext: 'hwp', name: 'Hangul Document', role: 'Viewer', mimeType: 'application/x-hwp' },
+    { ext: ['ws', 'xy', 'rft', 'mcw', 'cwk'], name: 'Legacy Word Processor Document', role: 'Viewer' },
+  ],
+  win: {
+    target: [{ target: 'nsis', arch: ['x64', 'arm64'] }, { target: 'portable', arch: ['x64'] }],
+  },
+  nsis: { oneClick: false, perMachine: false, allowToChangeInstallationDirectory: true, artifactName: 'QuillPen-${version}-windows-${arch}-setup.${ext}' },
+  portable: { artifactName: 'QuillPen-${version}-windows-portable.${ext}' },
+  mac: {
+    target: [{ target: 'dmg', arch: ['universal'] }, { target: 'zip', arch: ['universal'] }],
+    category: 'public.app-category.productivity',
+    // Ad-hoc signature: runs on Apple silicon without a paid Developer ID, but is not notarized,
+    // so Gatekeeper asks once (docs/INSTALL.md). Hardened runtime would reject Electron's own signature.
+    identity: '-',
+    hardenedRuntime: false,
+    gatekeeperAssess: false,
+  },
+  linux: {
+    target: [{ target: 'AppImage', arch: ['x64', 'arm64', 'armv7l'] }, { target: 'deb', arch: ['x64', 'arm64', 'armv7l'] }],
+    category: 'Office',
+    synopsis: 'Word processor with a complete, customizable command library',
+    maintainer: 'socrtwo <socrtwo@users.noreply.github.com>',
+    executableName: 'quillpen',
+    syncDesktopName: true,
+  },
+  publish: null,
+};

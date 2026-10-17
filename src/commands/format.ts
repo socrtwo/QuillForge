@@ -1,11 +1,12 @@
 /** Character, paragraph, list and style commands (Home tab). */
+import { escHtml, safeColor, safeNum } from '../util/sanitize';
 import { def, type MenuEntry } from './registry';
 import type { App } from '../app';
 import { schema, PARA_DEFAULTS } from '../editor/schema';
 import {
   markActive, markAttr, toggleMark, setMark, removeMarks, clearCharFormatting, clearAllFormatting,
   setParaAttrs, paraAttr, effectiveParaProp, setParagraphStyle, toggleList, listIndent, findListAncestor,
-  mapSelectedText, transformCase, type CaseMode, currentParagraph, selectedParagraphs,
+  mapSelectedText, transformCase, type CaseMode, currentParagraph, selectedParagraphs, wordAt,
 } from '../editor/ops';
 import { resolveStyles, effectiveStyle, quickStyles, allStyles } from '../editor/styles';
 import { openDialog, colorMenu, toast, promptDialog } from '../ui/dialog';
@@ -24,6 +25,9 @@ export const FONT_SIZES = [8, 9, 10, 10.5, 11, 12, 14, 16, 18, 20, 22, 24, 26, 2
 export const recentFonts: string[] = [];
 
 export const lastColors = { font: '#c00000', highlight: '#ffff00', shading: '#d9e2f3', underline: '#c00000' };
+
+/** A font family name safe inside a single-quoted CSS string in a style attribute. */
+const cssStr = (v: unknown) => String(v ?? '').replace(/[^\p{L}\p{N} _.,-]/gu, '');
 
 function v(app: App) { return app.view; }
 
@@ -227,9 +231,10 @@ const CASES: [CaseMode, string, string][] = [
 def({
   id: 'fmt.changeCase', label: 'Change Case', icon: 'match_case', tab: 'Home', group: 'Font', kind: 'menu', edits: true, keys: ['Shift-F3'],
   run: (app, arg) => {
-    if (arg) { mapSelectedText(v(app), (t) => transformCase(t, arg), arg === 'sentence' || arg === 'title'); return; }
-    // Cycle: lower → upper → capitalize (Shift+F3 behaviour)
-    const t = app.state.doc.textBetween(app.state.selection.from, app.state.selection.to);
+    if (arg) { mapSelectedText(v(app), (t) => transformCase(t, arg), arg === 'sentence' || arg === 'title' || arg === 'capitalize' || arg === 'toggle'); return; }
+    // Cycle: lower → upper → capitalize (Shift+F3 behavior); a collapsed cursor cycles the word it is in.
+    const sel = app.state.selection;
+    const t = sel.empty ? wordAt(sel.$from)?.text || '' : app.state.doc.textBetween(sel.from, sel.to);
     const mode: CaseMode = t === t.toUpperCase() ? 'lower' : t === t.toLowerCase() ? 'capitalize' : 'upper';
     mapSelectedText(v(app), (s) => transformCase(s, mode), true);
   },
@@ -326,7 +331,9 @@ def([
   {
     id: 'fmt.language', label: 'Set Proofing Language', icon: 'language', tab: 'Review', group: 'Language', edits: true,
     run: async (app) => {
-      const langs = ['en-US', 'en-GB', 'en-AU', 'en-CA', 'es-ES', 'es-MX', 'fr-FR', 'fr-CA', 'de-DE', 'it-IT', 'pt-BR', 'pt-PT', 'nl-NL', 'sv-SE', 'da-DK', 'nb-NO', 'fi-FI', 'pl-PL', 'cs-CZ', 'ru-RU', 'uk-UA', 'el-GR', 'tr-TR', 'he-IL', 'ar-SA', 'hi-IN', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'la', 'grc'];
+      const langs = ['en', 'en-US', 'en-GB', 'en-AU', 'en-CA', 'en-IE', 'en-IN', 'en-NZ', 'en-ZA', 'en-SG', 'en-PH', 'en-HK', 'en-MY', 'en-NG', 'en-KE', 'en-JM', 'en-TT', 'en-BZ', 'en-ZW', 'es-ES', 'es-MX', 'fr-FR', 'fr-CA', 'de-DE', 'it-IT', 'pt-BR', 'pt-PT', 'nl-NL', 'sv-SE', 'da-DK', 'nb-NO', 'fi-FI', 'pl-PL', 'cs-CZ', 'ru-RU', 'uk-UA', 'el-GR', 'tr-TR', 'he-IL', 'ar-SA', 'hi-IN', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'la', 'grc'];
+      // Every language with a downloadable dictionary (Review ▸ Spelling Dictionaries).
+      for (const d of (await import('../proof/dictionaries')).CATALOG) if (!langs.some((l) => l.toLowerCase() === d.tag.toLowerCase())) langs.push(d.tag);
       const r = await openDialog({
         title: 'Language', fields: [
           { key: 'lang', label: 'Mark selected text as', type: 'list', options: langs, value: markAttr(app.state, M.lang, 'lang') || app.settings.language, rows: 10 },
@@ -344,27 +351,51 @@ def([
 
 // Format painter: click = once, double-click (arg 'sticky') = repeated
 export const painter: { marks: readonly Mark[] | null; para: Record<string, any> | null; sticky: boolean } = { marks: null, para: null, sticky: false };
+let stopPainter: (() => void) | null = null;
+const PAINT_EVENTS = ['pointerdown', 'pointerup', 'pointercancel', 'keydown', 'keyup'];
 def({
   id: 'fmt.painter', label: 'Format Painter', icon: 'format_paint', tab: 'Home', group: 'Clipboard', kind: 'toggle', keys: ['Mod-Shift-c'], popular: true,
   tip: 'Copy formatting from the selection, then select text to apply it. Long-press to keep it on.',
   run: (app, arg) => {
-    if (painter.marks) { painter.marks = null; painter.para = null; app.ui.status(''); return; }
+    if (stopPainter) { stopPainter(); return; }
     const st = app.state;
     painter.marks = st.selection.empty ? (st.storedMarks || st.selection.$from.marks()) : (st.doc.nodeAt(st.selection.from)?.marks || st.selection.$from.marks());
     const p = currentParagraph(st);
     painter.para = p ? { ...p.attrs, id: null } : null;
     painter.sticky = arg === 'sticky';
     app.ui.status('Format Painter: select the text to format' + (painter.sticky ? ' (Esc to stop)' : ''));
+    // Paint the next selection the user makes, never the source (still selected when this runs), and only
+    // once the mouse button or Shift is released, so a drag or Shift+arrows paints the whole range.
+    let skip: { from: number; to: number } | null = st.selection.empty ? null : { from: st.selection.from, to: st.selection.to };
+    let held = false;
+    const onInput = (e: Event) => {
+      const key = (e as KeyboardEvent).key;
+      if (e.type === 'keydown' && key === 'Escape') { stop(); return; }
+      if (e.type.startsWith('key') && key !== 'Shift') return;
+      held = e.type === 'pointerdown' || e.type === 'keydown';
+      if (!held) app.refresh();
+    };
     const off = app.onRefresh(() => {
-      const s = app.state;
-      if (!painter.marks) { off(); return; }
-      if (!s.selection.empty) {
-        applyPaintedFormat(app);
-        if (!painter.sticky) { painter.marks = null; painter.para = null; app.ui.status(''); off(); }
-      }
+      const sel = app.state.selection;
+      if (!painter.marks) { stop(); return; }
+      if (held) return;
+      if (sel.empty) { skip = null; return; }
+      if (skip && sel.from === skip.from && sel.to === skip.to) return;
+      applyPaintedFormat(app);
+      skip = { from: app.state.selection.from, to: app.state.selection.to };
+      if (!painter.sticky) stop();
     });
+    const stop = () => {
+      off();
+      for (const t of PAINT_EVENTS) document.removeEventListener(t, onInput, true);
+      painter.marks = null; painter.para = null; stopPainter = null;
+      app.ui.status('');
+      app.refresh();
+    };
+    for (const t of PAINT_EVENTS) document.addEventListener(t, onInput, true);
+    stopPainter = stop;
   },
-  isActive: () => !!painter.marks,
+  isActive: () => !!stopPainter,
 });
 function applyPaintedFormat(app: App) {
   const view = v(app);
@@ -649,10 +680,12 @@ def([
       const st = app.state;
       const anc = findListAncestor(st);
       if (!anc || anc.node.type !== N.ordered_list) return;
-      let prev: { node: any; pos: number } | null = null;
-      st.doc.nodesBetween(0, anc.pos, (n, pos) => { if (n.type === N.ordered_list && pos < anc.pos) prev = { node: n, pos }; return pos < anc.pos; });
+      // Only a preceding numbered list at the same level (same parent), not a nested sublist inside it.
+      const $a = st.doc.resolve(anc.pos);
+      let prev: { node: any } | null = null;
+      for (let i = $a.index() - 1; i >= 0 && !prev; i--) { const n = $a.parent.child(i); if (n.type === N.ordered_list) prev = { node: n }; }
       if (!prev) { toast('No previous list to continue.'); return; }
-      const p = prev as { node: any; pos: number };
+      const p = prev as { node: any };
       v(app).dispatch(st.tr.setNodeMarkup(anc.pos, undefined, { ...anc.node.attrs, order: p.node.attrs.order + p.node.childCount, format: p.node.attrs.format }));
     },
   },
@@ -870,7 +903,7 @@ export async function modifyStyle(app: App, name: string) {
       { key: 'outlineLevel', label: 'Outline level (0 = body)', type: 'number', min: 0, max: 9, value: e.outlineLevel || 0, half: true, visibleIf: () => s.type !== 'character' },
       { key: 'quick', label: 'Add to the Styles gallery', type: 'checkbox', value: !!s.quick, half: true },
     ],
-    onChange: (vv, ctl) => ctl.setPreview(`<div style="font-family:'${vv.font?.startsWith('+') ? app.settings.theme.bodyFont : vv.font}';font-size:${vv.size}pt;font-weight:${vv.bold ? 700 : 400};font-style:${vv.italic ? 'italic' : 'normal'};${vv.underline ? 'text-decoration:underline;' : ''}${vv.smallCaps ? 'font-variant:small-caps;' : ''}color:${vv.useColor ? vv.color : 'inherit'};text-align:${vv.align || 'left'};line-height:${vv.lineHeight}">${name} — The quick brown fox jumps over the lazy dog.</div>`),
+    onChange: (vv, ctl) => ctl.setPreview(`<div style="font-family:'${cssStr(vv.font?.startsWith('+') ? app.settings.theme.bodyFont : vv.font)}';font-size:${safeNum(vv.size, 11, 1, 1638)}pt;font-weight:${vv.bold ? 700 : 400};font-style:${vv.italic ? 'italic' : 'normal'};${vv.underline ? 'text-decoration:underline;' : ''}${vv.smallCaps ? 'font-variant:small-caps;' : ''}color:${vv.useColor ? safeColor(vv.color) : 'inherit'};text-align:${/^(left|right|center|justify)$/.test(vv.align) ? vv.align : 'left'};line-height:${safeNum(vv.lineHeight, 1, 0.1, 20)}">${escHtml(name)} — The quick brown fox jumps over the lazy dog.</div>`),
   });
   if (!r) return;
   app.updateSettings((st) => {
@@ -916,7 +949,7 @@ def({
         { key: 'ligatures', label: 'Ligatures', type: 'select', options: [{ value: '', label: 'Default' }, { value: 'none', label: 'None' }, { value: 'common-ligatures', label: 'Standard' }, { value: 'common-ligatures discretionary-ligatures', label: 'Standard + Discretionary' }, { value: 'historical-ligatures', label: 'Historical' }], value: markAttr(st, M.typo, 'ligatures') || '', half: true },
         { key: 'numerals', label: 'Number forms', type: 'select', options: [{ value: '', label: 'Default' }, { value: 'lining-nums', label: 'Lining' }, { value: 'oldstyle-nums', label: 'Old-style' }, { value: 'tabular-nums', label: 'Tabular' }, { value: 'proportional-nums', label: 'Proportional' }], value: markAttr(st, M.typo, 'numerals') || '', half: true },
       ],
-      onChange: (vv, ctl) => ctl.setPreview(`<span style="font-family:'${vv.font}';font-size:${vv.size}pt;font-weight:${vv.bold ? 700 : 400};font-style:${vv.italic ? 'italic' : 'normal'};color:${vv.color};text-decoration:${[vv.underline ? 'underline' : '', vv.strike || vv.dstrike ? 'line-through' : ''].join(' ') || 'none'};${vv.dstrike ? 'text-decoration-style:double;' : ''}${vv.smallcaps ? 'font-variant:small-caps;' : ''}${vv.allcaps ? 'text-transform:uppercase;' : ''}letter-spacing:${vv.spacing}pt;font-kerning:${vv.kerning ? 'normal' : 'none'};font-variant-ligatures:${vv.ligatures || 'normal'};font-variant-numeric:${vv.numerals || 'normal'};vertical-align:${vv.sup ? 'super' : vv.sub ? 'sub' : 'baseline'}">${fam || 'Font'} AaBbYyZz 0123456789 fi fl</span>`),
+      onChange: (vv, ctl) => ctl.setPreview(`<span style="font-family:'${cssStr(vv.font)}';font-size:${safeNum(vv.size, 11, 1, 1638)}pt;font-weight:${vv.bold ? 700 : 400};font-style:${vv.italic ? 'italic' : 'normal'};color:${safeColor(vv.color)};text-decoration:${[vv.underline ? 'underline' : '', vv.strike || vv.dstrike ? 'line-through' : ''].join(' ') || 'none'};${vv.dstrike ? 'text-decoration-style:double;' : ''}${vv.smallcaps ? 'font-variant:small-caps;' : ''}${vv.allcaps ? 'text-transform:uppercase;' : ''}letter-spacing:${safeNum(vv.spacing, 0, -100, 100)}pt;font-kerning:${vv.kerning ? 'normal' : 'none'};font-variant-ligatures:${vv.ligatures || 'normal'};font-variant-numeric:${vv.numerals || 'normal'};vertical-align:${vv.sup ? 'super' : vv.sub ? 'sub' : 'baseline'}">${escHtml(fam || 'Font')} AaBbYyZz 0123456789 fi fl</span>`),
     });
     if (!r) return;
     const view = v(app);

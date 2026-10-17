@@ -148,7 +148,7 @@ vite.config.ts.timestamp-*
 # Turbo Repo
 .turbo
 
-# QuillForge
+# QuillPen
 dist/
 android/app/build/
 android/build/
@@ -159,3 +159,6 @@ android/capacitor-cordova-android-plugins/
 *.keystore
 *.jks
 test-results/
+public/third-party-notices.txt
+build/
+release/

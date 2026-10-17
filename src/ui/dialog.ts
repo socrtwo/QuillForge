@@ -68,6 +68,8 @@ export interface DialogOptions {
 }
 
 let dialogDepth = 0;
+/** Open dialogs, innermost last: only the top one handles Escape and Enter. */
+const dialogStack: HTMLElement[] = [];
 
 export function openDialog(opts: DialogOptions): Promise<Record<string, any> | null> {
   return new Promise((resolve) => {
@@ -129,6 +131,8 @@ export function openDialog(opts: DialogOptions): Promise<Record<string, any> | n
       if (done) return;
       done = true;
       dialogDepth--;
+      const at = dialogStack.indexOf(overlay);
+      if (at >= 0) dialogStack.splice(at, 1);
       overlay.classList.add('qf-out');
       setTimeout(() => overlay.remove(), 120);
       document.removeEventListener('keydown', onKey, true);
@@ -136,9 +140,13 @@ export function openDialog(opts: DialogOptions): Promise<Record<string, any> | n
       resolve(result);
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(null); }
+      if (dialogStack[dialogStack.length - 1] !== overlay) return;
+      // Shortcut capture boxes (Customize Keyboard) take Enter and modified keys themselves; plain Escape still closes.
+      const plainEsc = e.key === 'Escape' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey;
+      if ((e.target as HTMLElement | null)?.closest?.('[data-capture-keys]') && !plainEsc) return;
+      if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); finish(null); }
       if (e.key === 'Enter' && !(e.target instanceof HTMLTextAreaElement) && !(e.target instanceof HTMLButtonElement) && opts.ok !== false) {
-        e.preventDefault(); e.stopPropagation(); okClick();
+        e.preventDefault(); e.stopImmediatePropagation(); okClick();
       }
     };
     const okClick = () => {
@@ -153,20 +161,24 @@ export function openDialog(opts: DialogOptions): Promise<Record<string, any> | n
       h('button', { class: 'qf-iconbtn', 'aria-label': 'Close', onclick: () => finish(null) }, icon('close')));
     const footer = h('div', { class: 'qf-dialog-foot' });
     for (const b of opts.buttons || []) footer.appendChild(h('button', { class: 'qf-btn' + (b.primary ? ' qf-primary' : ''), onclick: () => b.onClick(values(), ctl) }, b.label));
-    footer.appendChild(h('span', { class: 'qf-spacer' }));
-    if (opts.cancel !== false) footer.appendChild(h('button', { class: 'qf-btn', onclick: () => finish(null) }, opts.cancel || 'Cancel'));
-    if (opts.ok !== false) footer.appendChild(h('button', { class: 'qf-btn qf-primary', onclick: okClick }, opts.ok || 'OK'));
+    // OK and Cancel stay together at the right; on narrow screens the extra buttons wrap onto their own line.
+    const main = h('span', { class: 'qf-foot-main' });
+    if (opts.cancel !== false) main.appendChild(h('button', { class: 'qf-btn', onclick: () => finish(null) }, opts.cancel || 'Cancel'));
+    if (opts.ok !== false) main.appendChild(h('button', { class: 'qf-btn qf-primary', onclick: okClick }, opts.ok || 'OK'));
+    footer.appendChild(main);
 
     box.append(header, body, footer);
     overlay.appendChild(box);
     overlay.addEventListener('mousedown', (e) => { if (e.target === overlay && !isPhone()) finish(null); });
     document.body.appendChild(overlay);
+    dialogStack.push(overlay);
     document.addEventListener('keydown', onKey, true);
     build();
     opts.onOpen?.(ctl);
     opts.onChange?.(values(), ctl, '');
-    const first = body.querySelector<HTMLElement>('[autofocus], input:not([type=checkbox]):not([type=radio]), textarea, select');
-    setTimeout(() => first?.focus(), 30);
+    // The field marked autofocus (else the first text field), unless the user already moved into the dialog.
+    const first = body.querySelector<HTMLElement>('[autofocus]') || body.querySelector<HTMLElement>('input:not([type=checkbox]):not([type=radio]), textarea, select');
+    setTimeout(() => { if (!box.contains(document.activeElement)) first?.focus(); }, 30);
   });
 }
 
@@ -207,6 +219,7 @@ function buildField(f: Field, ctl: DialogControl, changed: () => void): { row: H
       const inp = h('input', { id, type: 'text', list: listId, value: f.value ?? '', placeholder: f.placeholder || '' });
       const dl = h('datalist', { id: listId }, ...(f.options || []).map((o) => h('option', { value: typeof o === 'string' ? o : String(o.value) })));
       inp.addEventListener('input', changed);
+      if (f.autofocus) inp.setAttribute('autofocus', '');
       el = inp;
       const row = h('div', { class: 'qf-field' + (f.half ? ' qf-half' : '') }, label, h('div', { class: 'qf-ctl' }, inp, dl, f.suffix ? h('span', { class: 'qf-suffix' }, f.suffix) : null), f.help ? h('div', { class: 'qf-help' }, f.help) : null);
       return { row, el };
@@ -378,6 +391,14 @@ export async function promptDialog(title: string, label: string, value = '', opt
 // Popup menus
 
 let openMenus: HTMLElement[] = [];
+/** Where focus goes back to when a menu is left with the keyboard (the button or editor it was opened from). */
+let menuReturn: HTMLElement | null = null;
+/** Whether the latest input was a key press: menus opened from the keyboard take focus, others leave it alone. */
+let keyboardInput = false;
+if (typeof document !== 'undefined') {
+  document.addEventListener('keydown', () => { keyboardInput = true; }, true);
+  for (const t of ['pointerdown', 'mousedown', 'touchstart']) document.addEventListener(t, () => { keyboardInput = false; }, true);
+}
 
 export function closeMenus(): void {
   for (const m of openMenus) m.remove();
@@ -400,10 +421,33 @@ export interface MenuOptions {
   title?: string;
   grid?: boolean;
   extra?: HTMLElement;
+  /** Move focus into the menu (default: when it was opened from the keyboard). */
+  focus?: boolean;
 }
 
+const menuItems = (menu: HTMLElement) => [...menu.querySelectorAll<HTMLElement>('button, input')].filter((x) => !(x as HTMLButtonElement).disabled && (x.offsetParent !== null || x === document.activeElement));
+
+/** Arrow keys, Home/End, Right/Left for submenus, Escape and Tab inside a menu. */
+function menuKey(ev: KeyboardEvent, menu: HTMLElement, level: number) {
+  const items = menuItems(menu);
+  const cur = document.activeElement as HTMLElement | null;
+  const i = cur ? items.indexOf(cur) : -1;
+  const typing = cur?.tagName === 'INPUT';
+  const go = (j: number) => { ev.preventDefault(); items[(j + items.length) % items.length]?.focus(); };
+  if (ev.key === 'ArrowDown') go(i + 1);
+  else if (typing) { if (ev.key === 'Escape' || ev.key === 'Tab') leave(ev); }
+  else if (ev.key === 'ArrowUp') go(i < 0 ? items.length - 1 : i - 1);
+  else if (ev.key === 'Home') go(0);
+  else if (ev.key === 'End') go(items.length - 1);
+  else if (ev.key === 'ArrowRight' && cur?.querySelector('.qf-sub')) { ev.preventDefault(); cur.click(); }
+  else if (ev.key === 'ArrowLeft' && level > 0) { ev.preventDefault(); for (const m of openMenus.slice(level)) m.remove(); openMenus = openMenus.slice(0, level); (menu as any)._back?.focus?.(); }
+  else if (ev.key === 'Escape' || ev.key === 'Tab') leave(ev);
+}
+function leave(ev: KeyboardEvent) { ev.preventDefault(); const back = menuReturn; closeMenus(); back?.focus?.(); }
+
 export function showMenu(entries: MenuEntry[], opts: MenuOptions): HTMLElement {
-  if (!opts.level) closeMenus();
+  const prior = document.activeElement as HTMLElement | null;
+  if (!opts.level) { if (!prior?.closest?.('.qf-menu')) menuReturn = prior; closeMenus(); }
   const phone = isPhone();
   const menu = h('div', { class: 'qf-menu' + (opts.className ? ' ' + opts.className : '') + (opts.grid ? ' qf-menu-grid' : ''), role: 'menu' });
   if (opts.title) menu.appendChild(h('div', { class: 'qf-menu-title' }, opts.title));
@@ -434,7 +478,9 @@ export function showMenu(entries: MenuEntry[], opts: MenuOptions): HTMLElement {
         }
         return;
       }
+      const back = keyboardInput && menu.contains(document.activeElement) ? menuReturn : null;
       closeMenus();
+      back?.focus?.();
       opts.onPick(e);
     });
     menu.appendChild(item);
@@ -442,15 +488,20 @@ export function showMenu(entries: MenuEntry[], opts: MenuOptions): HTMLElement {
   if (opts.extra) menu.appendChild(opts.extra);
   document.body.appendChild(menu);
   openMenus.push(menu);
-  // position
-  const vw = window.innerWidth, vh = window.innerHeight;
+  (menu as any)._back = prior;
+  menu.addEventListener('keydown', (ev) => menuKey(ev, menu, opts.level || 0));
+  // Position: next to the anchor, kept inside the area not covered by status, navigation or gesture bars.
+  const sa = safeInsets();
+  const left = sa.left + 4, top = sa.top + 4, right = window.innerWidth - sa.right - 4, bottom = window.innerHeight - sa.bottom - 4;
   const mr = menu.getBoundingClientRect();
   let x = opts.x ?? 0, y = opts.y ?? 0;
-  if (opts.anchor) { const r = opts.anchor.getBoundingClientRect(); x = r.left; y = r.bottom + 2; if (y + mr.height > vh - 8 && r.top - mr.height > 8) y = r.top - mr.height - 2; }
-  if (x + mr.width > vw - 4) x = Math.max(4, vw - mr.width - 4);
-  if (y + mr.height > vh - 4) y = Math.max(4, vh - mr.height - 4);
+  if (opts.anchor) { const r = opts.anchor.getBoundingClientRect(); x = r.left; y = r.bottom + 2; if (y + mr.height > bottom - 4 && r.top - mr.height > top + 4) y = r.top - mr.height - 2; }
+  if (x + mr.width > right) x = right - mr.width;
+  if (y + mr.height > bottom) y = bottom - mr.height;
+  x = Math.max(left, x); y = Math.max(top, y);
   menu.style.left = x + 'px';
   menu.style.top = y + 'px';
+  if (opts.focus ?? keyboardInput) menuItems(menu)[0]?.focus();
   if (!opts.level) {
     setTimeout(() => {
       document.addEventListener('mousedown', outside, true);
@@ -458,6 +509,17 @@ export function showMenu(entries: MenuEntry[], opts: MenuOptions): HTMLElement {
     }, 0);
   }
   return menu;
+}
+
+/** Current system-bar insets in CSS pixels (the --sat/--sab/--sal/--sar variables in app.css). */
+export function safeInsets(): { top: number; bottom: number; left: number; right: number } {
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding:var(--sat) var(--sar) var(--sab) var(--sal)';
+  document.body.appendChild(probe);
+  const cs = getComputedStyle(probe);
+  const r = { top: parseFloat(cs.paddingTop) || 0, bottom: parseFloat(cs.paddingBottom) || 0, left: parseFloat(cs.paddingLeft) || 0, right: parseFloat(cs.paddingRight) || 0 };
+  probe.remove();
+  return r;
 }
 
 // ------------------------------------------------------------------------------------------
@@ -483,7 +545,9 @@ export function colorMenu(anchor: HTMLElement | { x: number; y: number }, opts: 
       if (resolved) return;
       resolved = true;
       if (c && !recentColors.includes(c)) { recentColors.unshift(c); recentColors.splice(10); }
+      const back = keyboardInput && m.contains(document.activeElement) ? menuReturn : null;
       closeMenus();
+      back?.focus?.();
       resolve(c);
     };
     const grid = h('div', { class: 'qf-colors' });

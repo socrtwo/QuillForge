@@ -58,6 +58,13 @@ const SYMBOLS: [RegExp, string][] = [
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
+function romanValue(r: string): number {
+  const v: Record<string, number> = { i: 1, v: 5, x: 10 };
+  let n = 0;
+  for (let i = 0; i < r.length; i++) n += v[r[i]] < (v[r[i + 1]] || 0) ? -v[r[i]] : v[r[i]];
+  return n;
+}
+
 function quoteChars(style: AutoFormatPrefs['quoteStyle']) {
   switch (style) {
     case 'guillemets': return { dOpen: '«', dClose: '»', sOpen: '‹', sClose: '›' };
@@ -81,14 +88,12 @@ export function buildInputRules(prefs: () => AutoFormatPrefs) {
     return rule;
   };
 
-  // Smart quotes
-  rules.push(when('smartQuotes', new InputRule(/(?:^|[\s{[(<'"‘“])(")$/, (state, _m, start, end) => {
-    const q = quoteChars(prefs().quoteStyle);
-    return state.tr.insertText(q.dOpen, end, end);
-  })));
-  rules.push(when('smartQuotes', new InputRule(/"$/, (state, _m, start, end) => state.tr.insertText(quoteChars(prefs().quoteStyle).dClose, end, end))));
-  rules.push(when('smartQuotes', new InputRule(/(?:^|[\s{[(<'"‘“])(')$/, (state, _m, start, end) => state.tr.insertText(quoteChars(prefs().quoteStyle).sOpen, end, end))));
-  rules.push(when('smartQuotes', new InputRule(/'$/, (state, _m, start, end) => state.tr.insertText(quoteChars(prefs().quoteStyle).sClose, end, end))));
+  // Smart quotes. The quote replaces the selection (from the typed position to `end`), like plain typing.
+  const quoteAt = (state: EditorState, m: RegExpMatchArray, start: number, end: number, q: string) => state.tr.insertText(q, start + m[0].length - 1, end);
+  rules.push(when('smartQuotes', new InputRule(/(?:^|[\s{[(<'"‘“])(")$/, (state, m, start, end) => quoteAt(state, m, start, end, quoteChars(prefs().quoteStyle).dOpen))));
+  rules.push(when('smartQuotes', new InputRule(/"$/, (state, m, start, end) => quoteAt(state, m, start, end, quoteChars(prefs().quoteStyle).dClose))));
+  rules.push(when('smartQuotes', new InputRule(/(?:^|[\s{[(<'"‘“])(')$/, (state, m, start, end) => quoteAt(state, m, start, end, quoteChars(prefs().quoteStyle).sOpen))));
+  rules.push(when('smartQuotes', new InputRule(/'$/, (state, m, start, end) => quoteAt(state, m, start, end, quoteChars(prefs().quoteStyle).sClose))));
   // Dashes
   rules.push(when('dashes', new InputRule(/(\S)--$/, (state, m, start, end) => state.tr.insertText(m[1] + '—', start, end))));
   rules.push(when('dashes', new InputRule(/(\s)-(\s)$/, (state, m, start, end) => state.tr.insertText(`${m[1]}–${m[2]}`, start, end))));
@@ -131,8 +136,9 @@ export function buildInputRules(prefs: () => AutoFormatPrefs) {
   })));
   rules.push(when('markdownBlocks', wrappingInputRule(/^\s*([-+*•])\s$/, S.nodes.bullet_list)));
   rules.push(when('markdownBlocks', wrappingInputRule(/^(\d+)[.)]\s$/, S.nodes.ordered_list, (m) => ({ order: +m[1] }), (m, node) => node.childCount + node.attrs.order === +m[1])));
+  // "i." and multi-letter numerals ("ii.", "iv.") start a roman list; any other single letter a lettered list.
+  rules.push(when('markdownBlocks', wrappingInputRule(/^(i|[ivx]{2,})[.)]\s$/, S.nodes.ordered_list, (m) => ({ order: romanValue(m[1]) || 1, format: 'lower-roman' }))));
   rules.push(when('markdownBlocks', wrappingInputRule(/^([a-z])[.)]\s$/, S.nodes.ordered_list, (m) => ({ order: m[1].charCodeAt(0) - 96, format: 'lower-alpha' }))));
-  rules.push(when('markdownBlocks', wrappingInputRule(/^([ivx]+)[.)]\s$/, S.nodes.ordered_list, () => ({ format: 'lower-roman' }))));
   rules.push(when('markdownBlocks', wrappingInputRule(/^\[( |x)?\]\s$/, S.nodes.task_list)));
   rules.push(when('markdownBlocks', textblockTypeInputRule(/^```([a-z]*)?\s$/, S.nodes.code_block, (m) => ({ language: m[1] || null }))));
 
@@ -141,9 +147,13 @@ export function buildInputRules(prefs: () => AutoFormatPrefs) {
     const inner = m[2];
     if (!inner || /^\s|\s$/.test(inner)) return null;
     const pre = m[1] || '';
-    const tr = state.tr;
-    const textStart = start + pre.length;
-    tr.replaceWith(textStart, end, S.text(inner, [...state.doc.resolve(start).marks(), type().create()]));
+    // Delimiter length per side; the last closing character is the one being typed (not yet in the doc).
+    const open = (m[0].length - pre.length - inner.length) / 2;
+    const s = start + pre.length;
+    // Delete the closing, then the opening delimiter and mark the text between, so inline atoms
+    // (images, footnotes, breaks) and existing formatting inside are kept.
+    const tr = state.tr.delete(s + open + inner.length, end).delete(s, s + open);
+    tr.addMark(s, s + inner.length, type().create());
     tr.removeStoredMark(type());
     return tr;
   });
@@ -190,14 +200,19 @@ export function autocorrectPlugin(prefs: () => AutoFormatPrefs, replacements: ()
           view.dispatch(tr);
           return true;
         }
+        // A lone letter or roman numeral starting the paragraph ("a.", "ii)") may begin a list: leave it.
+        if (p.markdownBlocks && (text === '.' || text === ')') && before.length === word.length && /^([a-z]|[ivx]+)$/.test(word)) return false;
         const reps = replacements();
         if (p.replaceList) {
-          const lower = word.toLowerCase();
-          if (reps[word] !== undefined) replaced = reps[word];
-          else if (reps[lower] !== undefined && word === lower) replaced = reps[lower];
-          else if (reps[lower] !== undefined && word[0] === word[0].toUpperCase() && word.slice(1) === word.slice(1).toLowerCase()) {
+          // Look up with straight apostrophes so entries like "i'm" also match after smart quotes ("i’m").
+          const key = word.replace(/’/g, "'");
+          const lower = key.toLowerCase();
+          if (Object.hasOwn(reps, key)) replaced = reps[key];
+          else if (Object.hasOwn(reps, lower) && key === lower) replaced = reps[lower];
+          else if (Object.hasOwn(reps, lower) && key[0] === key[0].toUpperCase() && key.slice(1) === key.slice(1).toLowerCase()) {
             const r = reps[lower]; replaced = r.charAt(0).toUpperCase() + r.slice(1);
           }
+          if (replaced != null && p.smartQuotes && p.quoteStyle !== 'straight') replaced = replaced.replace(/'/g, '’');
         }
         let w = replaced ?? word;
         if (p.twoInitialCaps && /^\p{Lu}\p{Lu}\p{Ll}{2,}$/u.test(w)) w = w[0] + w.slice(1).toLowerCase();

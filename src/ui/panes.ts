@@ -10,12 +10,13 @@ import { setFind, selectMatch, findKey, proofKey } from '../editor/plugins/decor
 import { listChanges, resolveChanges } from '../editor/plugins/trackChanges';
 import { pageOfPos, pageInfo } from '../editor/plugins/pagination';
 import { replaceAll } from '../commands/edit';
-import { commentRanges, updateComment } from '../commands/review';
+import { commentRanges, updateComment, refuseIfProtected } from '../commands/review';
 import { currentParagraph, setParagraphStyle } from '../editor/ops';
 import { modifyStyle } from '../commands/format';
 import { kvKeys, kvGet, kvDel } from '../util/store';
 import { compareDocs } from '../editor/compare';
 import { suggest, addWord } from '../proof/proofing';
+import { aiPaneDef } from './aiPane';
 
 export interface PaneDef {
   id: string;
@@ -29,6 +30,10 @@ export interface PaneDef {
 const N = schema.nodes;
 const M = schema.marks;
 let lastDoc: PMNode | null = null;
+
+/** True while the user is typing in a text field of the pane: redrawing it then would destroy the field
+ *  (on phones the on-screen keyboard resizes the window, which refreshes every pane). */
+const typingIn = (el: HTMLElement) => { const a = document.activeElement as HTMLElement | null; return !!a && el.contains(a) && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'); };
 
 function headings(doc: PMNode) {
   const out: { level: number; text: string; pos: number }[] = [];
@@ -208,9 +213,8 @@ const find: PaneDef = {
       const fs = findKey.getState(st)!;
       const m = fs.matches.find((x) => x.from === st.selection.from && x.to === st.selection.to);
       if (!m) { app.exec('edit.findNext'); return; }
-      let text = r.value;
-      if (re.i.checked) { const one = new RegExp(q.value, cs.i.checked ? 'u' : 'iu'); text = st.doc.textBetween(m.from, m.to).replace(one, r.value); }
-      app.view.dispatch(st.tr.insertText(text, m.from, m.to));
+      // Same engine as Replace All (^p ^t ^& codes, regex context and groups, wildcards, case, style), on this match only.
+      replaceAll(app, { find: q.value, replace: r.value, regex: re.i.checked, caseSensitive: cs.i.checked, wholeWord: ww.i.checked, wildcards: wc.i.checked, inSelection: true, style: style.value || undefined, preserveCase: pc.i.checked, quiet: true });
       apply();
       app.exec('edit.findNext');
     };
@@ -247,8 +251,14 @@ const comments: PaneDef = {
       const activeM = app.state.selection.$head.marks().find((m) => m.type === M.comment);
       for (const c of items) {
         const rg = ranges.get(c.id);
-        const replyInput = h('input', { placeholder: 'Reply…', 'aria-label': 'Reply' }) as HTMLInputElement;
-        replyInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && replyInput.value) app.exec('review.replyComment', { id: c.id, text: replyInput.value }); });
+        const replyInput = h('input', { placeholder: 'Reply…', 'aria-label': 'Reply', 'data-reply': c.id }) as HTMLInputElement;
+        replyInput.addEventListener('keydown', (e) => {
+          if (e.key !== 'Enter' || !replyInput.value) return;
+          app.exec('review.replyComment', { id: c.id, text: replyInput.value });
+          replyInput.value = '';
+          (el as any)._draw();
+          [...el.querySelectorAll<HTMLInputElement>('input[data-reply]')].find((x) => x.dataset.reply === c.id)?.focus();
+        });
         const card = h('div', { class: 'qf-comment-card' + (c.resolved ? ' qf-resolved' : '') + (activeM?.attrs.id === c.id ? ' qf-on' : '') },
           h('div', { class: 'qf-comment-head' }, h('span', { class: 'qf-avatar' }, (c.author || '?')[0]), h('b', null, c.author), h('span', { class: 'qf-help' }, new Date(c.date).toLocaleString())),
           rg ? h('div', { class: 'qf-comment-quote', onclick: () => { app.view.dispatch(app.state.tr.setSelection(TextSelection.create(app.state.doc, rg.from, rg.to)).scrollIntoView()); app.focus(); } }, '“' + rg.text.slice(0, 80) + '”') : h('div', { class: 'qf-help' }, '(anchor text was deleted)'),
@@ -266,7 +276,7 @@ const comments: PaneDef = {
     el.append(h('div', { class: 'qf-row' }, filterSel, h('button', { class: 'qf-btn qf-primary', onclick: () => app.exec('review.newComment') }, icon('add_comment'), ' New')), list);
     (el as any)._draw();
   },
-  update(app, el) { (el as any)._draw?.(); },
+  update(app, el) { if (!typingIn(el)) (el as any)._draw?.(); },
 };
 
 // ------------------------------------------------------------------------------------------
@@ -283,7 +293,7 @@ const revisions: PaneDef = {
         el.appendChild(h('div', { class: 'qf-rev qf-rev-' + c.kind },
           h('div', { class: 'qf-help' }, `${c.kind === 'insertion' ? 'Inserted' : c.kind === 'deletion' ? 'Deleted' : 'Formatted'} · ${c.author} · ${c.date ? new Date(c.date).toLocaleString() : ''}`),
           h('div', { class: 'qf-rev-text', onclick: () => { app.view.dispatch(app.state.tr.setSelection(TextSelection.create(app.state.doc, c.from, c.to)).scrollIntoView()); app.focus(); } }, c.text.slice(0, 160)),
-          h('div', { class: 'qf-row' }, h('button', { class: 'qf-btn qf-sm', onclick: () => app.view.dispatch(resolveChanges(app.state, [c], true)) }, '✓ Accept'), h('button', { class: 'qf-btn qf-sm', onclick: () => app.view.dispatch(resolveChanges(app.state, [c], false)) }, '✗ Reject'))));
+          h('div', { class: 'qf-row' }, h('button', { class: 'qf-btn qf-sm', onclick: () => { if (!refuseIfProtected(app)) app.view.dispatch(resolveChanges(app.state, [c], true)); } }, '✓ Accept'), h('button', { class: 'qf-btn qf-sm', onclick: () => { if (!refuseIfProtected(app)) app.view.dispatch(resolveChanges(app.state, [c], false)); } }, '✗ Reject'))));
       }
     };
     (el as any)._draw();
@@ -295,32 +305,45 @@ const revisions: PaneDef = {
 const spelling: PaneDef = {
   id: 'spelling', title: 'Editor: Spelling & Grammar',
   render(app, el) {
-    let idx = 0;
-    (el as any)._draw = async () => {
-      clear(el);
-      const issues = [...(proofKey.getState(app.state)?.issues || [])].sort((a, b) => a.from - b.from);
-      if (!issues.length) { el.append(h('p', null, '✓ No spelling or grammar issues found.'), h('button', { class: 'qf-btn', onclick: () => app.proofer.run(app.tab) }, 'Recheck')); return; }
+    let idx = 0, seq = 0, timer: any = null;
+    // The issue shown belongs to one version of one document: its positions are used only while that version
+    // is current, and the pane redraws (without moving the cursor) when the document or the results change.
+    let shown: { doc: PMNode; issues: unknown } | null = null;
+    const draw = async (select: boolean) => {
+      const token = ++seq;
+      const st = app.state;
+      const found = proofKey.getState(st)?.issues;
+      shown = { doc: st.doc, issues: found };
+      const issues = [...(found || [])].sort((a, b) => a.from - b.from);
+      if (!issues.length) { clear(el); el.append(h('p', null, '✓ No spelling or grammar issues found.'), h('button', { class: 'qf-btn', onclick: () => app.proofer.run(app.tab) }, 'Recheck')); return; }
       idx = Math.min(idx, issues.length - 1);
       const is = issues[idx];
-      const word = app.state.doc.textBetween(is.from, is.to);
-      const sugs = is.kind === 'spell' ? await suggest(word) : is.suggestions;
+      const word = st.doc.textBetween(is.from, is.to);
+      const sugs = is.kind === 'spell' ? await suggest(word, is.dialect) : is.suggestions;
+      if (token !== seq) return;
+      clear(el);
+      const act = (fn: () => void) => () => { if (app.state.doc === st.doc) fn(); else void draw(true); };
       const counts = { spell: issues.filter((i) => i.kind === 'spell').length, grammar: issues.filter((i) => i.kind === 'grammar').length, style: issues.filter((i) => i.kind === 'style').length };
       el.append(
         h('p', { class: 'qf-help' }, `Spelling ${counts.spell} · Grammar ${counts.grammar} · Refinements ${counts.style}`),
         h('div', { class: 'qf-proof-card' }, h('div', { class: 'qf-help' }, is.kind === 'spell' ? 'Spelling' : is.kind === 'grammar' ? 'Grammar' : 'Clarity'), h('h3', null, word), h('p', null, is.message)),
-        h('div', { class: 'qf-suggestions' }, ...(sugs.length ? sugs : []).map((s) => h('button', { class: 'qf-btn', onclick: () => { app.view.dispatch(app.state.tr.insertText(s, is.from, is.to)); setTimeout(() => (el as any)._draw(), 50); } }, s)), sugs.length ? null : h('p', { class: 'qf-help' }, 'No suggestions')),
+        h('div', { class: 'qf-suggestions' }, ...(sugs.length ? sugs : []).map((s) => h('button', { class: 'qf-btn', onclick: act(() => { app.view.dispatch(app.state.tr.insertText(s, is.from, is.to)); setTimeout(() => void draw(true), 50); }) }, s)), sugs.length ? null : h('p', { class: 'qf-help' }, 'No suggestions')),
         h('div', { class: 'qf-row' },
-          h('button', { class: 'qf-btn', onclick: () => { app.view.dispatch(app.state.tr.setSelection(TextSelection.create(app.state.doc, is.from, is.to)).scrollIntoView()); } }, 'Show'),
-          h('button', { class: 'qf-btn', onclick: () => { idx++; (el as any)._draw(); } }, 'Ignore Once'),
-          is.kind === 'spell' ? h('button', { class: 'qf-btn', onclick: () => { app.prefs.ignoredWords.push(word); app.savePrefs(); app.proofer.run(app.tab).then(() => (el as any)._draw()); } }, 'Ignore All') : null,
-          is.kind === 'spell' ? h('button', { class: 'qf-btn', onclick: async () => { app.prefs.dictionary.push(word); app.savePrefs(); await addWord(word); app.proofer.run(app.tab).then(() => (el as any)._draw()); } }, 'Add to Dictionary') : null,
-          sugs[0] ? h('button', { class: 'qf-btn', onclick: () => { replaceAll(app, { find: word, replace: sugs[0], wholeWord: true, caseSensitive: true }); app.proofer.run(app.tab).then(() => (el as any)._draw()); } }, `Change All to “${sugs[0]}”`) : null),
-        h('div', { class: 'qf-row' }, h('button', { class: 'qf-iconbtn', onclick: () => { idx = Math.max(0, idx - 1); (el as any)._draw(); } }, icon('chevron_left')), h('span', null, `${idx + 1} / ${issues.length}`), h('button', { class: 'qf-iconbtn', onclick: () => { idx++; (el as any)._draw(); } }, icon('chevron_right'))),
+          h('button', { class: 'qf-btn', onclick: act(() => { app.view.dispatch(app.state.tr.setSelection(TextSelection.create(app.state.doc, is.from, is.to)).scrollIntoView()); }) }, 'Show'),
+          h('button', { class: 'qf-btn', onclick: () => { idx++; void draw(true); } }, 'Ignore Once'),
+          is.kind === 'spell' ? h('button', { class: 'qf-btn', onclick: () => { app.prefs.ignoredWords.push(word); app.savePrefs(); app.proofer.run(app.tab).then(() => draw(true)); } }, 'Ignore All') : null,
+          is.kind === 'spell' ? h('button', { class: 'qf-btn', onclick: async () => { app.prefs.dictionary.push(word); app.savePrefs(); await addWord(word); app.proofer.run(app.tab).then(() => draw(true)); } }, 'Add to Dictionary') : null,
+          sugs[0] ? h('button', { class: 'qf-btn', onclick: act(() => { replaceAll(app, { find: word, replace: sugs[0], wholeWord: true, caseSensitive: true }); app.proofer.run(app.tab).then(() => draw(true)); }) }, `Change All to “${sugs[0]}”`) : null),
+        h('div', { class: 'qf-row' }, h('button', { class: 'qf-iconbtn', onclick: () => { idx = Math.max(0, idx - 1); void draw(true); } }, icon('chevron_left')), h('span', null, `${idx + 1} / ${issues.length}`), h('button', { class: 'qf-iconbtn', onclick: () => { idx++; void draw(true); } }, icon('chevron_right'))),
       );
-      app.view.dispatch(app.state.tr.setSelection(TextSelection.create(app.state.doc, is.from, is.to)).scrollIntoView());
+      if (select && app.state.doc === st.doc) app.view.dispatch(app.state.tr.setSelection(TextSelection.create(app.state.doc, is.from, is.to)).scrollIntoView());
     };
-    (el as any)._draw();
+    (el as any)._draw = draw;
+    (el as any)._stale = () => !shown || shown.doc !== app.state.doc || shown.issues !== proofKey.getState(app.state)?.issues;
+    (el as any)._later = () => { clearTimeout(timer); timer = setTimeout(() => void draw(false), 200); };
+    void draw(true);
   },
+  update(app, el) { if ((el as any)._stale?.()) (el as any)._later(); },
 };
 
 // ------------------------------------------------------------------------------------------
@@ -520,40 +543,63 @@ const notes: PaneDef = {
         n++;
         const ta = h('textarea', { rows: '2' }) as HTMLTextAreaElement;
         ta.value = node.attrs.text;
-        ta.addEventListener('change', () => { const cur = app.state.doc.nodeAt(pos); if (cur?.type === N.footnote) app.view.dispatch(app.state.tr.setNodeMarkup(pos, undefined, { ...cur.attrs, text: ta.value })); });
+        ta.addEventListener('change', () => {
+          // The document may have changed since the list was drawn: find the note again (by id, else position and text).
+          let at = -1;
+          app.state.doc.descendants((x, p) => { if (at < 0 && x.type === N.footnote && (node.attrs.id ? x.attrs.id === node.attrs.id : p === pos && x.attrs.text === node.attrs.text)) at = p; return at < 0; });
+          const cur = at >= 0 ? app.state.doc.nodeAt(at) : null;
+          if (cur) app.view.dispatch(app.state.tr.setNodeMarkup(at, undefined, { ...cur.attrs, text: ta.value }));
+          else toast('That note is no longer in the document.');
+        });
         el.append(h('div', { class: 'qf-note' }, h('button', { class: 'qf-link', onclick: () => app.selectPos(pos) }, `${node.attrs.kind === 'end' ? 'Endnote' : 'Footnote'} ${n}`), ta));
         return true;
       });
       if (!n) el.append(h('p', { class: 'qf-help' }, 'No notes yet. Use References ▸ Insert Footnote.'));
+      (el as any)._doc = app.state.doc;
     };
     (el as any)._draw();
   },
+  update(app, el) { if ((el as any)._doc !== app.state.doc && !typingIn(el)) (el as any)._draw?.(); },
 };
 
 // ------------------------------------------------------------------------------------------
 const versions: PaneDef = {
   id: 'versions', title: 'Version History',
   async render(app, el) {
+    // The list and its buttons belong to the document shown when it was drawn (see update).
+    const tab = app.tab, e = el as any;
+    e._tab = tab; e._key = undefined; e._token = (e._token || 0) + 1;
     const { docKey } = await import('../commands/file');
-    const key = docKey(app.tab);
+    const key = e._key = docKey(tab);
+    e._docKey = docKey;
     const draw = async () => {
+      if (e._tab !== tab) return;
+      const token = e._token = (e._token || 0) + 1;
+      const live = () => e._token === token && e._tab === tab;
       clear(el);
       el.append(h('button', { class: 'qf-btn qf-primary', onclick: async () => { await app.exec('file.snapshot'); setTimeout(draw, 300); } }, icon('add_a_photo'), ' Take Snapshot'));
       const keys = (await kvKeys(`snap:${key}:`)).sort().reverse();
+      if (!live()) return;
       if (!keys.length) el.append(h('p', { class: 'qf-help' }, 'Snapshots are saved each time you save and when you take one manually.'));
       for (const k of keys.slice(0, 100)) {
         const snap = await kvGet(k);
+        if (!live()) return;
         if (!snap) continue;
         el.append(h('div', { class: 'qf-version' },
           h('div', null, h('b', null, snap.label), h('div', { class: 'qf-help' }, `${new Date(snap.when).toLocaleString()} · ${snap.words} words`)),
           h('div', { class: 'qf-row' },
             h('button', { class: 'qf-btn qf-sm', onclick: () => app.createTab(schema.nodeFromJSON(snap.json), { title: `${snap.name} (${new Date(snap.when).toLocaleDateString()})`, readOnly: false }) }, 'Open'),
-            h('button', { class: 'qf-btn qf-sm', onclick: () => { const d = compareDocs(schema.nodeFromJSON(snap.json), app.state.doc, 'Changes since snapshot'); app.createTab(d, { title: 'Compare with snapshot' }); } }, 'Compare'),
-            h('button', { class: 'qf-btn qf-sm', onclick: async () => { if (await confirmDialog('Restore Version', 'Replace the current document with this version? (Undo is available.)')) { app.view.dispatch(app.state.tr.replaceWith(0, app.state.doc.content.size, schema.nodeFromJSON(snap.json).content)); } } }, 'Restore'),
+            h('button', { class: 'qf-btn qf-sm', onclick: () => { const d = compareDocs(schema.nodeFromJSON(snap.json), tab.view.state.doc, 'Changes since snapshot'); app.createTab(d, { title: 'Compare with snapshot' }); } }, 'Compare'),
+            h('button', { class: 'qf-btn qf-sm', onclick: async () => { if (await confirmDialog('Restore Version', 'Replace the current document with this version? (Undo is available.)') && app.docs.includes(tab)) { tab.view.dispatch(tab.view.state.tr.replaceWith(0, tab.view.state.doc.content.size, schema.nodeFromJSON(snap.json).content)); } } }, 'Restore'),
             h('button', { class: 'qf-iconbtn qf-sm', title: 'Delete', onclick: async () => { await kvDel(k); draw(); } }, icon('delete')))));
       }
     };
     draw();
+  },
+  update(app, el) {
+    // Another document, or the same tab now holding another file (a blank tab is reused when a file opens).
+    const e = el as any;
+    if (e._tab !== app.tab || (e._key !== undefined && e._docKey(app.tab) !== e._key)) { clear(el); void versions.render(app, el, {}); }
   },
 };
 
@@ -574,5 +620,5 @@ const mailmerge: PaneDef = {
   },
 };
 
-export const PANES: Record<string, PaneDef> = { navigation, styles, inspector, clipboard, find, comments, revisions, spelling, thesaurus, accessibility, reveal, selection, snippets, notes, versions, mailmerge };
+export const PANES: Record<string, PaneDef> = { navigation, styles, inspector, clipboard, find, comments, revisions, spelling, thesaurus, accessibility, reveal, selection, snippets, notes, versions, mailmerge, ai: aiPaneDef };
 void toast; void openDialog; void pageOfPos;

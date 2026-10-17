@@ -1,7 +1,9 @@
 /** Review tab: proofing, comments, tracking, changes, compare, protect, accessibility, speech. */
 import { def } from './registry';
 import type { App } from '../app';
-import type { Node as PMNode } from 'prosemirror-model';
+import { Fragment, Mark, type Node as PMNode } from 'prosemirror-model';
+import type { EditorState, Transaction } from 'prosemirror-state';
+import { normalizeSettings } from '../editor/settings';
 import { schema } from '../editor/schema';
 import { trackKey, listChanges, resolveChanges, changesInRange } from '../editor/plugins/trackChanges';
 import { proofKey, coachKey } from '../editor/plugins/decorations';
@@ -10,6 +12,7 @@ import { countWords, docText, selectedText, textblocks, wordAt } from '../editor
 import { openDialog, toast, promptDialog, confirmDialog, alertDialog } from '../ui/dialog';
 import { h } from '../ui/dom';
 import { keepAwake, openExternal } from '../platform/native';
+import { SPELL_DIALECTS, type SpellDialect } from '../proof/proofing';
 
 const N = schema.nodes;
 const M = schema.marks;
@@ -42,7 +45,31 @@ export function textStats(text: string) {
 }
 
 def([
-  { id: 'review.spelling', label: 'Spelling & Grammar', icon: 'spellcheck', tab: 'Review', group: 'Proofing', keys: ['F7'], popular: true, run: (app) => { app.proofer.run(app.tab); app.ui.openPane('spelling'); } },
+  { id: 'review.spelling', label: 'Spelling & Grammar', icon: 'spellcheck', tab: 'Review', group: 'Proofing', keys: ['F7'], popular: true, run: (app) => { app.ui.openPane('spelling'); return app.proofer.run(app.tab); } },
+  {
+    id: 'review.spellDialect', label: 'English Spelling', icon: 'translate', tab: 'Review', group: 'Language', kind: 'menu',
+    tip: 'Accept every standard English spelling (default), follow the document\'s language, or check one variety: US, UK (with Oxford -ize), Canada or Australia',
+    keywords: 'dialect american british canadian australian dictionary colour color',
+    run: async (app, arg?: SpellDialect) => {
+      if (!arg) {
+        const r = await openDialog({ title: 'English Spelling', fields: [{ key: 'd', label: 'Dictionary', type: 'select', options: SPELL_DIALECTS, value: app.prefs.spellDialect || 'any' }] });
+        if (!r) return;
+        arg = r.d;
+      }
+      if (!SPELL_DIALECTS.some((d) => d.value === arg)) return;
+      app.prefs.spellDialect = arg!;
+      app.savePrefs();
+      app.proofer.schedule(app.tab, 0);
+      toast(SPELL_DIALECTS.find((d) => d.value === arg)?.label || '');
+    },
+    menu: (app) => [...SPELL_DIALECTS.map((d) => ({ id: 'review.spellDialect', arg: d.value, label: d.label, checked: (app.prefs.spellDialect || 'any') === d.value })), { id: 'review.dictionaries', label: 'Dictionaries for other languages…' }],
+  },
+  {
+    id: 'review.dictionaries', label: 'Spelling Dictionaries…', icon: 'download', tab: 'Review', group: 'Language', noRecord: true,
+    tip: 'Download free spelling dictionaries for 90+ languages and use them for documents or marked text',
+    keywords: 'language dictionary hunspell download french german spanish install',
+    run: async (app) => { const { openDictionaryWizard } = await import('../ui/dictWizard'); await openDictionaryWizard(app); },
+  },
   { id: 'review.toggleSpell', label: 'Check Spelling as You Type', icon: 'spellcheck', tab: 'Review', group: 'Proofing', kind: 'toggle', run: (app) => { app.prefs.spellcheck = !app.prefs.spellcheck; app.savePrefs(); app.proofer.schedule(app.tab, 0); }, isActive: (app) => app.prefs.spellcheck },
   { id: 'review.toggleGrammar', label: 'Mark Grammar Errors as You Type', icon: 'grading', tab: 'Review', group: 'Proofing', kind: 'toggle', run: (app) => { app.prefs.grammar = !app.prefs.grammar; app.savePrefs(); app.proofer.schedule(app.tab, 0); }, isActive: (app) => app.prefs.grammar },
   { id: 'review.hideProof', label: 'Hide Spelling & Grammar Errors in This Document', icon: 'visibility_off', tab: 'Review', group: 'Proofing', run: (app) => app.view.dispatch(app.state.tr.setMeta(proofKey, []).setMeta('addToHistory', false)) },
@@ -312,6 +339,15 @@ def([
   },
 ]);
 
+/** Accept/Reject and the Document Inspector dispatch with trackSkip (which bypasses protection), so they
+ *  refuse while the document is protected or read-only. Returns true when refused. */
+export function refuseIfProtected(app: App): boolean {
+  const s = app.settings;
+  if (s.protection.mode === 'none' && !s.markedFinal && !app.tab.readOnly) return false;
+  toast('This document is protected. Use Review ▸ Restrict Editing to remove protection first.');
+  return true;
+}
+
 function acceptReject(app: App, accept: boolean, scope: 'one' | 'all' | 'shown' | 'selection' | 'author', moveNext = false) {
   const st = app.state;
   let changes = listChanges(st.doc);
@@ -330,6 +366,7 @@ function acceptReject(app: App, accept: boolean, scope: 'one' | 'all' | 'shown' 
     changes = changes.filter((c) => !(el.classList.contains('qf-hideInsertions') && (c.kind === 'insertion' || c.kind === 'deletion')) && !(el.classList.contains('qf-hideFormatting') && c.kind === 'format'));
   }
   if (!changes.length) { toast('No tracked changes.'); return; }
+  if (refuseIfProtected(app)) return;
   const end = Math.max(...changes.map((c) => c.to));
   v(app).dispatch(resolveChanges(app.state, changes, accept));
   if (moveNext) {
@@ -351,14 +388,15 @@ def([
   },
   { id: 'review.acceptAll', label: 'Accept All Changes', icon: 'done_all', tab: 'Review', group: 'Changes', edits: true, run: (app) => acceptReject(app, true, 'all') },
   { id: 'review.rejectAll', label: 'Reject All Changes', icon: 'remove_done', tab: 'Review', group: 'Changes', edits: true, run: (app) => acceptReject(app, false, 'all') },
-  { id: 'review.acceptAllStop', label: 'Accept All and Stop Tracking', icon: 'done_all', tab: 'Review', group: 'Changes', edits: true, run: (app) => { acceptReject(app, true, 'all'); setTracking(app, false); } },
-  { id: 'review.rejectAllStop', label: 'Reject All and Stop Tracking', icon: 'remove_done', tab: 'Review', group: 'Changes', edits: true, run: (app) => { acceptReject(app, false, 'all'); setTracking(app, false); } },
+  { id: 'review.acceptAllStop', label: 'Accept All and Stop Tracking', icon: 'done_all', tab: 'Review', group: 'Changes', edits: true, run: (app) => { if (refuseIfProtected(app)) return; acceptReject(app, true, 'all'); setTracking(app, false); } },
+  { id: 'review.rejectAllStop', label: 'Reject All and Stop Tracking', icon: 'remove_done', tab: 'Review', group: 'Changes', edits: true, run: (app) => { if (refuseIfProtected(app)) return; acceptReject(app, false, 'all'); setTracking(app, false); } },
   {
     id: 'review.acceptByAuthor', label: 'Accept/Reject by Reviewer…', icon: 'person_search', tab: 'Review', group: 'Changes', edits: true,
     run: async (app) => {
       const all = listChanges(app.state.doc);
       const authors = [...new Set(all.map((c) => c.author))];
       if (!authors.length) { toast('No tracked changes.'); return; }
+      if (refuseIfProtected(app)) return;
       const r = await openDialog({ title: 'Changes by Reviewer', fields: [{ key: 'a', label: 'Reviewer', type: 'select', options: authors, value: authors[0] }, { key: 'act', label: 'Action', type: 'radio', options: [{ value: 'accept', label: 'Accept' }, { value: 'reject', label: 'Reject' }], value: 'accept' }] });
       if (r) v(app).dispatch(resolveChanges(app.state, all.filter((c) => c.author === r.a), r.act === 'accept'));
     },
@@ -404,16 +442,18 @@ def([
     },
   },
   {
-    id: 'review.combine', label: 'Combine Revisions…', icon: 'merge_type', tab: 'Review', group: 'Compare',
+    id: 'review.combine', label: 'Combine Revisions…', icon: 'merge_type', tab: 'Review', group: 'Compare', edits: true,
     run: async (app) => {
+      if (refuseIfProtected(app)) return;
+      const tab = app.tab;
       toast('Choose the revised copy to combine into this document.');
       const { openDocument, OPEN_ACCEPT, OPEN_MIMES } = await import('../platform/native');
       const { importFile } = await import('../io');
       const f = await openDocument(OPEN_ACCEPT, OPEN_MIMES);
       if (!f) return;
       const other = (await importFile(f.data, f.name)).doc;
-      const doc = compareDocs(app.state.doc, other, f.name.replace(/\.[^.]+$/, ''));
-      app.replaceDoc(app.tab, doc);
+      if (!app.docs.includes(tab)) return;
+      tab.view.dispatch(combineTr(tab.view.state, other, f.name.replace(/\.[^.]+$/, '')));
     },
   },
   { id: 'review.compareVersions', label: 'Compare with Saved Version…', icon: 'history', tab: 'Review', group: 'Compare', run: (app) => app.ui.openPane('versions') },
@@ -426,8 +466,9 @@ def([
         { key: 'pw', label: 'Password (optional)', type: 'password', value: '' },
       ] });
       if (!r) return;
-      if (p.hash && r.mode !== p.mode) {
-        const pw = await promptDialog('Unprotect Document', 'Password:', '', { type: 'password' });
+      // Changing the mode or the password needs the current password.
+      if (p.hash && (r.mode !== p.mode || r.pw)) {
+        const pw = await promptDialog(r.mode !== p.mode ? 'Unprotect Document' : 'Change Password', 'Current password:', '', { type: 'password' });
         if (pw == null || (await sha(pw)) !== p.hash) { toast('Incorrect password.'); return; }
       }
       const hash = r.pw ? await sha(r.pw) : r.mode === 'none' ? undefined : p.hash;
@@ -450,7 +491,32 @@ def([
   { id: 'review.hideInk', label: 'Hide Ink', icon: 'ink_eraser', tab: 'Review', group: 'Ink', kind: 'toggle', run: (app) => { app.tab.el.classList.toggle('qf-hide-ink'); app.refresh(); }, isActive: (app) => app.tab.el.classList.contains('qf-hide-ink') },
 ]);
 
-async function sha(s: string): Promise<string> {
-  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('quillforge:' + s));
+/** Combine Revisions as one undoable change to the current document: this document's settings (comments,
+ *  styles, page setup, protection) stay, unchanged text keeps its own formatting and comments, and the
+ *  revised copy's differences appear as tracked changes. compareDocs keeps its second argument's version of
+ *  unchanged text, so the revised copy is compared back to this one and the new changes (revision marks,
+ *  and the change attribute of block objects) are then flipped. */
+export function combineTr(state: EditorState, other: PMNode, label: string): Transaction {
+  const t0 = Date.now();
+  const merged = compareDocs(other, state.doc, label);
+  const t1 = Date.now();
+  const made = (a: { author?: string; date?: number }) => a.author === label && a.date! >= t0 && a.date! <= t1;
+  const flip = (m: Mark) => (!(m.type === M.insertion || m.type === M.deletion) || !made(m.attrs) ? m : m.type === M.insertion ? M.deletion.create(m.attrs) : M.insertion.create(m.attrs));
+  const swap = (n: PMNode): PMNode => {
+    const c = n.attrs.change;
+    let out = c && made(c) ? n.type.create({ ...n.attrs, change: { ...c, kind: c.kind === 'insertion' ? 'deletion' : 'insertion' } }, n.content, n.marks) : n;
+    if (n.content.size) { const kids: PMNode[] = []; n.forEach((k) => kids.push(swap(k))); out = out.copy(Fragment.fromArray(kids)); }
+    return n.marks.length ? out.mark(Mark.setFrom(n.marks.map(flip))) : out;
+  };
+  const content: PMNode[] = [];
+  merged.forEach((n) => content.push(swap(n)));
+  const s = JSON.parse(JSON.stringify(normalizeSettings(state.doc.attrs.settings)));
+  for (const [id, c] of Object.entries(normalizeSettings(other.attrs.settings).comments)) if (!s.comments[id]) s.comments[id] = c;
+  return state.tr.replaceWith(0, state.doc.content.size, content).setDocAttribute('settings', s).setMeta('trackSkip', true);
+}
+
+/** Hash used for Restrict Editing passwords (also used by Developer ▸ Protect for Form Filling). */
+export async function sha(s: string): Promise<string> {
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('quillpen:' + s));
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }

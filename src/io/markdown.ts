@@ -18,8 +18,8 @@ import { styleLevel } from '../editor/schema';
 import type { ExportOptions } from './index';
 import { htmlToBlocks } from './html';
 import {
-  S, collectFootnotes, decodeEntity, finishDoc, htmlToTextLines, inlineAtomText, makeBlob, markSet, newSettings, para, prepareDoc,
-  type NoteInfo,
+  S, collectFootnotes, decodeEntity, decodeTextBytes, finishDoc, htmlToTextLines, inlineAtomText, listStart, makeBlob, markSet, newSettings, para,
+  prepareDoc, type NoteInfo,
 } from './serialize';
 import type { DocSettings } from '../editor/settings';
 
@@ -491,14 +491,20 @@ function plainOf(nodes: Inl[]): string {
 }
 
 function processEmphasis(arr: Inl[]): void {
+  // Per kind of closer, the element below which no opener can match (CommonMark's openers_bottom):
+  // a run of closers without openers ("a* a* a* ...") is then linear, not quadratic.
+  const bottom = new Map<string, Inl>();
   let i = 0;
   let guard = 0;
   while (i < arr.length && guard++ < 100000) {
     const closer = arr[i];
     if (closer.t !== 'delim' || !closer.canClose || closer.n === 0) { i++; continue; }
+    const key = `${closer.ch}${closer.canOpen ? 1 : 0}${closer.origN % 3}${closer.ch === '~' || closer.ch === '=' ? closer.n : ''}`;
+    const stop = bottom.get(key);
     let found = -1;
     for (let j = i - 1; j >= 0; j--) {
       const op = arr[j];
+      if (op === stop) break;
       if (op.t !== 'delim' || op.ch !== closer.ch || !op.canOpen || op.n === 0) continue;
       if (closer.ch === '*' || closer.ch === '_') {
         const odd = (op.canClose || closer.canOpen) && (op.origN + closer.origN) % 3 === 0 && !(op.origN % 3 === 0 && closer.origN % 3 === 0);
@@ -506,7 +512,7 @@ function processEmphasis(arr: Inl[]): void {
       } else if (closer.ch === '~') { if (op.n === closer.n) { found = j; break; } }
       else if (op.n === 2 && closer.n === 2) { found = j; break; }
     }
-    if (found < 0) { i++; continue; }
+    if (found < 0) { if (i > 0) bottom.set(key, arr[i - 1]); i++; continue; }
     const op = arr[found] as Extract<Inl, { t: 'delim' }>;
     let use: number, mark: string;
     if (closer.ch === '~') { use = closer.n; mark = 'strike'; }
@@ -515,7 +521,15 @@ function processEmphasis(arr: Inl[]): void {
     const kids = arr.slice(found + 1, i);
     op.n -= use;
     closer.n -= use;
-    arr.splice(found + 1, i - found - 1, { t: 'wrap', mark, kids });
+    const wrap: Inl = { t: 'wrap', mark, kids };
+    arr.splice(found + 1, i - found - 1, wrap);
+    if (bottom.size) {
+      // A boundary that is wrapped or removed moves to the wrap, below which nothing changed.
+      const gone = new Set<Inl>(kids);
+      if (op.n === 0) gone.add(op);
+      if (closer.n === 0) gone.add(closer);
+      for (const [k, el] of bottom) if (gone.has(el)) bottom.set(k, wrap);
+    }
     let ci = found + 2;
     if (op.n === 0) { arr.splice(found, 1); ci--; }
     if (closer.n === 0) arr.splice(ci, 1);
@@ -576,6 +590,7 @@ function parseInline(src: string, ctx: Ctx): Inl[] {
   let i = 0;
   const len = src.length;
   let guard = 0;
+  let closers: number[] | null = null, nextCloser = 0;
   while (i < len && guard++ < 2_000_000) {
     const c = src[i];
     if (c === '\\') {
@@ -627,14 +642,14 @@ function parseInline(src: string, ctx: Ctx): Inl[] {
       }
       const nx = src[i + 1];
       if (nx && !isWs(nx)) {
-        let e = i + 1;
-        let found = -1;
-        while (e < len) {
-          e = src.indexOf('$', e);
-          if (e < 0) break;
-          if (src[e - 1] !== '\\' && !isWs(src[e - 1]) && !/\d/.test(src[e + 1] || '')) { found = e; break; }
-          e++;
+        // Closing $ positions (not escaped, not after a space, not before a digit), found once:
+        // rescanning the rest of the text for every opener is quadratic ("$1 $2 $3 ...").
+        if (!closers) {
+          closers = [];
+          for (let e = src.indexOf('$', 1); e >= 0; e = src.indexOf('$', e + 1)) if (src[e - 1] !== '\\' && !isWs(src[e - 1]) && !/\d/.test(src[e + 1] || '')) closers.push(e);
         }
+        while (nextCloser < closers.length && closers[nextCloser] <= i) nextCloser++;
+        const found = nextCloser < closers.length ? closers[nextCloser] : -1;
         if (found > i + 1) { pushText(); nodes.push({ t: 'math', v: src.slice(i + 1, found).replace(/\\\$/g, '$') }); i = found + 1; continue; }
       }
       text += '$'; i++; continue;
@@ -884,7 +899,8 @@ export async function importMarkdown(data: ArrayBuffer, name: string): Promise<P
   const settings = newSettings();
   let blocks: PMNode[] = [];
   try {
-    const text = new TextDecoder('utf-8').decode(new Uint8Array(data)).replace(/^\uFEFF/, '');
+    // Same decoding as plain text: BOMs (UTF-16 too), then UTF-8 with a Windows-1252 fallback.
+    const text = decodeTextBytes(data).replace(/^\uFEFF/, '');
     blocks = markdownToBlocks(text, settings);
   } catch { /* empty doc */ }
   void name;
@@ -986,7 +1002,7 @@ function atomMd(node: PMNode, w: WCtx, lineBreak: string): string {
   }
 }
 
-/** Serialise the inline content of a textblock. */
+/** Serialize the inline content of a textblock. */
 function inlineMd(node: PMNode, w: WCtx, lineBreak = '\\\n'): string {
   const segs: Seg[] = [];
   node.forEach((c) => {
@@ -1095,7 +1111,7 @@ function tableMd(node: PMNode, w: WCtx): string {
 function listMd(node: PMNode, w: WCtx): string {
   const t = node.type;
   const items: string[] = [];
-  let n = t === S.nodes.ordered_list ? (node.attrs.order ?? 1) : 1;
+  let n = t === S.nodes.ordered_list ? Math.max(0, listStart(node.attrs.order)) : 1;
   node.forEach((item) => {
     let marker = '- ';
     if (t === S.nodes.ordered_list) marker = `${n++}. `;
@@ -1153,7 +1169,29 @@ export function docToMarkdown(doc: PMNode): string {
       return `[^${i + 1}]: ${paras.join('\n\n    ') || ' '}`;
     }).join('\n');
   }
-  return out.replace(/\n{3,}/g, '\n\n') + '\n';
+  return tidyBlankLines(out) + '\n';
+}
+
+/** Collapse runs of blank lines to one, except inside fenced code and $$ math, whose lines are content. */
+function tidyBlankLines(md: string): string {
+  let out = '', buf = '', close: RegExp | null = null;
+  const flush = () => { out += buf.replace(/\n{3,}/g, '\n\n'); buf = ''; };
+  md.split('\n').forEach((line, k) => {
+    const sep = k ? '\n' : '';
+    if (close) { out += sep + line; if (close.test(line)) close = null; return; }
+    const f = /^\s*(`{3,}|~{3,})(.*)$/.exec(line);
+    const fence = f && !(f[1][0] === '`' && f[2].includes('`'));
+    if (fence || /^\s*\$\$\s*$/.test(line)) {
+      buf += sep;
+      flush();
+      out += line;
+      close = fence ? new RegExp(`^\\s*${f![1][0]}{${f![1].length},}\\s*$`) : /^\s*\$\$\s*$/;
+      return;
+    }
+    buf += sep + line;
+  });
+  flush();
+  return out;
 }
 
 export async function exportMarkdown(doc: PMNode, opts: ExportOptions): Promise<Blob> {

@@ -10,6 +10,7 @@ import { pageOfPos } from '../editor/plugins/pagination';
 import { footnoteLabel } from '../editor/plugins/decorations';
 import { openDialog, toast, promptDialog } from '../ui/dialog';
 import { esc } from '../ui/dom';
+import { sanitizeGeneratedHtml } from '../util/sanitize';
 import { slug } from './edit';
 
 const N = schema.nodes;
@@ -155,11 +156,12 @@ export function generateBlock(app: App, kind: string, options: Record<string, an
       const entries = new Map<string, Map<string, Set<string>>>();
       st.doc.descendants((n, pos) => {
         if (n.type === N.index_entry && n.attrs.kind !== 'toa') {
-          const term = n.attrs.term, sub = n.attrs.sub || '';
+          const term = String(n.attrs.term || '').trim(), sub = n.attrs.sub || '';
+          if (!term) return true;
           if (!entries.has(term)) entries.set(term, new Map());
           const m = entries.get(term)!;
           if (!m.has(sub)) m.set(sub, new Set());
-          m.get(sub)!.add(n.attrs.see ? `see ${n.attrs.see}` : pg(pos) || '•');
+          m.get(sub)!.add(n.attrs.see ? esc(`see ${n.attrs.see}`) : pg(pos) || '•');
         }
         return true;
       });
@@ -168,7 +170,7 @@ export function generateBlock(app: App, kind: string, options: Record<string, an
       let html = '<div class="qf-index" style="column-count:2;column-gap:24pt">';
       let letter = '';
       for (const t of terms) {
-        const L = t[0].toUpperCase();
+        const L = (t[0] || '#').toUpperCase();
         if (L !== letter) { letter = L; html += `<p class="qf-index-letter">${esc(L)}</p>`; }
         const subs = entries.get(t)!;
         const main = subs.get('');
@@ -200,11 +202,16 @@ export function generateBlock(app: App, kind: string, options: Record<string, an
     case 'bibliography': {
       const order = citedOrder(st.doc);
       const style = s.citationStyle;
-      let srcs = options.all ? [...s.sources] : order.map((id) => s.sources.find((x) => x.id === id)).filter(Boolean) as Source[];
-      if (!['IEEE', 'GB7714'].includes(style)) srcs = srcs.sort((a, b) => (a.author || a.title).localeCompare(b.author || b.title));
+      const numeric = ['IEEE', 'GB7714'].includes(style);
+      const cited = order.map((id) => s.sources.find((x) => x.id === id)).filter(Boolean) as Source[];
+      // Numeric styles: cited sources keep their citation numbers; uncited ones ("All Sources") follow them.
+      const uncited = options.all ? s.sources.filter((x) => !order.includes(x.id)) : [];
+      let srcs = options.all ? (numeric ? [...cited, ...uncited] : [...s.sources]) : cited;
+      if (!numeric) srcs = srcs.sort((a, b) => (a.author || a.title).localeCompare(b.author || b.title));
+      const num = (x: Source) => { const i = order.indexOf(x.id); return i >= 0 ? i + 1 : order.length + uncited.indexOf(x) + 1; };
       const title = options.title ?? (style === 'MLA' ? 'Works Cited' : style === 'APA' ? 'References' : 'Bibliography');
       if (!srcs.length) return `<p class="qf-toc-title">${esc(title)}</p><p class="qf-gen-empty">No sources cited. Add citations with References ▸ Insert Citation.</p>`;
-      return `<p class="qf-toc-title">${esc(title)}</p>` + srcs.map((x) => `<p class="qf-bib-entry">${formatBibEntry(x, style, order.indexOf(x.id) + 1)}</p>`).join('');
+      return `<p class="qf-toc-title">${esc(title)}</p>` + srcs.map((x) => `<p class="qf-bib-entry">${formatBibEntry(x, style, num(x))}</p>`).join('');
     }
     case 'endnotes': {
       const items: string[] = [];
@@ -427,7 +434,7 @@ def([
         ], onChange: (x, ctl) => {
           const src = s.sources.find((q) => q.id === x.id);
           const info = ctl.body.querySelector('.qf-info');
-          if (info) info.innerHTML = src ? `<p class="qf-help">Preview (${s.citationStyle}):</p><p>${formatBibEntry(src, s.citationStyle, 1)}</p>` : '';
+          if (info) info.innerHTML = src ? `<p class="qf-help">Preview (${esc(s.citationStyle)}):</p><p>${sanitizeGeneratedHtml(formatBibEntry(src, s.citationStyle, 1))}</p>` : '';
         } });
         if (!r || !r.act) break;
         if (r.act === 'new') { const src = await editSource(app); if (src) app.updateSettings((st) => { st.sources.push(src); }); }
@@ -460,17 +467,113 @@ def([
   },
 ]);
 
+const BIB_ACCENTS: Record<string, string> = { '"': '\u0308', "'": '\u0301', '`': '\u0300', '^': '\u0302', '~': '\u0303', '=': '\u0304', '.': '\u0307', c: '\u0327', v: '\u030C', u: '\u0306', H: '\u030B', k: '\u0328', r: '\u030A' };
+const BIB_SYMBOLS: Record<string, string> = { ss: 'ß', ae: 'æ', AE: 'Æ', oe: 'œ', OE: 'Œ', aa: 'å', AA: 'Å', o: 'ø', O: 'Ø', l: 'ł', L: 'Ł' };
+
+/** Turns a raw BibTeX value (nested braces, TeX accents) into plain text. */
+function bibText(raw: string, plain = false): string {
+  let t = raw;
+  if (!plain) {
+    const acc = (a: string, ch: string) => (ch === '\\i' ? 'i' : ch === '\\j' ? 'j' : ch) + BIB_ACCENTS[a];
+    t = t.replace(/\\([cvuHkr])(?:\s*\{\s*(\\[ij]|[A-Za-z])\s*\}|\s+([A-Za-z]))/g, (_m, a, b, c) => acc(a, b ?? c))
+      .replace(/\\(["'`^~=.])\s*(?:\{\s*(\\[ij]|[A-Za-z])\s*\}|(\\[ij]|[A-Za-z]))/g, (_m, a, b, c) => acc(a, b ?? c))
+      .replace(/\\(ss|ae|AE|oe|OE|aa|AA|o|O|l|L)(?![A-Za-z])\s*/g, (_m, k) => BIB_SYMBOLS[k])
+      .replace(/\\([&%$#_{}])/g, (_m, ch) => (ch === '{' || ch === '}' ? '' : ch));
+  }
+  return t.replace(/[{}]/g, '').replace(/\s+/g, ' ').trim().normalize('NFC');
+}
+
+/** BibTeX parser: a small scanner that counts braces, so values may nest braces, entries may be
+ *  on one line and the closing brace may be anywhere. @string macros are expanded; @comment and
+ *  @preamble are skipped; values may be {braced}, "quoted", bare numbers/macros, joined with #. */
 export function parseBibtex(src: string): Source[] {
   const out: Source[] = [];
-  const re = /@(\w+)\s*\{\s*([^,]*),([\s\S]*?)\n\}/g;
-  let m;
-  while ((m = re.exec(src + '\n'))) {
+  const macros: Record<string, string> = {};
+  const n = src.length;
+  let i = 0;
+  const ws = () => { while (i < n && /\s/.test(src[i])) i++; };
+  const ident = () => { const s0 = i; while (i < n && /[^\s"#%'(),={}@]/.test(src[i])) i++; return src.slice(s0, i); };
+  // Reads a {braced} or "quoted" group starting at src[i]; returns the inner text with nested braces kept.
+  const group = () => {
+    const quoted = src[i] === '"';
+    const s0 = ++i;
+    let depth = 0;
+    for (; i < n; i++) {
+      const c = src[i];
+      if (c === '{') depth++;
+      else if (c === '}') { if (depth === 0) { if (!quoted) break; } else depth--; }
+      else if (c === '"' && quoted && depth === 0) break;
+    }
+    const inner = src.slice(s0, i);
+    if (i < n) i++;
+    return inner;
+  };
+  const value = (close: string) => {
+    let v = '';
+    for (;;) {
+      ws();
+      const c = src[i];
+      if (c === '{' || c === '"') v += group();
+      else {
+        const s0 = i;
+        while (i < n && /[^\s,#{}()"]/.test(src[i]) && src[i] !== close) i++;
+        const w = src.slice(s0, i);
+        if (!w) break;
+        v += /^\d+$/.test(w) ? w : macros[w.toLowerCase()] ?? w;
+      }
+      ws();
+      if (src[i] !== '#') break;
+      i++;
+    }
+    return v;
+  };
+  // Skips to just after the entry's closing delimiter, honoring nested braces.
+  const skipEntry = (close: string) => {
+    let depth = 0;
+    for (; i < n; i++) {
+      const c = src[i];
+      if (c === '{') depth++;
+      else if (c === '}' && depth > 0) depth--;
+      else if (c === close && depth === 0) { i++; return; }
+    }
+  };
+  const TYPES: Record<string, string> = { book: 'Book', article: 'Journal Article', inproceedings: 'Conference Proceedings', incollection: 'Book Section', phdthesis: 'Thesis', mastersthesis: 'Thesis', techreport: 'Report', misc: 'Miscellaneous', online: 'Web Site' };
+  while (i < n) {
+    const at = src.indexOf('@', i);
+    if (at < 0) break;
+    i = at + 1;
+    ws();
+    const kind = ident().toLowerCase();
+    ws();
+    if (!kind || (src[i] !== '{' && src[i] !== '(')) continue;
+    const close = src[i] === '(' ? ')' : '}';
+    i++;
+    if (kind === 'comment' || kind === 'preamble') { skipEntry(close); continue; }
+    if (kind === 'string') {
+      ws(); const name = ident(); ws();
+      if (name && src[i] === '=') { i++; macros[name.toLowerCase()] = value(close); }
+      skipEntry(close);
+      continue;
+    }
+    ws();
+    const s0 = i;
+    while (i < n && src[i] !== ',' && src[i] !== close && src[i] !== '\n') i++;
+    const key = src.slice(s0, i).trim();
     const fields: Record<string, string> = {};
-    const fre = /(\w+)\s*=\s*(\{((?:[^{}]|\{[^{}]*\})*)\}|"([^"]*)"|(\d+))/g;
-    let f;
-    while ((f = fre.exec(m[3]))) fields[f[1].toLowerCase()] = (f[3] ?? f[4] ?? f[5] ?? '').replace(/[{}]/g, '');
-    const type = ({ book: 'Book', article: 'Journal Article', inproceedings: 'Conference Proceedings', incollection: 'Book Section', phdthesis: 'Thesis', mastersthesis: 'Thesis', techreport: 'Report', misc: 'Miscellaneous', online: 'Web Site' } as Record<string, string>)[m[1].toLowerCase()] || 'Miscellaneous';
-    out.push({ id: m[2].trim() || `src${out.length}`, type, author: (fields.author || '').replace(/\s+and\s+/g, '; '), title: fields.title || '', year: fields.year || '', publisher: fields.publisher || fields.school || fields.institution, city: fields.address, journal: fields.journal || fields.booktitle, volume: fields.volume, issue: fields.number, pages: fields.pages?.replace('--', '–'), url: fields.url, doi: fields.doi, edition: fields.edition });
+    while (i < n) {
+      ws();
+      if (src[i] === ',') { i++; continue; }
+      if (src[i] === close) { i++; break; }
+      if (src[i] === '@') break; // unterminated entry: let the next one start
+      const name = ident().toLowerCase();
+      if (!name) { i++; continue; }
+      ws();
+      if (src[i] !== '=') continue;
+      i++;
+      fields[name] = value(close);
+    }
+    const f = (k: string) => (fields[k] == null ? undefined : bibText(fields[k], k === 'url' || k === 'doi'));
+    out.push({ id: key || `src${out.length}`, type: TYPES[kind] || 'Miscellaneous', author: (f('author') || '').replace(/\s+and\s+/g, '; '), title: f('title') || '', year: f('year') || '', publisher: f('publisher') || f('school') || f('institution'), city: f('address'), journal: f('journal') || f('booktitle'), volume: f('volume'), issue: f('number'), pages: f('pages')?.replace('--', '–'), url: f('url'), doi: f('doi'), edition: f('edition') });
   }
   return out;
 }
@@ -524,7 +627,7 @@ def([
       const st = app.state;
       const heads = headingList(st.doc, 9);
       const bms: string[] = []; st.doc.descendants((n) => { if (n.type === N.bookmark) bms.push(n.attrs.name); return true; });
-      const caps: { text: string; pos: number }[] = []; st.doc.descendants((n, pos) => { if (n.type === N.paragraph && n.attrs.style === 'Caption') caps.push({ text: n.textContent, pos }); return true; });
+      const caps: { text: string; pos: number; node: PMNode }[] = []; st.doc.descendants((n, pos) => { if (n.type === N.paragraph && n.attrs.style === 'Caption') caps.push({ text: n.textContent, pos, node: n }); return true; });
       const notes: { text: string; pos: number }[] = []; st.doc.descendants((n, pos) => { if (n.type === N.footnote) notes.push({ text: n.attrs.text, pos }); return true; });
       const r = await openDialog({ title: 'Cross-reference', wide: true, fields: [
         { key: 'type', label: 'Reference type', type: 'select', options: ['Heading', 'Bookmark', 'Caption', 'Footnote'], value: 'Heading', half: true },
@@ -539,9 +642,20 @@ def([
       if (!r?.target) return;
       const t = String(r.target);
       let name = '', text = '', pos = 0;
+      let capId: { pos: number; node: PMNode } | null = null;
       if (t[0] === 'h') { const h0 = heads[+t.slice(1)]; text = h0.text; pos = h0.pos; name = slug(h0.text); }
       if (t[0] === 'b') { name = t.slice(1); }
-      if (t[0] === 'c') { const c = caps[+t.slice(1)]; text = c.text.split(':')[0]; pos = c.pos; name = 'cap-' + slug(c.text).slice(0, 30); }
+      if (t[0] === 'c') {
+        const c = caps[+t.slice(1)]; text = c.text.split(':')[0]; pos = c.pos;
+        // nav.gotoAnchor resolves paragraph ids, so link to the caption's id (giving it a unique one if needed).
+        name = c.node.attrs.id || '';
+        if (!name) {
+          const used = new Set<string>(); st.doc.descendants((n) => { if (typeof n.attrs?.id === 'string' && n.attrs.id) used.add(n.attrs.id); if (n.type === N.bookmark) used.add(n.attrs.name); return true; });
+          const base = 'cap-' + (slug(c.text).slice(0, 30) || 'caption');
+          name = base; for (let k = 2; used.has(name); k++) name = `${base}-${k}`;
+          capId = { pos: c.pos, node: c.node };
+        }
+      }
       if (t[0] === 'n') { const nn = notes[+t.slice(1)]; text = footnoteLabel(st, nn.pos) || ''; pos = nn.pos; }
       const view = v(app);
       if (t[0] === 'b') {
@@ -552,7 +666,9 @@ def([
       if (r.what === 'page') text = String(pageOfPos(st, pos));
       if (r.what === 'above') text = pos < st.selection.from ? 'above' : 'below';
       const marks = r.link && name ? [schema.marks.link.create({ href: '#' + name })] : [];
-      view.dispatch(view.state.tr.replaceSelectionWith(schema.text(text || '?', marks), false));
+      const tr = view.state.tr;
+      if (capId && r.link) tr.setNodeMarkup(capId.pos, undefined, { ...capId.node.attrs, id: name });
+      view.dispatch(tr.replaceSelectionWith(schema.text(text || '?', marks), false));
     },
   },
   {

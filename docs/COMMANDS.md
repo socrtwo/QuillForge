@@ -1,8 +1,8 @@
-# QuillForge Command Reference
+# QuillPen Command Reference
 
-QuillForge ships **746 commands**. Every one can be placed on the Quick Access Bar, added to a custom tab, bound to a keyboard shortcut, recorded in a macro, or found with command search (Alt+Q).
+QuillPen ships **823 commands**. Every one can be placed on the Quick Access Bar, added to a custom tab, bound to a keyboard shortcut, recorded in a macro, or found with command search (Alt+Q).
 
-431 of them are "Commands Not in the Tabs" — reachable through the Quick Access Bar chooser, Customize Tabs, the command search, or menus — mirroring how desktop suites expose their full command library.
+435 of them are "Commands Not in the Tabs" — reachable through the Quick Access Bar chooser, Customize Tabs, the command search, or menus — mirroring how desktop suites expose their full command library.
 
 This file is generated from the source by `npm run catalog`.
 
@@ -18,13 +18,14 @@ This file is generated from the source by `npm run catalog`.
 - **Review**: Proofing · Speech · Accessibility · Language · Comments · Tracking · Changes · Compare · Protect · Ink
 - **View**: Views · Immersive · Show · Zoom · Writing · Window · Macros
 - **Tools**: Clean Up · Typography · Text · Analyze
+- **AI**: Assistant · Providers · Write · Rewrite · Length & Structure · Proofing · Summarize & Analyze · Translate · Research · Review · Pictures · Creative
 - **Developer**: Code · Controls · Protect · Templates
 - **Help**: Help
 - **Table Design** (contextual): Table Style Options · Table Styles · Borders
 - **Table Layout** (contextual): Table · Rows & Columns · Merge · Cell Size · Alignment · Data
 - **Picture Format** (contextual): Adjust · Picture Styles · Accessibility · Arrange · Size
 
-## File (44)
+## File (48)
 
 | Command | Group | Shortcut | ID | Notes |
 |---|---|---|---|---|
@@ -37,7 +38,7 @@ This file is generated from the source by `npm run catalog`.
 | Export as OpenDocument Text (.odt) | Export |  | `file.export.odt` | not in tabs |
 | Export as PDF | Export |  | `file.exportPdf` |  |
 | Export as Plain Text (.txt) | Export |  | `file.export.txt` | not in tabs |
-| Export as QuillForge Document (.qfd) | Export |  | `file.export.qfd` | not in tabs |
+| Export as QuillPen Document (.qpd) | Export |  | `file.export.qpd` | not in tabs |
 | Export as Rich Text Format (.rtf) | Export |  | `file.export.rtf` | not in tabs |
 | Export as Web Page (.html) | Export |  | `file.export.html` | not in tabs |
 | Export as Word Document (.docx) | Export |  | `file.export.docx` | not in tabs |
@@ -51,9 +52,13 @@ This file is generated from the source by `npm run catalog`.
 | New Document | New | Ctrl+n | `file.new` |  |
 | New from Template… | New |  | `file.newFromTemplate` | not in tabs |
 | Clear Unpinned Recent Documents | Open |  | `file.clearRecent` | not in tabs |
+| Manual Recovery Options | Open |  | `file.recoveryHelp` | not in tabs |
+| Open and Repair… | Open |  | `file.openRepair` | not in tabs |
 | Open Encrypted Document… | Open |  | `file.openEncrypted` | not in tabs |
 | Open Recent | Open |  | `file.openRecent` | has options menu; not in tabs |
 | Open… | Open | Ctrl+o, Ctrl+F12 | `file.open` |  |
+| Recover Text from Any File… | Open |  | `file.recoverText` | not in tabs |
+| Recovery Report | Open |  | `file.recoveryReport` | not in tabs |
 | AutoCorrect Options… | Options |  | `file.autocorrectOptions` | not in tabs |
 | Custom Dictionary… | Options |  | `file.customDictionary` | not in tabs |
 | Customize Keyboard… | Options |  | `file.customizeKeyboard` | not in tabs |
@@ -576,7 +581,7 @@ This file is generated from the source by `npm run catalog`.
 | Insert Merge Field | Write & Insert Fields |  | `mail.insertField` | has options menu |
 | Rules | Write & Insert Fields |  | `mail.rules` | has options menu |
 
-## Review (46)
+## Review (48)
 
 | Command | Group | Shortcut | ID | Notes |
 |---|---|---|---|---|
@@ -604,7 +609,9 @@ This file is generated from the source by `npm run catalog`.
 | Compare with Saved Version… | Compare |  | `review.compareVersions` | not in tabs |
 | Hide Ink | Ink |  | `review.hideInk` |  |
 | Do Not Check Spelling | Language |  | `fmt.noProof` | not in tabs |
+| English Spelling | Language |  | `review.spellDialect` | has options menu |
 | Set Proofing Language | Language |  | `fmt.language` |  |
+| Spelling Dictionaries… | Language |  | `review.dictionaries` |  |
 | Translate Selection (online) | Language |  | `review.translate` |  |
 | Check Spelling as You Type | Proofing |  | `review.toggleSpell` | not in tabs |
 | Define (Dictionary) | Proofing |  | `review.define` | not in tabs |
@@ -733,6 +740,81 @@ This file is generated from the source by `npm run catalog`.
 | Non-Breaking Spaces Before Units/Numbers | Typography |  | `tools.nbspUnits` | not in tabs |
 | Typographic Clean-Up (All) | Typography |  | `tools.typographer` | inspired by Publishing typography |
 
+## AI (70)
+
+| Command | Group | Shortcut | ID | Notes |
+|---|---|---|---|---|
+| Action Items | Analyze |  | `ai.actionItems` |  |
+| Analyze Text | Analyze |  | `ai.analyze` |  |
+| Explain | Analyze |  | `ai.explain` |  |
+| Extract Names, Dates & Places | Analyze |  | `ai.extractData` |  |
+| Generate FAQ | Analyze |  | `ai.faq` |  |
+| Insert Summary at Top | Analyze |  | `ai.summaryTop` |  |
+| Summarize | Analyze | Ctrl+Alt+Shift+u | `ai.summarize` | has options menu |
+| AI & Privacy | Assistant |  | `ai.privacy` |  |
+| AI Pane | Assistant | Ctrl+Alt+a | `ai.chat` |  |
+| AI Settings… | Assistant |  | `ai.settings` |  |
+| Ask About Document… | Assistant | Ctrl+Alt+q | `ai.ask` |  |
+| Delete Downloaded Models | Assistant |  | `ai.clearLocal` |  |
+| My Prompts | Assistant |  | `ai.runPrompt` | has options menu |
+| Prompt Library… | Assistant |  | `ai.prompts` |  |
+| Set Up AI… | Assistant |  | `ai.setup` |  |
+| Stop AI | Assistant |  | `ai.stop` |  |
+| Describe (Sensory Detail) | Creative |  | `ai.describe` |  |
+| Name Generator… | Creative |  | `ai.names` |  |
+| Polish Dialogue | Creative |  | `ai.dialogue` |  |
+| Story Notes… | Creative |  | `ai.storyNotes` |  |
+| Add Detail | Length |  | `ai.addDetail` | has options menu |
+| Add Headings | Length |  | `ai.headings` |  |
+| Convert to Table | Length |  | `ai.table` |  |
+| Expand | Length |  | `ai.expand` |  |
+| Key Points | Length |  | `ai.keyPoints` |  |
+| Make Bulleted List | Length |  | `ai.bullets` |  |
+| Shorten | Length |  | `ai.shorten` |  |
+| Describe Picture | Media |  | `ai.describeImage` |  |
+| Generate Alt Text | Media |  | `ai.altText` |  |
+| Generate Image… | Media |  | `ai.generateImage` |  |
+| Image to Text (OCR) | Media |  | `ai.imageToText` |  |
+| Check Against Style Guide | Proof |  | `ai.styleGuide` |  |
+| Clarity Suggestions | Proof |  | `ai.clarity` |  |
+| Fix OCR Errors | Proof |  | `ai.ocrFix` |  |
+| Proofread with AI | Proof | Ctrl+Alt+p | `ai.proofread` |  |
+| Active AI | Providers |  | `ai.chooseProvider` | has options menu |
+| Choose AIs… | Providers |  | `ai.ensembleMembers` |  |
+| Providers & Models… | Providers |  | `ai.providers` |  |
+| Several AIs | Providers |  | `ai.ensembleMode` | has options menu |
+| Show AI Discussion | Providers |  | `ai.showDeliberation` |  |
+| Flag Claims to Verify | Research |  | `ai.flagClaims` |  |
+| Format Citation… | Research |  | `ai.citation` | has options menu |
+| Suggest Sources | Research |  | `ai.findSources` |  |
+| Draft Comment Reply | Review |  | `ai.draftReply` |  |
+| Feedback as Comments | Review |  | `ai.feedback` |  |
+| Grade Against Rubric… | Review |  | `ai.grade` |  |
+| Manuscript Critique | Review |  | `ai.critique` |  |
+| Reader Reaction | Review |  | `ai.readerView` | has options menu |
+| Review AI Edits | Review |  | `ai.reviewEdits` |  |
+| Summarize Comments | Review |  | `ai.summarizeComments` |  |
+| Change Style | Rewrite |  | `ai.style` | has options menu |
+| Change Tone | Rewrite |  | `ai.tone` | has options menu |
+| Edit with Instruction… | Rewrite | Ctrl+Alt+e | `ai.edit` |  |
+| Improve Writing | Rewrite |  | `ai.improve` |  |
+| Make It Sound Natural | Rewrite |  | `ai.natural` |  |
+| Match My Voice | Rewrite |  | `ai.matchVoice` |  |
+| Rewrite | Rewrite | Ctrl+Alt+Shift+r | `ai.rewrite` |  |
+| Simplify | Rewrite |  | `ai.simplify` |  |
+| Detect Language | Translate |  | `ai.detectLanguage` |  |
+| Side-by-Side Translation | Translate |  | `ai.bilingual` | has options menu |
+| Translate Document | Translate |  | `ai.translateDoc` | has options menu |
+| Translate Selection | Translate |  | `ai.translate` | has options menu |
+| Brainstorm Ideas… | Write |  | `ai.brainstorm` |  |
+| Continue Writing | Write | Ctrl+Alt+Shift+. | `ai.continue` |  |
+| Create Document from Brief… | Write |  | `ai.createDocument` |  |
+| Draft from Template | Write |  | `ai.fromTemplate` | has options menu |
+| Draft with AI… | Write | Ctrl+Alt+j | `ai.draft` |  |
+| Generate Outline… | Write |  | `ai.outline` |  |
+| Inline AI Command… | Write | Ctrl+Alt+Shift+i | `ai.command` |  |
+| Suggest Titles | Write |  | `ai.titles` |  |
+
 ## Developer (24)
 
 | Command | Group | Shortcut | ID | Notes |
@@ -762,15 +844,16 @@ This file is generated from the source by `npm run catalog`.
 | Document Panel (Properties) | Templates |  | `dev.documentPanel` |  |
 | Document Template (Attach Styles)… | Templates |  | `dev.documentTemplate` |  |
 
-## Help (6)
+## Help (7)
 
 | Command | Group | Shortcut | ID | Notes |
 |---|---|---|---|---|
-| About QuillForge | Help |  | `help.about` |  |
+| About QuillPen | Help |  | `help.about` |  |
 | Command Reference | Help |  | `help.commands` |  |
 | Keyboard Shortcuts | Help | Ctrl+/ | `help.shortcuts` |  |
 | Report an Issue | Help |  | `help.feedback` |  |
 | Show the Quick Tour | Help |  | `help.tour` |  |
+| Third-Party Notices | Help |  | `help.notices` |  |
 | What’s New | Help |  | `help.whatsNew` |  |
 
 ## Table Tools (contextual) (41)

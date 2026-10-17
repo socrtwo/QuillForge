@@ -14,7 +14,11 @@ const N = schema.nodes;
 const v = (app: App) => app.view;
 
 export function parseCsv(text: string): string[][] {
-  const delim = (text.split('\n')[0].match(/\t/g) || []).length > (text.split('\n')[0].match(/,/g) || []).length ? '\t' : (text.split('\n')[0].match(/;/g) || []).length > (text.split('\n')[0].match(/,/g) || []).length ? ';' : ',';
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1); // UTF-8 BOM (Excel)
+  // Detect the delimiter from the header line, ignoring quoted text.
+  const head = text.split('\n')[0].replace(/"(?:[^"]|"")*"/g, '');
+  const count = (re: RegExp) => (head.match(re) || []).length;
+  const delim = count(/\t/g) > count(/,/g) ? '\t' : count(/;/g) > count(/,/g) ? ';' : ',';
   const rows: string[][] = [];
   let row: string[] = [], cell = '', q = false;
   for (let i = 0; i < text.length; i++) {
@@ -33,7 +37,7 @@ export function parseCsv(text: string): string[][] {
 }
 
 export function toCsv(fields: string[], rows: string[][]): string {
-  const q = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+  const q = (s: string) => (/[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
   return [fields.map(q).join(','), ...rows.map((r) => r.map((x) => q(x ?? '')).join(','))].join('\n');
 }
 
@@ -50,18 +54,22 @@ function record(app: App, i: number): Record<string, string> {
 
 /** Replace merge fields with record values; drops empty lines produced by blank address fields. */
 export function mergeInto(doc: PMNode, rec: Record<string, string>, index: number): Fragment {
-  const mapNode = (node: PMNode): PMNode | null => {
+  const mapNode = (node: PMNode): PMNode[] => {
     if (node.type === N.field) {
-      if (node.attrs.type === 'MERGEFIELD' && String(node.attrs.arg).startsWith('IF:')) return node;
-      if (node.attrs.type === 'MERGEFIELD') { const val = rec[node.attrs.arg] ?? ''; return val ? schema.text(val, node.marks) : null; }
-      if (node.attrs.type === 'MERGEREC') return schema.text(String(index + 1), node.marks);
-      if (node.attrs.type === 'DATE') return schema.text(formatDate(new Date(), node.attrs.format || 'M/d/yyyy'), node.marks);
-      return node;
+      if (node.attrs.type === 'MERGEFIELD' && String(node.attrs.arg).startsWith('IF:')) return [node];
+      if (node.attrs.type === 'MERGEFIELD') {
+        // Multi-line values (e.g. a quoted CSV address) become manual line breaks.
+        const val = String(rec[node.attrs.arg] ?? '');
+        return val.split(/\r\n|\r|\n/).flatMap((line, i) => [...(i ? [N.hard_break.create(null, null, node.marks)] : []), ...(line ? [schema.text(line, node.marks)] : [])]);
+      }
+      if (node.attrs.type === 'MERGEREC') return [schema.text(String(index + 1), node.marks)];
+      if (node.attrs.type === 'DATE') return [schema.text(formatDate(new Date(), node.attrs.format || 'M/d/yyyy'), node.marks)];
+      return [node];
     }
-    if (node.isLeaf) return node;
+    if (node.isLeaf) return [node];
     const kids: PMNode[] = [];
-    node.forEach((c) => { const m = mapNode(c); if (m) kids.push(m); });
-    if (node.type === N.paragraph && node.content.size && !kids.length) return null; // suppress blank lines
+    node.forEach((c) => { kids.push(...mapNode(c)); });
+    if (node.type === N.paragraph && node.content.size && !kids.length) return []; // suppress blank lines
     // collapse double spaces left by empty fields
     const merged: PMNode[] = [];
     for (const k of kids) {
@@ -69,10 +77,12 @@ export function mergeInto(doc: PMNode, rec: Record<string, string>, index: numbe
       if (last && last.isText && k.isText && last.sameMarkup(k)) merged[merged.length - 1] = schema.text((last.text! + k.text!).replace(/ {2,}/g, ' '), k.marks);
       else merged.push(k);
     }
-    try { return node.copy(Fragment.fromArray(merged)); } catch { return node; }
+    // createAndFill keeps containers valid when all their paragraphs were dropped (cell, list item).
+    try { return [node.type.createAndFill(node.attrs, merged, node.marks) ?? node]; } catch { return [node]; }
   };
   const out: PMNode[] = [];
-  doc.forEach((n) => { const m = mapNode(n); if (m) out.push(m); });
+  doc.forEach((n) => { out.push(...mapNode(n)); });
+  if (!out.length) out.push(N.paragraph.create());
   return Fragment.fromArray(out);
 }
 

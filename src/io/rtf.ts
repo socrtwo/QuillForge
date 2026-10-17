@@ -1,12 +1,12 @@
 /**
  * Rich Text Format (RTF 1.9) import / export.
  *
- * Export writes a font table, colour table, style sheet (headings carry \outlinelevel), Word 97+
+ * Export writes a font table, color table, style sheet (headings carry \outlinelevel), Word 97+
  * list tables (\listtable/\ls/\ilvl with \listtext fallbacks), tables (\trowd … \row with
  * horizontal/vertical merges), PNG/JPEG pictures, footnotes/endnotes, HYPERLINK and other fields,
  * bookmarks, page setup and headers/footers.
  *
- * Import is a real tokenizer + group/destination state machine: font/colour/style/list tables,
+ * Import is a real tokenizer + group/destination state machine: font/color/style/list tables,
  * \pard/\plain resets, character and paragraph properties, Unicode (\uN with \ucN skipping) and
  * code-page text (\'hh with \ansicpg and per-font \fcharset), tables, pictures, fields, footnotes,
  * headers/footers, bookmarks, old-style (\pn/\pntext) and new-style lists, section and page breaks.
@@ -22,7 +22,7 @@ import type { StyleDef } from '../editor/settings';
 import type { ExportOptions } from './index';
 import {
   S, buildNestedLists, bytesToHex, canonicalStyleName, collectFootnotes, docSettings, docTitle, finishDoc, hexToBytes, htmlToTextLines,
-  imagePixelSize, inlineAtomText, makeBlob, markSet, markerFormat, newSettings, para, parseDataUrl, prepareDoc, resolveFontName,
+  imagePixelSize, inlineAtomText, listStart, makeBlob, markSet, markerFormat, newSettings, para, parseDataUrl, prepareDoc, resolveFontName,
   sniffImageMime, toDataUrl, toHexColor, normalizeImportedFormatting, type FlatListItem, type NoteInfo,
 } from './serialize';
 
@@ -338,7 +338,7 @@ class RtfWriter {
       if (!levels[depth]) {
         const t = list.type;
         levels[depth] = t === S.nodes.ordered_list
-          ? { kind: 'ordered', format: list.attrs.format || 'decimal', start: list.attrs.order ?? 1, bullet: '', suffix: list.attrs.suffix ?? '.' }
+          ? { kind: 'ordered', format: list.attrs.format || 'decimal', start: listStart(list.attrs.order), bullet: '', suffix: list.attrs.suffix ?? '.' }
           : t === S.nodes.task_list ? { kind: 'task', format: 'none', start: 1, bullet: '', suffix: '' }
             : { kind: 'bullet', format: 'bullet', start: 1, bullet: bulletChar(list.attrs.bullet), suffix: '' };
       }
@@ -371,7 +371,7 @@ class RtfWriter {
 
   list(node: PMNode, depth: number, def: { ls: number; levels: ListLevelDef[] }, intbl: boolean): string {
     let out = '';
-    let n = node.type === S.nodes.ordered_list ? (node.attrs.order ?? 1) : 1;
+    let n = node.type === S.nodes.ordered_list ? listStart(node.attrs.order) : 1;
     const lvl = def.levels[Math.min(depth, 8)];
     node.forEach((item) => {
       let marker: string;
@@ -603,7 +603,7 @@ class RtfWriter {
 
   render(doc: PMNode, opts: ExportOptions, title: string): string {
     const s = this.settings;
-    // Body first, so fonts/colours/styles/lists are registered.
+    // Body first, so fonts/colors/styles/lists are registered.
     const body = this.children(doc, {});
     const author = s.properties.author || opts.author || '';
     const fileName = opts.fileName || '';
@@ -649,7 +649,7 @@ class RtfWriter {
       (p.gutter ? `\\gutter${tw(p.gutter)}` : '') + (land ? '\\landscape' : '') + (s.differentOddEven ? '\\facingp' : '') + (p.mirror ? '\\margmirror' : '') +
       `\\deftab${tw(s.defaultTab || 36)}\\widowctrl\\ftnbj\\aenddoc\\ftnrstcont\\aftnnrlc\\viewkind1\\viewscale100`;
     const sect = `\\sectd${s.differentFirst ? '\\titlepg' : ''}${this.sectionProps()}`;
-    const header = `{\\rtf1\\ansi\\ansicpg1252\\deff0\\deflang${lang}\\uc1\n{\\fonttbl\n${fonttbl}\n}\n${colortbl}\n${this.styleSheet()}\n${lists}{\\*\\generator QuillForge;}\n{\\info${info}}\n${docProps}\n${sect}\n`;
+    const header = `{\\rtf1\\ansi\\ansicpg1252\\deff0\\deflang${lang}\\uc1\n{\\fonttbl\n${fonttbl}\n}\n${colortbl}\n${this.styleSheet()}\n${lists}{\\*\\generator QuillPen;}\n{\\info${info}}\n${docProps}\n${sect}\n`;
     return header + hf + body + '}';
   }
 }
@@ -672,10 +672,13 @@ interface CharState {
   b: boolean; i: boolean; ul: string | null; strike: boolean; dstrike: boolean; sup: boolean; sub: boolean;
   scaps: boolean; caps: boolean; v: boolean; f: number | null; fs: number | null; cf: number; hl: number; shade: number;
   expnd: number; scale: number; up: number;
+  /** Tracked change: 1 insertion (\revised), 2 deletion (\deleted), with author index and DTTM. */
+  rev: number; revAuth: number; revDt: number; revAuthDel: number; revDtDel: number;
 }
 interface ParaState {
   align: string | null; li: number; ri: number; fi: number; sb: number | null; sa: number | null; sl: number; slmult: number;
   keepn: boolean; keep: boolean; pagebb: boolean; outline: number | null; s: number | null; intbl: boolean; ls: number; ilvl: number; cbpat: number;
+  border: Record<string, string> | null;
 }
 interface Sink { text: string; align: string | null; kind: string }
 interface FieldState { inst: string; hyperlink: string | null; resultStarted: boolean; startPara: number; startIdx: number; sinkStart: number; sink: Sink | null }
@@ -683,13 +686,15 @@ interface Group {
   ch: CharState; pa: ParaState; dest: string; uc: number; link: string | null; sink: Sink | null;
   field: FieldState | null; ownsField: boolean; ownsNote: boolean; noteKind: string; ownsSink: boolean; uprDest: string | null;
   ownsPict: boolean; ownsBkmk: boolean; ownsInfo: string | null; styleEntry: boolean;
+  /** Owns a metadata capture (annotation id/author/ref/date, comment range, shape property). */
+  ownsMeta: string | null; ownsAnnot: boolean; ownsShape: boolean; ownsShpTxt: boolean; ownsSp: boolean;
 }
-interface CellDef { right: number; mgf: boolean; mrg: boolean; vmgf: boolean; vmrg: boolean; bg: number; valign: string | null }
+interface CellDef { right: number; mgf: boolean; mrg: boolean; vmgf: boolean; vmrg: boolean; bg: number; valign: string | null; borders?: Record<string, string> }
 type Entry = PMNode | { list: FlatListItem } | { sect: string };
 interface RowBuild { cells: Entry[][]; defs: CellDef[]; header: boolean }
 
-const freshChar = (): CharState => ({ b: false, i: false, ul: null, strike: false, dstrike: false, sup: false, sub: false, scaps: false, caps: false, v: false, f: null, fs: null, cf: 0, hl: 0, shade: 0, expnd: 0, scale: 100, up: 0 });
-const freshPara = (): ParaState => ({ align: null, li: 0, ri: 0, fi: 0, sb: null, sa: null, sl: 0, slmult: 0, keepn: false, keep: false, pagebb: false, outline: null, s: null, intbl: false, ls: 0, ilvl: 0, cbpat: 0 });
+const freshChar = (): CharState => ({ b: false, i: false, ul: null, strike: false, dstrike: false, sup: false, sub: false, scaps: false, caps: false, v: false, f: null, fs: null, cf: 0, hl: 0, shade: 0, expnd: 0, scale: 100, up: 0, rev: 0, revAuth: 0, revDt: 0, revAuthDel: 0, revDtDel: 0 });
+const freshPara = (): ParaState => ({ align: null, li: 0, ri: 0, fi: 0, sb: null, sa: null, sl: 0, slmult: 0, keepn: false, keep: false, pagebb: false, outline: null, s: null, intbl: false, ls: 0, ilvl: 0, cbpat: 0, border: null });
 
 const CHARSET_CP: Record<number, string> = {
   0: 'windows-1252', 1: 'windows-1252', 2: 'windows-1252', 77: 'macintosh', 128: 'shift_jis', 129: 'euc-kr', 130: 'euc-kr', 134: 'gbk', 136: 'big5',
@@ -707,25 +712,48 @@ const UL_STYLES: Record<string, string> = {
   uldashdd: 'dotDotDash', ulthd: 'thick', ulthdash: 'thick', ulldash: 'dashed', ulhwave: 'wavy', ululdbwave: 'wavy', ulthdashd: 'thick', ulthdashdd: 'thick', ulthldash: 'thick',
 };
 
-const SKIP_DESTS = new Set(['themedata', 'colorschememapping', 'datastore', 'latentstyles', 'rsidtbl', 'revtbl', 'filetbl', 'xmlnstbl', 'mmathPr',
-  'pgdsctbl', 'objdata', 'objclass', 'nonshppict', 'shpinst', 'fldtype', 'ftnsep', 'ftnsepc', 'ftncn', 'aftnsep', 'aftnsepc', 'aftncn', 'pnseclvl',
-  'listpicture', 'userprops', 'docvar', 'template', 'nesttableprops', 'nonesttables', 'atnid', 'atnauthor', 'annotation', 'atndate', 'atnref', 'atrfstart', 'atrfend',
+const SKIP_DESTS = new Set(['themedata', 'colorschememapping', 'datastore', 'latentstyles', 'rsidtbl', 'filetbl', 'xmlnstbl', 'mmathPr',
+  'pgdsctbl', 'objdata', 'objclass', 'nonshppict', 'fldtype', 'ftnsep', 'ftnsepc', 'ftncn', 'aftnsep', 'aftnsepc', 'aftncn', 'pnseclvl',
+  'listpicture', 'userprops', 'docvar', 'template', 'nesttableprops', 'nonesttables', 'atnicn', 'atntime', 'atnparent',
   'xe', 'tc', 'txe', 'rxe', 'bkmkend', 'blipuid', 'picprop', 'wgrffmtfilter', 'fchars', 'lchars', 'background', 'operator', 'password', 'passwordhash',
   'mmath', 'mmathPict', 'oleclsid', 'panose', 'falt', 'fname', 'keycode', 'formfield', 'datafield', 'printim', 'buptim', 'revtim', 'generator', 'hlinkbase',
-  'shptxt', 'sp', 'sn', 'sv', 'do', 'dptxbxtext', 'protusertbl', 'ebcstart', 'ebcend', 'pxe', 'factoidname']);
+  'do', 'dptxbxtext', 'protusertbl', 'ebcstart', 'ebcend', 'pxe', 'factoidname']);
 
 const INFO_KEYS: Record<string, string> = { title: 'title', subject: 'subject', author: 'author', manager: 'manager', company: 'company', category: 'category', keywords: 'keywords', doccomm: 'comments', comment: 'comments', operator: '' };
 
 const FIELD_TYPES = new Set(['DATE', 'TIME', 'CREATEDATE', 'SAVEDATE', 'PRINTDATE', 'PAGE', 'NUMPAGES', 'NUMWORDS', 'NUMCHARS', 'AUTHOR', 'TITLE', 'SUBJECT', 'KEYWORDS',
   'COMMENTS', 'FILENAME', 'DOCPROPERTY', 'DOCVARIABLE', 'USERNAME', 'USERINITIALS', 'SEQ', 'REF', 'PAGEREF', 'STYLEREF', 'MERGEFIELD', 'MERGEREC', 'FILLIN', 'QUOTE', '=', 'SECTION']);
 
-interface ListDef { id: number; levels: { nfc: number; start: number }[] }
+interface ListDef { id: number; levels: { nfc: number; start: number; text?: string }[] }
 
-class RtfReader {
+/** Bullet character from \leveltext → list bullet attribute (private-use Symbol/Wingdings glyphs mapped). */
+function rtfBullet(ch: string): string {
+  if (!ch || ch === '•' || ch === '·' || ch === '\uf0b7' || ch === '\u00b7') return 'disc';
+  if (ch === 'o' || ch === '◦' || ch === '○') return 'circle';
+  if (ch === '▪' || ch === '■' || ch === '\uf0a7' || ch === '§') return 'square';
+  if (ch.charCodeAt(0) >= 0xf000) return 'disc';
+  return ch;
+}
+
+/** Decode an RTF/Word DTTM (packed minute/hour/day/month/year) into epoch milliseconds (0 when absent). */
+export function dttmToMs(v: number): number {
+  if (!v) return 0;
+  const x = v >>> 0;
+  const min = x & 63, hr = (x >>> 6) & 31, day = (x >>> 11) & 31, mon = (x >>> 16) & 15, yr = 1900 + ((x >>> 20) & 511);
+  if (!day || !mon || mon > 12) return 0;
+  return Date.UTC(yr, mon - 1, day, hr, min);
+}
+
+/** Group nesting kept as separate states; deeper groups (only crafted files) reuse the deepest. */
+export const RTF_MAX_DEPTH = 1000;
+
+export class RtfReader {
   s: string;
   pos = 0;
   settings = newSettings();
   groups: Group[] = [];
+  /** Open groups beyond RTF_MAX_DEPTH. */
+  overflow = 0;
   g: Group;
   fonts = new Map<number, { name: string; charset: number }>();
   fontEntry: { num: number; name: string; charset: number } | null = null;
@@ -757,10 +785,29 @@ class RtfReader {
   page: { w?: number; h?: number; ml?: number; mr?: number; mt?: number; mb?: number; land?: boolean; hy?: number; fy?: number; gutter?: number } = {};
   titlepg = false;
   facingp = false;
+  // Review: revision authors, comment ranges and the annotation being read.
+  revAuthors: string[] = [];
+  revAuthorBuf = '';
+  activeComments: string[] = [];
+  rangedComments = new Set<string>();
+  meta: Record<string, string> = {};
+  annotCount = 0;
+  // Shapes (\shp): properties, picture (pib) and text (\shptxt).
+  shapes: { props: Map<string, string>; img: { src: string; w: number | null; h: number | null } | null; blocks: PMNode[] | null; box: Record<string, number>; saved: PMNode[] | null; blockStart: number }[] = [];
+  spName = '';
+  spValue = '';
+  borderTarget: Record<string, string> | null = null;
+  borderSide = '';
+  borderSpec = { style: 'solid', w: 10, cf: 0 };
+  paraStyles: Record<string, StyleDef> = {};
+  /** RTFD attachments (file name → data URL) for \NeXTGraphic references. */
+  attachments: Map<string, string> | null = null;
+  nextGraphic: { name: string; w: number; h: number } | null = null;
+  skipAttachmentChar = false;
 
   constructor(s: string) {
     this.s = s;
-    this.g = { ch: freshChar(), pa: freshPara(), dest: 'body', uc: 1, link: null, sink: null, field: null, ownsField: false, ownsNote: false, noteKind: 'foot', ownsSink: false, uprDest: null, ownsPict: false, ownsBkmk: false, ownsInfo: null, styleEntry: false };
+    this.g = { ch: freshChar(), pa: freshPara(), dest: 'body', uc: 1, link: null, sink: null, field: null, ownsField: false, ownsNote: false, noteKind: 'foot', ownsSink: false, uprDest: null, ownsPict: false, ownsBkmk: false, ownsInfo: null, styleEntry: false, ownsMeta: null, ownsAnnot: false, ownsShape: false, ownsShpTxt: false, ownsSp: false };
   }
 
   // ---------------------------------------------------------------- text plumbing
@@ -783,7 +830,7 @@ class RtfReader {
   byte(b: number): void {
     if (this.ucSkip > 0) { this.ucSkip--; return; }
     const d = this.g.dest;
-    if (d === 'body' || d === 'sink' || d === 'fldinst' || d === 'listtext' || d === 'bkmk' || d.startsWith('info:')) { this.bytes.push(b); return; }
+    if (d === 'body' || d === 'sink' || d === 'fldinst' || d === 'listtext' || d === 'bkmk' || d.startsWith('info:') || d.startsWith('meta:') || d === 'sv' || d === 'sn' || d === 'revtbl' || d === 'leveltext' || d === 'nextgraphic') { this.bytes.push(b); return; }
     if (d === 'pict') { this.pict?.hex.push(String.fromCharCode(b)); return; }
     if (d === 'fonttbl' || d === 'stylesheet' || d === 'colortbl') this.emit(String.fromCharCode(b));
   }
@@ -821,8 +868,24 @@ class RtfReader {
         }
         break;
       }
+      case 'sn': this.spName += text; break;
+      case 'nextgraphic': if (this.nextGraphic) this.nextGraphic.name += text; break;
+      case 'leveltext': {
+        const l = this.lists[this.lists.length - 1];
+        const lv = l?.levels[l.levels.length - 1];
+        if (lv) lv.text = (lv.text || '') + text;
+        break;
+      }
+      case 'sv': this.spValue += text; break;
+      case 'revtbl': {
+        for (const c of text) {
+          if (c === ';') { this.revAuthors.push(this.revAuthorBuf.trim()); this.revAuthorBuf = ''; } else this.revAuthorBuf += c;
+        }
+        break;
+      }
       default:
         if (g.dest.startsWith('info:')) { const k = g.dest.slice(5); this.info[k] = (this.info[k] || '') + text; }
+        else if (g.dest.startsWith('meta:')) { const k = g.dest.slice(5); this.meta[k] = (this.meta[k] || '') + text; }
     }
   }
 
@@ -863,10 +926,18 @@ class RtfReader {
     if (c.scale && c.scale !== 100) out.push(M.scale.create({ pct: c.scale }));
     if (c.up) out.push(M.position.create({ pt: c.up / 2 }));
     if (this.g.link) out.push(M.link.create({ href: this.g.link }));
+    if (c.rev === 1) out.push(M.insertion.create({ author: this.revAuthors[c.revAuth] || 'Unknown', date: dttmToMs(c.revDt), id: `rtf-r${c.revAuth}-${c.revDt}` }));
+    else if (c.rev === 2) out.push(M.deletion.create({ author: this.revAuthors[c.revAuthDel] || 'Unknown', date: dttmToMs(c.revDtDel), id: `rtf-d${c.revAuthDel}-${c.revDtDel}` }));
+    for (const id of this.activeComments) out.push(M.comment.create({ id: 'rtf-c' + id }));
     return markSet(out);
   }
 
   emitBody(text: string): void {
+    if (this.skipAttachmentChar) {
+      // The attachment placeholder character that follows a \NeXTGraphic group.
+      this.skipAttachmentChar = false;
+      text = text.replace(/^[\u00ac\ufffc]/, '');
+    }
     const clean = text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '');
     if (!clean) return;
     this.bodyStarted = true;
@@ -889,6 +960,14 @@ class RtfReader {
       if (!name && st.outline != null && st.outline < 9) name = `Heading ${st.outline + 1}`;
     }
     if ((!name || name === 'Normal') && ps.outline != null && ps.outline < 9) name = `Heading ${ps.outline + 1}`;
+    if (!name && ps.s != null && ps.s !== 0 && this.styles.has(ps.s)) {
+      // A custom paragraph style: keep its name (the text carries its formatting directly).
+      const raw = this.styles.get(ps.s)!.name.replace(/;$/, '').trim();
+      if (raw && !/^(default|normal|standard|default paragraph style)$/i.test(raw)) {
+        name = raw;
+        if (!this.paraStyles[raw]) this.paraStyles[raw] = { name: raw, type: 'paragraph', basedOn: 'Normal', quick: true };
+      }
+    }
     if (!name || name === 'List Paragraph') name = 'Normal';
     return name;
   }
@@ -912,11 +991,13 @@ class RtfReader {
     if (ps.keep) a.keepLines = true;
     if (ps.pagebb) a.pageBreakBefore = true;
     if (ps.cbpat && this.colors[ps.cbpat]) a.bg = this.colors[ps.cbpat];
+    if (ps.border && Object.keys(ps.border).length) a.border = JSON.stringify(ps.border);
     return a;
   }
 
   listInfo(ps: ParaState, text: string): FlatListItem | null {
     let ordered = false, format = 'disc', start = 1, level = 0;
+    let suffix: string | null = null;
     let isList = false;
     if (ps.ls > 0) {
       const id = this.overrides.get(ps.ls);
@@ -924,10 +1005,21 @@ class RtfReader {
       const lv = def?.levels[Math.min(ps.ilvl, (def?.levels.length || 1) - 1)];
       level = ps.ilvl;
       isList = true;
+      // Outline numbering without a number on headings (LibreOffice chapter numbering) is not a list.
+      if (lv && lv.nfc === 255 && /^(Heading \d|Title)$/.test(this.styleName(ps))) return null;
       if (lv) {
         const map: Record<number, string> = { 0: 'decimal', 1: 'upper-roman', 2: 'lower-roman', 3: 'upper-alpha', 4: 'lower-alpha', 22: 'decimal-zero' };
-        if (lv.nfc === 23 || lv.nfc === 255) { ordered = false; format = 'disc'; }
-        else { ordered = true; format = map[lv.nfc] || 'decimal'; start = lv.start || 1; }
+        const lt = (lv.text || '').replace(/;$/, '');
+        if (lv.nfc === 23 || lv.nfc === 255) {
+          ordered = false;
+          // \leveltext: a length byte, then the bullet character.
+          const ch = lt.slice(1).replace(/[\u0000-\u0008]/g, '').trim();
+          format = lv.nfc === 255 && !ch ? 'none' : rtfBullet(ch);
+        } else {
+          ordered = true; format = map[lv.nfc] || 'decimal'; start = lv.start || 1;
+          const tail = lt.slice(1).split(/[\u0000-\u0008]/).pop() || '';
+          if (tail.trim() && tail.trim().length <= 2) suffix = tail.trim();
+        }
       } else if (this.marker) {
         const mf = markerFormat(this.marker.replace(/\t/g, ''));
         ordered = mf.ordered; format = mf.format; start = mf.start;
@@ -947,7 +1039,7 @@ class RtfReader {
     }
     if (!isList) return null;
     const task = /^[☐☒☑]\s?/.test(text);
-    return { level: Math.min(8, level), ordered: task ? false : ordered, format, start, task, checked: task ? !/^☐/.test(text) : null, blocks: [] };
+    return { level: Math.min(8, level), ordered: task ? false : ordered, format, start, task, checked: task ? !/^☐/.test(text) : null, blocks: [], ...(suffix ? { suffix } : {}) } as FlatListItem;
   }
 
   endPara(kind: 'par' | 'cell' | 'eof'): void {
@@ -1015,8 +1107,13 @@ class RtfReader {
     if (t.curRow.length) t.rows.push({ cells: t.curRow, defs: [...this.rowDefs], header: false });
     if (!t.rows.length) return;
     // Build cells with merges.
-    type CB = { blocks: PMNode[]; colspan: number; rowspan: number; header: boolean; widths: number[]; bg: string | null; valign: string | null; col: number };
+    type CB = { blocks: PMNode[]; colspan: number; rowspan: number; header: boolean; widths: number[]; bg: string | null; valign: string | null; col: number; borders: string | null };
     const grid: CB[][] = [];
+    // Column grid: the distinct cell edges of all rows (rows may merge cells simply by omitting edges).
+    const edges: number[] = [];
+    for (const row of t.rows) for (const d of row.defs) if (d.right > 0 && !edges.some((e) => Math.abs(e - d.right) <= 30)) edges.push(d.right);
+    edges.sort((a, b) => a - b);
+    const gridIndex = (right: number) => { let best = -1; for (let i = 0; i < edges.length; i++) if (Math.abs(edges[i] - right) <= 30) best = i; return best; };
     for (let r = 0; r < t.rows.length; r++) {
       const row = t.rows[r];
       const cells: CB[] = [];
@@ -1026,20 +1123,23 @@ class RtfReader {
         const def = row.defs[k] || { right: prevRight + 1440, mgf: false, mrg: false, vmgf: false, vmrg: false, bg: 0, valign: null };
         const width = Math.max(1, Math.round((def.right - prevRight) / 15));
         prevRight = def.right;
-        if (def.mrg && cells.length) { const last = cells[cells.length - 1]; last.colspan++; last.widths.push(width); col++; continue; }
+        const gi = row.defs[k] ? gridIndex(def.right) : -1;
+        const span = gi >= col ? gi - col + 1 : 1;
+        if (def.mrg && cells.length) { const last = cells[cells.length - 1]; last.colspan += span; last.widths.push(width); col += span; continue; }
         if (def.vmrg && r > 0) {
           const above = this.findOrigin(grid, r - 1, col);
-          if (above) { above.rowspan++; col++; continue; }
+          if (above) { above.rowspan++; col += span; continue; }
         }
-        cells.push({ blocks: this.finalize(row.cells[k]), colspan: 1, rowspan: 1, header: row.header, widths: [width], bg: def.bg && this.colors[def.bg] ? this.colors[def.bg] : null, valign: def.valign, col });
-        col++;
+        const widths = span > 1 ? Array.from({ length: span }, () => Math.max(1, Math.round(width / span))) : [width];
+        cells.push({ blocks: this.finalize(row.cells[k]), colspan: span, rowspan: 1, header: row.header, widths, bg: def.bg && this.colors[def.bg] ? this.colors[def.bg] : null, valign: def.valign, col, borders: def.borders && Object.keys(def.borders).length ? JSON.stringify(def.borders) : null });
+        col += span;
       }
       grid.push(cells);
     }
     let headerRows = 0;
     while (headerRows < t.rows.length && t.rows[headerRows].header) headerRows++;
     const rows = grid.map((cells, r) => S.nodes.table_row.create(null, cells.map((c) => (r < headerRows ? S.nodes.table_header : S.nodes.table_cell).create(
-      { colspan: c.colspan, rowspan: c.rowspan, colwidth: c.widths.every((w) => w > 1) ? c.widths : null, background: c.bg, valign: c.valign },
+      { colspan: c.colspan, rowspan: c.rowspan, colwidth: c.widths.every((w) => w > 1) ? c.widths : null, background: c.bg, valign: c.valign, borders: c.borders },
       c.blocks.length ? c.blocks : [para()],
     ))));
     this.blocks.push(S.nodes.table.create({ headerRows }, rows.filter((r) => r.childCount > 0)));
@@ -1074,7 +1174,7 @@ class RtfReader {
     this.flushBytes();
     this.groups.push(this.g);
     const g = this.g;
-    this.g = { ...g, ch: { ...g.ch }, pa: { ...g.pa }, ownsField: false, ownsNote: false, ownsSink: false, ownsPict: false, ownsBkmk: false, ownsInfo: null, styleEntry: false };
+    this.g = { ...g, ch: { ...g.ch }, pa: { ...g.pa, border: g.pa.border ? { ...g.pa.border } : null }, ownsField: false, ownsNote: false, ownsSink: false, ownsPict: false, ownsBkmk: false, ownsInfo: null, styleEntry: false, ownsMeta: null, ownsAnnot: false, ownsShape: false, ownsShpTxt: false, ownsSp: false };
     this.ucSkip = 0;
   }
 
@@ -1092,7 +1192,13 @@ class RtfReader {
       const parent = this.groups[this.groups.length - 1];
       if (parent && parent.dest === 'body') this.inlines.push(S.nodes.footnote.create({ text, kind: g.noteKind }));
     }
-    if (g.ownsSink && !g.ownsNote && g.sink) this.finishHF(g.sink);
+    if (g.ownsAnnot && g.sink) this.finishAnnotation(g.sink.text);
+    else if (g.ownsSink && !g.ownsNote && g.sink) this.finishHF(g.sink);
+    if (g.ownsMeta) this.finishMeta(g.ownsMeta);
+    if (g.ownsSp && this.shapes.length) { this.shapes[this.shapes.length - 1].props.set(this.spName.trim(), this.spValue.trim()); this.spName = ''; this.spValue = ''; }
+    if (g.ownsShpTxt) this.finishShapeText();
+    if (g.ownsShape) this.finishShape();
+    if (g.ownsMeta === 'nextgraphic') this.finishNextGraphic();
     if (g.ownsInfo) { /* info text already captured */ }
     const parent = this.groups.pop();
     if (parent) this.g = parent;
@@ -1119,7 +1225,79 @@ class RtfReader {
     if (w != null) w = Math.round(w * 100) / 100;
     if (h != null) h = Math.round(h * 100) / 100;
     const parent = this.groups[this.groups.length - 1];
+    if (parent && parent.dest === 'sv') {
+      const shape = this.shapes[this.shapes.length - 1];
+      if (shape && this.spName.trim() === 'pib') shape.img = { src: toDataUrl(bytes, mime), w, h };
+      return;
+    }
     if (parent && (parent.dest === 'body')) this.pushInline(S.nodes.image.create({ src: toDataUrl(bytes, mime), width: w, height: h }, null, this.g.link ? [S.marks.link.create({ href: this.g.link })] : []));
+  }
+
+  /** End of a captured metadata destination (comment ranges, annotation fields). */
+  finishMeta(key: string): void {
+    const v = (this.meta[key] || '').trim();
+    delete this.meta[key];
+    if (key === 'atrfstart') { if (v) { this.activeComments.push(v); this.rangedComments.add(v); } }
+    else if (key === 'atrfend') this.activeComments = this.activeComments.filter((x) => x !== v);
+    else this.meta['done:' + key] = v;
+  }
+
+  finishAnnotation(text: string): void {
+    const ref = this.meta['done:atnref'] || this.meta['done:atnid'] || String(++this.annotCount);
+    const author = this.meta['done:atnauthor'] || 'Unknown';
+    const dateRaw = this.meta['done:atndate'];
+    for (const k of ['done:atnref', 'done:atnid', 'done:atnauthor', 'done:atndate']) delete this.meta[k];
+    const id = 'rtf-c' + ref;
+    const n = Number(dateRaw);
+    this.settings.comments[id] = { id, author, date: dateRaw && Number.isFinite(n) ? dttmToMs(n) : 0, text: text.replace(/\n+$/, '').trim(), resolved: false, replies: [] };
+    if (!this.rangedComments.has(ref)) {
+      // A point annotation: anchor it on the preceding text run.
+      for (let i = this.inlines.length - 1; i >= 0; i--) {
+        const n2 = this.inlines[i];
+        if (n2.isText && n2.text) { this.inlines[i] = n2.mark(S.marks.comment.create({ id }).addToSet(n2.marks)); break; }
+      }
+    }
+  }
+
+  finishNextGraphic(): void {
+    const ng = this.nextGraphic;
+    this.nextGraphic = null;
+    if (!ng) return;
+    const name = ng.name.trim();
+    const src = this.attachments?.get(name) || this.attachments?.get(name.normalize('NFC')) || [...(this.attachments?.entries() || [])].find(([k]) => k.toLowerCase() === name.toLowerCase())?.[1];
+    this.skipAttachmentChar = true;
+    if (!src) { this.emitBody(`[${name}]`); this.skipAttachmentChar = true; return; }
+    this.pushInline(S.nodes.image.create({ src, alt: name.replace(/\.[^.]+$/, ''), width: ng.w ? ng.w / 20 : null, height: ng.h ? ng.h / 20 : null }));
+  }
+
+  finishShapeText(): void {
+    const shape = this.shapes[this.shapes.length - 1];
+    if (!shape) return;
+    if (this.hasPendingContent()) this.endPara('par');
+    if (this.table && !shape.saved) this.closeTable();
+    const entries = this.blocks.splice(shape.blockStart);
+    shape.blocks = this.finalize(entries);
+    this.inlines = shape.saved || [];
+    shape.saved = null;
+  }
+
+  finishShape(): void {
+    const shape = this.shapes.pop();
+    if (!shape) return;
+    const twip = (k: string) => shape.box[k];
+    const w = twip('shpright') != null && twip('shpleft') != null ? Math.abs(twip('shpright') - twip('shpleft')) / 20 : null;
+    const h = twip('shpbottom') != null && twip('shptop') != null ? Math.abs(twip('shpbottom') - twip('shptop')) / 20 : null;
+    if (shape.img) {
+      const alt = shape.props.get('wzDescription') || shape.props.get('wzName') || '';
+      const wrap = shape.props.get('fBehindDocument') === '1' ? 'behind' : null;
+      this.pushInline(S.nodes.image.create({ src: shape.img.src, alt: /^(Image|Picture|Grafik)\s*\d*$/i.test(alt) ? '' : alt, width: w && w > 1 ? Math.round(w * 100) / 100 : shape.img.w, height: h && h > 1 ? Math.round(h * 100) / 100 : shape.img.h, ...(wrap ? { wrap } : {}) }));
+    }
+    if (shape.blocks && shape.blocks.length) {
+      const fill = Number(shape.props.get('fillColor'));
+      const bgr = Number.isFinite(fill) && shape.props.has('fillColor') ? '#' + [fill & 255, (fill >> 8) & 255, (fill >> 16) & 255].map((x) => x.toString(16).padStart(2, '0')).join('') : null;
+      const box = S.nodes.text_box.create({ width: w && w > 1 ? String(Math.round(w)) : null, bg: shape.props.get('fFilled') === '0' ? null : bgr, border: shape.props.get('fLine') === '0' ? null : '1px solid #444' }, shape.blocks);
+      if (this.g.pa.intbl && this.table) this.table.curCell.push(box); else this.blocks.push(box);
+    }
   }
 
   parseInstruction(inst: string): { type: string; arg: string | null; format: string | null; href: string | null } {
@@ -1213,6 +1391,17 @@ class RtfReader {
         case 'ud': g.dest = g.uprDest || g.dest; return;
         case 'cs': case 'ts': case 'ds': if (g.dest === 'stylesheet') { this.styleEntry = { num: p, name: '', outline: null, kind: 'char' }; g.styleEntry = true; return; } g.dest = 'skip'; return;
         case 'footnote': break;
+        case 'revtbl': g.dest = 'revtbl'; this.revAuthors = []; this.revAuthorBuf = ''; return;
+        case 'atrfstart': case 'atrfend': case 'atnid': case 'atnauthor': case 'atnref': case 'atndate':
+          this.flushBytes(); g.dest = 'meta:' + w; g.ownsMeta = w; this.meta[w] = hasParam ? String(p) : ''; return;
+        case 'annotation': {
+          this.flushBytes();
+          if (g.dest !== 'body') { g.dest = 'skip'; return; }
+          g.sink = { text: '', align: null, kind: 'annot' };
+          g.dest = 'sink'; g.ownsAnnot = true; g.ownsSink = true;
+          return;
+        }
+        case 'shpinst': g.dest = this.shapes.length ? 'shpinst' : 'skip'; return;
         default:
           if (!this.isKnownDestination(w)) { g.dest = 'skip'; return; }
       }
@@ -1220,6 +1409,9 @@ class RtfReader {
     switch (w) {
       // Tables / destinations
       case 'fonttbl': g.dest = 'fonttbl'; return;
+      // Writers differ on whether these carry \*: both forms are the same table.
+      case 'listtable': g.dest = 'listtable'; return;
+      case 'listoverridetable': g.dest = 'listoverride'; return;
       case 'colortbl': g.dest = 'colortbl'; this.colors = []; return;
       case 'stylesheet': g.dest = 'stylesheet'; return;
       case 'info': g.dest = 'info'; return;
@@ -1258,9 +1450,42 @@ class RtfReader {
       case 'upr': g.uprDest = g.dest; g.dest = 'skip'; return;
       case 'object': return;
       case 'result': if (this.groups.length && this.groups[this.groups.length - 1].dest !== 'skip') g.dest = 'body'; return;
-      case 'shp': case 'shprslt': case 'shpgrp': return;
+      case 'shp': {
+        if (g.dest !== 'body' && g.dest !== 'shpinst') { g.dest = 'skip'; return; }
+        this.flushBytes();
+        this.shapes.push({ props: new Map(), img: null, blocks: null, box: {}, saved: null, blockStart: 0 });
+        g.ownsShape = true;
+        return;
+      }
+      case 'shprslt': {
+        // The result is a fallback rendering of the shape: skip it when the shape itself was understood.
+        const shape = this.shapes[this.shapes.length - 1];
+        if (shape && (shape.img || shape.blocks || shape.props.has('pib'))) g.dest = 'skip';
+        return;
+      }
+      case 'shpgrp': return;
+      case 'NeXTGraphic':
+        this.flushBytes();
+        this.nextGraphic = { name: '', w: 0, h: 0 };
+        g.dest = 'nextgraphic'; g.ownsMeta = 'nextgraphic';
+        return;
+      case 'sp': if (g.dest === 'shpinst') { g.dest = 'sp'; g.ownsSp = true; this.spName = ''; this.spValue = ''; } return;
+      case 'sn': if (g.dest === 'sp') { this.flushBytes(); g.dest = 'sn'; } else g.dest = 'skip'; return;
+      case 'sv': if (g.dest === 'sp') { this.flushBytes(); g.dest = 'sv'; } else g.dest = 'skip'; return;
+      case 'shptxt': {
+        const shape = this.shapes[this.shapes.length - 1];
+        if (!shape || g.dest !== 'shpinst') { g.dest = 'skip'; return; }
+        this.flushBytes();
+        shape.saved = this.inlines; this.inlines = []; shape.blockStart = this.blocks.length;
+        g.dest = 'body'; g.ownsShpTxt = true; g.pa = freshPara();
+        return;
+      }
+      case 'shpleft': case 'shpright': case 'shptop': case 'shpbottom':
+        if (this.shapes.length) this.shapes[this.shapes.length - 1].box[w] = p;
+        return;
       case 'bin': {
-        const n = Math.max(0, p);
+        // The declared length can exceed what the file holds: never allocate more than remains.
+        const n = Math.min(Math.max(0, p), this.s.length - this.pos);
         if (g.dest === 'pict' && this.pict) {
           const chunk = new Uint8Array(n);
           for (let k = 0; k < n && this.pos + k < this.s.length; k++) chunk[k] = this.s.charCodeAt(this.pos + k) & 0xff;
@@ -1270,8 +1495,13 @@ class RtfReader {
         return;
       }
     }
+    if (g.dest === 'nextgraphic') {
+      if (w === 'width' && this.nextGraphic) this.nextGraphic.w = p;
+      else if (w === 'height' && this.nextGraphic) this.nextGraphic.h = p;
+      return;
+    }
     if (SKIP_DESTS.has(w)) { g.dest = 'skip'; return; }
-    if (g.dest === 'info' && INFO_KEYS[w] !== undefined) { g.dest = INFO_KEYS[w] ? 'info:' + INFO_KEYS[w] : 'skip'; return; }
+    if (g.dest === 'info' && INFO_KEYS[w] !== undefined) { const k = INFO_KEYS[w]; g.dest = k && !(this.info[k] || '').trim() ? 'info:' + k : 'skip'; return; }
     if (g.dest === 'info' && /^(creatim|revtim|printim|buptim|version|vern|edmins|nofpages|nofwords|nofchars|nofcharsws|id|hlinkbase)$/.test(w)) { g.dest = 'skip'; return; }
 
     // Table-ish destinations ----------------------------------------------------------------
@@ -1299,7 +1529,8 @@ class RtfReader {
       else if (w === 'levelnfc' || w === 'levelnfcn') { const l = this.lists[this.lists.length - 1]; const lv = l?.levels[l.levels.length - 1]; if (lv) lv.nfc = p; }
       else if (w === 'levelstartat') { const l = this.lists[this.lists.length - 1]; const lv = l?.levels[l.levels.length - 1]; if (lv) lv.start = p; }
       else if (w === 'listid') { const l = this.lists[this.lists.length - 1]; if (l && !l.id) l.id = p; }
-      else if (w === 'leveltext' || w === 'levelnumbers' || w === 'listname') g.dest = 'skip';
+      else if (w === 'leveltext') { this.flushBytes(); g.dest = 'leveltext'; }
+      else if (w === 'levelnumbers' || w === 'listname') g.dest = 'skip';
       return;
     }
     if (g.dest === 'listoverride') {
@@ -1459,8 +1690,26 @@ class RtfReader {
       case 'ls': pa.ls = p; return;
       case 'ilvl': pa.ilvl = p; return;
       case 'cbpat': pa.cbpat = p; return;
+      // Borders: the side word selects the target, the following \brdr* words describe it.
+      case 'brdrt': case 'brdrb': case 'brdrl': case 'brdrr': case 'box':
+        if (!pa.border) pa.border = {};
+        this.borderTarget = pa.border; this.borderSide = w === 'box' ? 'box' : ({ brdrt: 'top', brdrb: 'bottom', brdrl: 'left', brdrr: 'right' } as Record<string, string>)[w];
+        this.borderSpec = { style: 'solid', w: 10, cf: 0 }; this.applyBorder(); return;
+      case 'clbrdrt': case 'clbrdrb': case 'clbrdrl': case 'clbrdrr':
+        if (!this.pendingCell.borders) this.pendingCell.borders = {};
+        this.borderTarget = this.pendingCell.borders; this.borderSide = ({ clbrdrt: 'top', clbrdrb: 'bottom', clbrdrl: 'left', clbrdrr: 'right' } as Record<string, string>)[w];
+        this.borderSpec = { style: 'solid', w: 10, cf: 0 }; this.applyBorder(); return;
+      case 'brdrs': case 'brdrth': case 'brdrsh': case 'brdrhair': case 'brdrdb': case 'brdrdot': case 'brdrdash': case 'brdrdashsm': case 'brdrdashd': case 'brdrdashdd':
+      case 'brdrtriple': case 'brdrwavy': case 'brdrinset': case 'brdroutset': case 'brdrengrave': case 'brdremboss': case 'brdrnone': case 'brdrnil': case 'brdrtbl': {
+        const map: Record<string, string> = { brdrdb: 'double', brdrtriple: 'double', brdrdot: 'dotted', brdrdash: 'dashed', brdrdashsm: 'dashed', brdrdashd: 'dashed', brdrdashdd: 'dotted', brdrinset: 'inset', brdroutset: 'outset', brdrengrave: 'groove', brdremboss: 'ridge', brdrwavy: 'solid' };
+        this.borderSpec.style = w === 'brdrnone' || w === 'brdrnil' || w === 'brdrtbl' ? 'none' : map[w] || 'solid';
+        if (w === 'brdrth') this.borderSpec.w = Math.max(this.borderSpec.w, 30);
+        this.applyBorder(); return;
+      }
+      case 'brdrw': this.borderSpec.w = p; this.applyBorder(); return;
+      case 'brdrcf': this.borderSpec.cf = p; this.applyBorder(); return;
       // Row / cell definitions
-      case 'trowd': this.rowDefs = []; this.pendingCell = { right: 0, mgf: false, mrg: false, vmgf: false, vmrg: false, bg: 0, valign: null }; this.rowHeader = false; return;
+      case 'trowd': this.borderTarget = null; this.rowDefs = []; this.pendingCell = { right: 0, mgf: false, mrg: false, vmgf: false, vmrg: false, bg: 0, valign: null }; this.rowHeader = false; return;
       case 'trhdr': this.rowHeader = true; return;
       case 'clmgf': this.pendingCell.mgf = true; return;
       case 'clmrg': this.pendingCell.mrg = true; return;
@@ -1501,14 +1750,30 @@ class RtfReader {
       case 'expndtw': c.expnd = p; return;
       case 'expnd': c.expnd = p * 5; return;
       case 'charscalex': c.scale = p || 100; return;
+      case 'revised': c.rev = on ? 1 : 0; return;
+      case 'deleted': c.rev = on ? 2 : 0; return;
+      case 'revauth': c.revAuth = p; return;
+      case 'revdttm': c.revDt = p; return;
+      case 'revauthdel': c.revAuthDel = p; return;
+      case 'revdttmdel': c.revDtDel = p; return;
     }
     if (UL_STYLES[w]) { c.ul = on ? UL_STYLES[w] : null; return; }
+  }
+
+  applyBorder(): void {
+    const t = this.borderTarget;
+    if (!t || !this.borderSide) return;
+    const b = this.borderSpec;
+    const color = (b.cf && this.colors[b.cf]) || '#000000';
+    const css = b.style === 'none' ? '' : `${Math.max(0.25, Math.round((b.w / 20) * 100) / 100)}pt ${b.style} ${color}`;
+    const sides = this.borderSide === 'box' ? ['top', 'right', 'bottom', 'left'] : [this.borderSide];
+    for (const side of sides) { if (css) t[side] = css; else delete t[side]; }
   }
 
   isKnownDestination(w: string): boolean {
     return ['fonttbl', 'colortbl', 'stylesheet', 'info', 'pict', 'field', 'fldrslt', 'footnote', 'header', 'footer', 'headerl', 'headerr', 'headerf',
       'footerl', 'footerr', 'footerf', 'pntext', 'listtext', 'shp', 'shprslt', 'result', 'object', 'title', 'subject', 'author', 'keywords', 'doccomm',
-      'company', 'manager', 'category', 'upr'].includes(w);
+      'company', 'manager', 'category', 'upr', 'shpinst', 'shptxt', 'sp', 'sn', 'sv', 'revtbl', 'annotation', 'atnid', 'atnauthor', 'atnref', 'atndate', 'atrfstart', 'atrfend'].includes(w);
   }
 
   symbol(c: string): void {
@@ -1531,8 +1796,9 @@ class RtfReader {
     let guard = 0;
     while (this.pos < len && guard++ < 50_000_000) {
       const ch = s[this.pos];
-      if (ch === '{') { this.pushGroup(); this.pos++; starred = false; continue; }
-      if (ch === '}') { if (this.groups.length) this.popGroup(); this.pos++; starred = false; continue; }
+      // Groups nested deeper than any real document share the deepest state (each level copies it).
+      if (ch === '{') { if (this.groups.length < RTF_MAX_DEPTH) this.pushGroup(); else this.overflow++; this.pos++; starred = false; continue; }
+      if (ch === '}') { if (this.overflow) this.overflow--; else if (this.groups.length) this.popGroup(); this.pos++; starred = false; continue; }
       if (ch === '\\') {
         const nx = s[this.pos + 1];
         if (nx === undefined) { this.pos++; continue; }
@@ -1601,6 +1867,7 @@ class RtfReader {
     for (const [k, v] of Object.entries(this.info)) if (v.trim()) (s.properties as any)[k] = v.trim();
     const deffFont = this.fonts.get(this.deff)?.name || null;
     let blocks = this.finalize(this.blocks);
+    if (Object.keys(this.paraStyles).length) s.styles = { ...this.paraStyles, ...s.styles };
     blocks = normalizeImportedFormatting(blocks, s, null);
     void deffFont;
     return finishDoc(blocks, s);
@@ -1608,13 +1875,15 @@ class RtfReader {
 }
 
 /** Parse RTF text (as a binary string, one char per byte). */
-export function rtfToDoc(binary: string): PMNode {
+export function rtfToDoc(binary: string, attachments?: Map<string, string>): PMNode {
   try {
     if (!/^\s*\{\\rtf/.test(binary.slice(0, 100))) {
       // Not RTF at all: treat as text.
       return finishDoc(binary.split(/\r?\n/).map((l) => para(l ? [S.text(l)] : [])), newSettings());
     }
-    return new RtfReader(binary).parse();
+    const r = new RtfReader(binary);
+    if (attachments) r.attachments = attachments;
+    return r.parse();
   } catch {
     const text = binary.replace(/\\[a-z]+-?\d* ?|[{}]/g, '');
     return finishDoc(text.split(/\r?\n/).filter((l) => l.trim()).map((l) => para([S.text(l)])), newSettings());

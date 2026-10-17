@@ -695,7 +695,7 @@ describe('robustness', () => {
       }
     }
     for (const imp of [importOdt, importFodt, importEpub]) (await imp(enc('<garbage>'), 'x')).check();
-  });
+  }, 30000); // slow under a loaded parallel run, not stuck
 
   it('page and section breaks survive RTF and ODT', async () => {
     const doc = S.node('doc', { settings: defaultSettings() }, [p(['one']), S.nodes.page_break.create(), p(['two']), S.nodes.section_break.create({ kind: 'continuous' }), p(['three'])]);

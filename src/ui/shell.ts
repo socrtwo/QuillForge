@@ -6,7 +6,7 @@ import { NodeSelection } from 'prosemirror-state';
 import { isInTable } from 'prosemirror-tables';
 import { getCommand, allCommands, searchCommands, type Command, type MenuEntry } from '../commands/registry';
 import { h, icon, clear, isPhone, esc } from './dom';
-import { showMenu, closeMenus, openDialog, toast } from './dialog';
+import { showMenu, closeMenus, openDialog, toast, safeInsets } from './dialog';
 import { DEFAULT_TABS, tabsFor, type RibbonTab } from './ribbonLayout';
 import { prettyKey, canonicalKey, keyName } from '../editor/setup';
 import { pageInfo, pageOfPos } from '../editor/plugins/pagination';
@@ -21,6 +21,7 @@ import { customizeQat, customizeRibbon, customizeKeyboard } from './customize';
 import { renderBackstage } from './backstage';
 import { controlClick } from '../commands/developer';
 import { schema } from '../editor/schema';
+import { embedHidden } from '../embed/hidden';
 import { toUnit, fromUnit } from '../prefs';
 
 const SLASH_ITEMS = ['style.p.Heading1', 'style.p.Heading2', 'style.p.Heading3', 'style.p.Normal', 'style.p.Quote', 'list.bullets', 'list.numbering', 'list.checklist', 'insert.table', 'insert.picture', 'insert.codeBlock', 'insert.hr', 'insert.pageBreak', 'insert.equation', 'insert.textBox', 'insert.chart', 'insert.diagram', 'insert.shapes', 'refs.toc', 'refs.footnote', 'insert.dateTime', 'insert.emoji', 'insert.symbol', 'insert.chip', 'draw.canvas', 'insert.lorem', 'review.newComment', 'insert.link', 'insert.snippets'];
@@ -80,7 +81,18 @@ export class Shell {
     this.statusEl = h('footer', { class: 'qf-status' });
     this.backstageEl = h('div', { class: 'qf-backstage', 'aria-hidden': 'true' });
     this.miniBar = h('div', { class: 'qf-minibar', role: 'toolbar' });
-    this.root.append(this.titlebar, this.tabsEl, this.ribbonEl, this.docTabsEl, main, this.qatBottom, this.statusEl, this.backstageEl, this.miniBar, h('div', { class: 'qf-toasts' }));
+    // Distraction-free writing hides every bar: this button (and Esc) brings them back, also on touch screens.
+    const zenExit = h('button', { class: 'qf-iconbtn qf-zen-exit', title: 'Exit distraction-free writing (Esc)', 'aria-label': 'Exit distraction-free writing', onclick: () => this.app.exec('view.distractionFree') }, icon('close_fullscreen'));
+    this.root.append(this.titlebar, this.tabsEl, this.ribbonEl, this.docTabsEl, main, this.qatBottom, this.statusEl, this.backstageEl, this.miniBar, zenExit, h('div', { class: 'qf-toasts' }));
+    if (this.app.embedded) {
+      // Embedded in QuillPost: a slim bar hands the message back (Done) or leaves it unchanged (Cancel).
+      this.root.classList.add('qf-embed');
+      const bar = h('div', { class: 'qf-embed-bar', role: 'toolbar', 'aria-label': 'Message editor' },
+        icon('edit_note'), h('span', { class: 'qf-embed-title' }, 'Editing message'), h('span', { class: 'qf-spacer' }),
+        h('button', { class: 'qf-btn qf-embed-cancel', type: 'button', onclick: () => this.app.embedControls?.cancel() }, 'Cancel'),
+        h('button', { class: 'qf-btn qf-primary qf-embed-done', type: 'button', onclick: () => this.app.embedControls?.done() }, icon('check'), 'Done'));
+      this.root.prepend(bar);
+    }
     this.renderQat();
     this.renderTabs();
     this.renderRibbon();
@@ -118,7 +130,7 @@ export class Shell {
     for (const id of this.app.prefs.qat) {
       if (id === '|') { target.appendChild(h('span', { class: 'qf-qat-sep' })); continue; }
       const c = getCommand(id);
-      if (!c) continue;
+      if (!c || this.hidden(id)) continue;
       const b = this.commandButton(c, 'qat');
       target.appendChild(b);
     }
@@ -130,7 +142,7 @@ export class Shell {
     const q = this.app.prefs.qat;
     showMenu([
       { heading: 'Customize Quick Access Bar' },
-      ...common.map((id) => ({ id, label: getCommand(id)?.label || id, checked: q.includes(id), arg: '__toggle' })),
+      ...common.filter((id) => !this.hidden(id)).map((id) => ({ id, label: getCommand(id)?.label || id, checked: q.includes(id), arg: '__toggle' })),
       { separator: true },
       { id: '__more', label: 'More Commands…', icon: 'library_add' },
       { id: '__pos', label: this.app.prefs.qatPosition === 'bottom' ? 'Show Above the Ribbon' : 'Show at the Bottom (near keyboard)', icon: 'swap_vert' },
@@ -157,7 +169,7 @@ export class Shell {
 
   renderTabs(): void {
     clear(this.tabsEl);
-    this.tabsEl.appendChild(h('button', { class: 'qf-tab qf-tab-file', role: 'tab', onclick: () => this.showBackstage() }, 'File'));
+    if (!this.app.embedded) this.tabsEl.appendChild(h('button', { class: 'qf-tab qf-tab-file', role: 'tab', onclick: () => this.showBackstage() }, 'File'));
     for (const t of tabsFor(this.app)) {
       const b = h('button', { class: 'qf-tab' + (t.contextual ? ' qf-contextual' : '') + (t.id === this.currentTab ? ' qf-active' : ''), role: 'tab', 'data-tab': t.id, style: t.accent ? `--tab-accent:${t.accent}` : '' }, t.label);
       b.addEventListener('click', () => {
@@ -171,6 +183,9 @@ export class Shell {
     }
   }
 
+  /** Commands left out of the embedded editor (file commands: the embedding app owns the document). */
+  hidden(id: string): boolean { return this.app.embedded && embedHidden(id); }
+
   ribbonTab(): RibbonTab {
     return tabsFor(this.app).find((t) => t.id === this.currentTab) || DEFAULT_TABS[0];
   }
@@ -182,9 +197,10 @@ export class Shell {
       const items = h('div', { class: 'qf-group-items' });
       for (const id of g.items) {
         const c = getCommand(id);
-        if (!c) continue;
+        if (!c || this.hidden(id)) continue;
         items.appendChild(this.ribbonItem(c));
       }
+      if (!items.childElementCount) continue;
       const label = h('div', { class: 'qf-group-label' }, g.label, g.launcher ? h('button', { class: 'qf-launcher', title: `${g.label} settings`, 'aria-label': `${g.label} settings`, onclick: () => this.app.exec(g.launcher!) }, icon('open_in_new')) : null);
       this.ribbonEl.appendChild(h('section', { class: 'qf-group', 'data-group': g.id }, items, label));
     }
@@ -429,12 +445,15 @@ export class Shell {
     clear(this.docTabsEl);
     this.root.classList.toggle('qf-multi-doc', app.docs.length > 1);
     for (const d of app.docs) {
+      // Embedded: the message (the first document) cannot be closed; documents a command made (merged
+      // letters, an AI draft) close without saving, since files are not available here.
+      const close = app.embedded ? (d === app.docs[0] ? null : () => app.closeTab(d)) : () => { app.activate(d); app.exec('file.close', d.id); };
       const t = h('div', { class: 'qf-doctab' + (d === app.active ? ' qf-active' : ''), role: 'tab' },
         h('button', { class: 'qf-doctab-name', onclick: () => app.activate(d) }, d.displayName + (d.dirty ? ' •' : '')),
-        h('button', { class: 'qf-doctab-close', 'aria-label': `Close ${d.displayName}`, onclick: () => { app.activate(d); app.exec('file.close', d.id); } }, icon('close')));
+        close ? h('button', { class: 'qf-doctab-close', 'aria-label': `Close ${d.displayName}`, onclick: close }, icon('close')) : null);
       this.docTabsEl.appendChild(t);
     }
-    this.docTabsEl.appendChild(h('button', { class: 'qf-iconbtn', title: 'New document', 'aria-label': 'New document', onclick: () => app.exec('file.new') }, icon('add')));
+    if (!app.embedded) this.docTabsEl.appendChild(h('button', { class: 'qf-iconbtn', title: 'New document', 'aria-label': 'New document', onclick: () => app.exec('file.new') }, icon('add')));
     if (app.active) this.titleBtn.textContent = app.active.displayName + (app.active.dirty ? ' •' : '');
   }
 
@@ -449,7 +468,7 @@ export class Shell {
 
   moreMenu(anchor: HTMLElement): void {
     const app = this.app;
-    showMenu([
+    const entries: MenuEntry[] = [
       { id: 'file.save', label: 'Save', icon: 'save' }, { id: 'file.share', label: 'Share', icon: 'share' }, { id: 'file.print', label: 'Print / PDF', icon: 'print' },
       { separator: true },
       { id: 'view.navPane', label: 'Navigation', icon: 'list_alt' }, { id: 'review.showComments', label: 'Comments', icon: 'forum' }, { id: 'style.pane', label: 'Styles', icon: 'style' },
@@ -458,7 +477,9 @@ export class Shell {
       { id: 'file.customizeQat', label: 'Customize Quick Access Bar…', icon: 'tune' }, { id: 'file.customizeRibbon', label: 'Customize Tabs…', icon: 'view_quilt' },
       { id: 'file.customizeKeyboard', label: 'Customize Keyboard…', icon: 'keyboard' }, { id: 'file.options', label: 'Options…', icon: 'settings' },
       { id: 'help.about', label: 'About', icon: 'info' },
-    ], { anchor, onPick: (e) => e.id && app.exec(e.id, e.arg) });
+    ];
+    const shown = entries.filter((e) => !e.id || !this.hidden(e.id));
+    showMenu(shown[0]?.separator ? shown.slice(1) : shown, { anchor, onPick: (e) => e.id && app.exec(e.id, e.arg) });
   }
 
   // ----------------------------------------------------------------------------------------
@@ -501,6 +522,7 @@ export class Shell {
 
   showBackstage(page = 'home'): void {
     closeMenus();
+    if (this.app.embedded) return; // its pages are all about files
     this.backstageEl.setAttribute('aria-hidden', 'false');
     this.root.classList.add('qf-backstage-open');
     renderBackstage(this.app, this.backstageEl, page);
@@ -536,7 +558,7 @@ export class Shell {
     const draw = () => {
       clear(list);
       const q = input.value.trim();
-      results = q ? searchCommands(q, 80) : [...app.prefs.pinnedCommands.map((id) => getCommand(id)!).filter(Boolean), ...allCommands().filter((c) => c.popular).slice(0, 40)];
+      results = (q ? searchCommands(q, 80) : [...app.prefs.pinnedCommands.map((id) => getCommand(id)!).filter(Boolean), ...allCommands().filter((c) => c.popular).slice(0, 40)]).filter((c) => !this.hidden(c.id));
       results.forEach((c, i) => {
         const pinned = app.prefs.qat.includes(c.id);
         const row = h('div', { class: 'qf-palette-row' + (i === sel ? ' qf-sel' : ''), role: 'option' },
@@ -578,7 +600,7 @@ export class Shell {
     };
     const show = () => {
       menuEl = showMenu(items().slice(0, 14).map((c) => ({ id: c.id, label: c.label, icon: c.icon })), {
-        x: coords.left, y: coords.bottom + 4, className: 'qf-slash-menu',
+        x: coords.left, y: coords.bottom + 4, className: 'qf-slash-menu', focus: false,
         onPick: (e) => { cleanup(); removeSlash(); if (e.id) app.exec(e.id); },
       });
     };
@@ -656,7 +678,7 @@ export class Shell {
         if (en.id === '__fix') { const { text, issue: i } = en.arg; view.dispatch(view.state.tr.insertText(text, i.from, i.to)); return; }
         if (en.id === '__ignore') { app.prefs.ignoredWords.push(view.state.doc.textBetween(en.arg.from, en.arg.to)); app.savePrefs(); app.proofer.schedule(app.tab, 0); return; }
         if (en.id === '__add') { const w = view.state.doc.textBetween(en.arg.from, en.arg.to); app.prefs.dictionary.push(w); app.savePrefs(); await prof.addWord(w); app.proofer.schedule(app.tab, 0); return; }
-        if (en.id === '__suggest') { const w = view.state.doc.textBetween(en.arg.from, en.arg.to); const sugs = await prof.suggest(w); showMenu(sugs.length ? sugs.map((x) => ({ id: '__fix2', arg: x, label: x })) : [{ label: '(no suggestions)' }], { x: e.clientX, y: e.clientY, onPick: (p) => { if (p.id === '__fix2') view.dispatch(view.state.tr.insertText(p.arg, en.arg.from, en.arg.to)); } }); return; }
+        if (en.id === '__suggest') { const w = view.state.doc.textBetween(en.arg.from, en.arg.to); const sugs = await prof.suggest(w, en.arg.dialect); showMenu(sugs.length ? sugs.map((x) => ({ id: '__fix2', arg: x, label: x })) : [{ label: '(no suggestions)' }], { x: e.clientX, y: e.clientY, onPick: (p) => { if (p.id === '__fix2') view.dispatch(view.state.tr.insertText(p.arg, en.arg.from, en.arg.to)); } }); return; }
         if (en.id) app.exec(en.id, en.arg);
       },
     });
@@ -681,9 +703,10 @@ export class Shell {
     if (!show) { this.miniBar.classList.remove('qf-show'); return; }
     try {
       const a = app.view.coordsAtPos(st.selection.from), b = app.view.coordsAtPos(st.selection.to);
+      const sa = safeInsets();
       const top = Math.min(a.top, b.top) - 50;
-      const left = Math.max(6, Math.min(window.innerWidth - this.miniBar.offsetWidth - 6, (a.left + b.left) / 2 - this.miniBar.offsetWidth / 2));
-      this.miniBar.style.top = `${top < 60 ? Math.max(a.bottom, b.bottom) + 8 : top}px`;
+      const left = Math.max(sa.left + 6, Math.min(window.innerWidth - sa.right - this.miniBar.offsetWidth - 6, (a.left + b.left) / 2 - this.miniBar.offsetWidth / 2));
+      this.miniBar.style.top = `${top < sa.top + 60 ? Math.min(Math.max(a.bottom, b.bottom) + 8, window.innerHeight - sa.bottom - this.miniBar.offsetHeight - 6) : top}px`;
       this.miniBar.style.left = `${left}px`;
       this.miniBar.classList.add('qf-show');
     } catch { this.miniBar.classList.remove('qf-show'); }
@@ -848,7 +871,7 @@ export class Shell {
 
   applyPrefs(): void {
     const p = this.app.prefs;
-    const dark = p.theme === 'dark' || (p.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const dark = this.app.embedTheme ? this.app.embedTheme === 'dark' : p.theme === 'dark' || (p.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     this.root.classList.toggle('qf-ribbon-collapsed', p.ribbon !== 'full');
     this.root.classList.toggle('qf-qat-at-bottom', p.qatPosition === 'bottom');
@@ -904,7 +927,7 @@ export class Shell {
 
   async tour(): Promise<void> {
     const steps = [
-      ['Everything is a command', 'Every feature of QuillForge is a command you can find with the search button (or Alt+Q), place on the Quick Access Bar, put on your own tab, assign a key, or record in a macro.'],
+      ['Everything is a command', 'Every feature of QuillPen is a command you can find with the search button (or Alt+Q), place on the Quick Access Bar, put on your own tab, assign a key, or record in a macro.'],
       ['Quick Access Bar', 'Tap ▾ at the end of the Quick Access Bar to add common commands, or choose More Commands… to pick from the full library. Long-press any ribbon button to add it. Options lets you move the bar to the bottom, near the keyboard.'],
       ['Views', 'Use Mobile View for comfortable phone editing and Print Layout to see real pages with headers, footers, and footnotes. The buttons at the bottom right switch views.'],
       ['Type “/”', 'At the start of an empty line, type / to insert headings, lists, tables, pictures, equations, and more. Markdown shortcuts such as # Heading, - bullet, and **bold** work too.'],

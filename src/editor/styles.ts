@@ -90,7 +90,7 @@ export const BUILTIN_STYLES: StyleDef[] = [
 
 /** Style sets reshape the built-in styles (Design ▸ Style Set). */
 export const STYLE_SETS: Record<string, Record<string, any> & { _fonts?: [string, string] }> = {
-  QuillForge: { _fonts: ['Carlito', 'Carlito'] },
+  QuillPen: { _fonts: ['Carlito', 'Carlito'] },
   Classic: {
     _fonts: ['Tinos', 'Tinos'],
     Normal: { size: 12, spaceAfter: 0, lineHeight: '1.15' },
@@ -157,7 +157,7 @@ export const STYLE_SETS: Record<string, Record<string, any> & { _fonts?: [string
 };
 
 export const THEMES: Record<string, { headingFont: string; bodyFont: string; accent: string[] }> = {
-  QuillForge: { headingFont: 'Carlito', bodyFont: 'Carlito', accent: ['#2b579a', '#c0504d', '#9bbb59', '#8064a2', '#4bacc6', '#f79646'] },
+  QuillPen: { headingFont: 'Carlito', bodyFont: 'Carlito', accent: ['#2b579a', '#c0504d', '#9bbb59', '#8064a2', '#4bacc6', '#f79646'] },
   Slate: { headingFont: 'Arimo', bodyFont: 'Arimo', accent: ['#3f4f5f', '#6f8fa8', '#b7c9d8', '#9c6644', '#c58f6a', '#e0b590'] },
   Ink: { headingFont: 'Tinos', bodyFont: 'Tinos', accent: ['#1b1b1b', '#5c5c5c', '#8a8a8a', '#a33', '#336', '#363'] },
   Forest: { headingFont: 'Gelasio', bodyFont: 'Lato', accent: ['#2e6b30', '#7a9e3b', '#c7b24b', '#8a5a2b', '#3b6e8a', '#9a3d3d'] },
@@ -172,7 +172,7 @@ export const THEMES: Record<string, { headingFont: string; bodyFont: string; acc
 export function resolveStyles(settings: DocSettings): Record<string, StyleDef> {
   const map: Record<string, StyleDef> = {};
   for (const s of BUILTIN_STYLES) map[s.name] = { ...s };
-  const set = STYLE_SETS[settings.styleSet] || STYLE_SETS.QuillForge;
+  const set = STYLE_SETS[settings.styleSet] || STYLE_SETS.QuillPen;
   for (const [name, over] of Object.entries(set)) {
     if (name === '_fonts' || !over) continue;
     map[name] = { ...(map[name] || { name, type: 'paragraph' }), ...(over as Partial<StyleDef>) } as StyleDef;
@@ -196,14 +196,30 @@ export function effectiveStyle(map: Record<string, StyleDef>, name: string, dept
   return merged;
 }
 
+// Style values come from documents (.docx styles, .qpd files): nothing may end a string, a
+// declaration or a rule, or load a resource, in the stylesheet built from them.
+
+/** Text for inside a double-quoted CSS string. */
+export function cssString(v: unknown): string {
+  return String(v ?? '').replace(/["\\]/g, '\\$&').replace(/[\u0000-\u001f\u007f]/g, (c) => `\\${c.charCodeAt(0).toString(16)} `);
+}
+
+/** A declaration value from document data, or '' when it is not a plain value. */
+export function cssValue(v: unknown): string {
+  const s = String(v ?? '').trim();
+  return /^[-\w\s#%.,()+*/]*$/.test(s) && !/url\s*\(|expression\s*\(|image(-set)?\s*\(|element\s*\(|\/\*/i.test(s) ? s : '';
+}
+
+const cssNum = (v: unknown): number | null => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+
 export function fontStack(name: string | undefined, settings: DocSettings): string {
   if (!name) return '';
-  const set = STYLE_SETS[settings.styleSet] || STYLE_SETS.QuillForge;
+  const set = STYLE_SETS[settings.styleSet] || STYLE_SETS.QuillPen;
   const fonts = set._fonts || [settings.theme.headingFont, settings.theme.bodyFont];
   let fam = name;
-  if (name === '+heading') fam = settings.styleSet === 'QuillForge' ? settings.theme.headingFont : fonts[0];
-  if (name === '+body') fam = settings.styleSet === 'QuillForge' ? settings.theme.bodyFont : fonts[1];
-  return `"${fam}", ${genericFor(fam)}`;
+  if (name === '+heading') fam = settings.styleSet === 'QuillPen' ? settings.theme.headingFont : fonts[0];
+  if (name === '+body') fam = settings.styleSet === 'QuillPen' ? settings.theme.bodyFont : fonts[1];
+  return `"${cssString(fam)}", ${genericFor(String(fam))}`;
 }
 
 export function genericFor(fam: string): string {
@@ -215,36 +231,36 @@ export function genericFor(fam: string): string {
 
 function styleProps(s: StyleDef, settings: DocSettings, para: boolean): string {
   const out: string[] = [];
+  const put = (prop: string, v: string, extra = '') => { if (v) out.push(`${prop}:${v}${extra}`); };
+  const pt = (prop: string, v: unknown) => { const n = cssNum(v); if (n != null) out.push(`${prop}:${n}pt`); };
   if (s.font) out.push(`font-family:${fontStack(s.font, settings)}`);
-  if (s.size) out.push(`font-size:${s.size}pt`);
+  if (cssNum(s.size)) pt('font-size', s.size);
   if (s.bold !== undefined) out.push(`font-weight:${s.bold ? 700 : 400}`);
   if (s.italic !== undefined) out.push(`font-style:${s.italic ? 'italic' : 'normal'}`);
   if (s.underline) out.push('text-decoration:underline');
-  if (s.color) out.push(`color:${s.color}`);
+  put('color', cssValue(s.color));
   if (s.caps) out.push('text-transform:uppercase');
   if (s.smallCaps) out.push('font-variant-caps:small-caps');
-  if (s.spacing) out.push(`letter-spacing:${s.spacing}pt`);
-  if ((s as any).bg && !para) out.push(`background:${(s as any).bg}`);
+  if (cssNum(s.spacing)) pt('letter-spacing', s.spacing);
+  if (!para) put('background', cssValue((s as any).bg));
   if (para) {
-    if (s.align) out.push(`text-align:${s.align}`);
-    out.push(`padding-top:${s.spaceBefore ?? 0}pt`);
-    out.push(`padding-bottom:${s.spaceAfter ?? 0}pt`);
-    if (s.lineHeight) out.push(`line-height:${/^\d+(\.\d+)?$/.test(s.lineHeight) ? s.lineHeight : s.lineHeight}`);
-    if (s.indentLeft != null) out.push(`margin-left:${s.indentLeft}pt`);
-    if (s.indentRight != null) out.push(`margin-right:${s.indentRight}pt`);
-    if (s.indentFirst != null) out.push(`text-indent:${s.indentFirst}pt`);
-    if (s.borderBottom) out.push(`border-bottom:${s.borderBottom}`);
-    if (s.borderTop) out.push(`border-top:${s.borderTop}`);
-    if (s.borderLeft) out.push(`border-left:${s.borderLeft};padding-left:6pt`);
-    if (s.bg) out.push(`background:${s.bg}`);
+    if (/^(left|right|center|justify|start|end)$/.test(String(s.align))) out.push(`text-align:${s.align}`);
+    out.push(`padding-top:${cssNum(s.spaceBefore) ?? 0}pt`);
+    out.push(`padding-bottom:${cssNum(s.spaceAfter) ?? 0}pt`);
+    put('line-height', cssValue(s.lineHeight));
+    pt('margin-left', s.indentLeft);
+    pt('margin-right', s.indentRight);
+    pt('text-indent', s.indentFirst);
+    put('border-bottom', cssValue(s.borderBottom));
+    put('border-top', cssValue(s.borderTop));
+    put('border-left', cssValue(s.borderLeft), ';padding-left:6pt');
+    put('background', cssValue(s.bg));
     if (s.pageBreakBefore) out.push('break-before:page');
   }
   return out.join(';');
 }
 
-function cssEscape(s: string): string {
-  return s.replace(/["\\]/g, '\\$&');
-}
+const cssEscape = cssString;
 
 function shade(hex: string, amt: number): string {
   // amt in -1..1; negative darkens, positive lightens
@@ -260,7 +276,8 @@ function shade(hex: string, amt: number): string {
 /** Produce the stylesheet that renders document styles. Scoped under `.qf-doc`. */
 export function stylesCss(settings: DocSettings): string {
   const map = resolveStyles(settings);
-  const acc = settings.theme.accent;
+  const acc = (Array.isArray(settings.theme.accent) ? settings.theme.accent : []).map((c) => cssValue(c) || '#2b579a');
+  if (!acc.length) acc.push('#2b579a');
   const lines: string[] = [];
   lines.push(`.qf-doc{--qf-accent1:${acc[0]};--qf-accent1-dark:${shade(acc[0], -0.25)};--qf-accent1-darker:${shade(acc[0], -0.5)};--qf-accent1-light:${shade(acc[0], 0.45)};--qf-accent1-pale:${shade(acc[0], 0.85)};` +
     acc.map((c, i) => `--qf-accent${i + 1}:${c}`).join(';') + '}');
@@ -276,13 +293,13 @@ export function stylesCss(settings: DocSettings): string {
       lines.push(`.qf-doc .ProseMirror [data-cstyle="${cssEscape(s.name)}"]{${styleProps(e, settings, false)}}`);
     } else if (s.type === 'table') {
       const sel = `.qf-doc .ProseMirror table[data-style="${cssEscape(s.name)}"]`;
-      const bc = s.borderColor || '#000';
+      const bc = cssValue(s.borderColor) || '#000';
       if (s.borders === 'all') lines.push(`${sel} td, ${sel} th{border:1px solid ${bc}}`);
       else if (s.borders === 'horizontal') lines.push(`${sel} td, ${sel} th{border:0;border-bottom:1px solid ${bc}}${sel}{border-top:1px solid ${bc}}`);
       else if (s.borders === 'outer') lines.push(`${sel}{border:1px solid ${bc}} ${sel} td, ${sel} th{border:0}`);
       else lines.push(`${sel} td, ${sel} th{border:0}`);
-      if (s.headerBg) lines.push(`${sel}[data-header-rows] tr:first-child > *{background:${s.headerBg};color:${s.headerColor || 'inherit'};font-weight:700}`);
-      if (s.bandBg) lines.push(`${sel}[data-banded="1"] tr:nth-child(even) > *{background:${s.bandBg}}`);
+      if (cssValue(s.headerBg)) lines.push(`${sel}[data-header-rows] tr:first-child > *{background:${cssValue(s.headerBg)};color:${cssValue(s.headerColor) || 'inherit'};font-weight:700}`);
+      if (cssValue(s.bandBg)) lines.push(`${sel}[data-banded="1"] tr:nth-child(even) > *{background:${cssValue(s.bandBg)}}`);
     }
   }
   if (settings.hyphenation) lines.push('.qf-doc .ProseMirror{hyphens:auto;-webkit-hyphens:auto}');

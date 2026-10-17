@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:presentation="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" office:version="1.3" office:mimetype="application/vnd.oasis.opendocument.presentation">
+ <office:automatic-styles><style:page-layout style:name="PM1"><style:page-layout-properties fo:page-width="28cm" fo:page-height="15.75cm"/></style:page-layout></office:automatic-styles>
+ <office:master-styles><style:master-page style:name="Default" style:page-layout-name="PM1"/></office:master-styles>
+ <office:body><office:presentation>
+  <draw:page draw:name="page1" draw:master-page-name="Default">
+   <draw:frame draw:layer="layout" presentation:class="title" presentation:user-transformed="true" svg:x="2cm" svg:y="1cm" svg:width="24cm" svg:height="3cm"><draw:text-box><text:p>Quarterly Review</text:p></draw:text-box></draw:frame>
+   <draw:frame draw:layer="layout" presentation:class="outline" presentation:user-transformed="true" svg:x="2cm" svg:y="5cm" svg:width="24cm" svg:height="8cm"><draw:text-box><text:list><text:list-item><text:p>Sales grew strongly</text:p></text:list-item><text:list-item><text:p>Costs held steady</text:p></text:list-item></text:list></draw:text-box></draw:frame>
+  </draw:page>
+  <draw:page draw:name="page2" draw:master-page-name="Default">
+   <draw:frame draw:layer="layout" presentation:class="title" presentation:user-transformed="true" svg:x="2cm" svg:y="1cm" svg:width="24cm" svg:height="3cm"><draw:text-box><text:p>Picture Slide</text:p></draw:text-box></draw:frame>
+   <draw:frame svg:x="10cm" svg:y="5cm" svg:width="4cm" svg:height="4cm"><draw:image><office:binary-data>iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGOQizpBEmIY1TCqYfhqAAB1t0AQ8w5IqQAAAABJRU5ErkJggg==</office:binary-data></draw:image></draw:frame>
+  </draw:page>
+ </office:presentation></office:body>
+</office:document>

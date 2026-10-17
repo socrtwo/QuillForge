@@ -79,7 +79,7 @@ export const DEFAULT_TABS: RibbonTab[] = [
       G('proofing', 'Proofing', ['review.spelling', 'review.thesaurus', 'review.wordCount', 'review.readability', 'review.styleCoach']),
       G('speech', 'Speech', ['review.readAloud']),
       G('accessibility', 'Accessibility', ['review.accessibility']),
-      G('language', 'Language', ['review.translate', 'fmt.language']),
+      G('language', 'Language', ['review.translate', 'fmt.language', 'review.spellDialect', 'review.dictionaries']),
       G('comments', 'Comments', ['review.newComment', 'review.deleteComment', 'review.prevComment', 'review.nextComment', 'review.showComments']),
       G('tracking', 'Tracking', ['review.trackChanges', 'review.markupView', 'review.showMarkup', 'review.reviewingPane']),
       G('changes', 'Changes', ['review.accept', 'review.reject', 'review.prevChange', 'review.nextChange']),
@@ -108,6 +108,22 @@ export const DEFAULT_TABS: RibbonTab[] = [
     ],
   },
   {
+    id: 'ai', label: 'AI', groups: [
+      G('assistant', 'Assistant', ['ai.chat', 'ai.ask', 'ai.command', 'ai.setup', 'ai.runPrompt', 'ai.prompts', 'ai.settings', 'ai.privacy', 'ai.stop'], 'ai.settings'),
+      G('providers', 'Providers', ['ai.chooseProvider', 'ai.providers', 'ai.ensembleMode', 'ai.ensembleMembers', 'ai.showDeliberation'], 'ai.ensembleMembers'),
+      G('write', 'Write', ['ai.draft', 'ai.continue', 'ai.fromTemplate', 'ai.createDocument', 'ai.brainstorm', 'ai.outline', 'ai.titles']),
+      G('rewrite', 'Rewrite', ['ai.rewrite', 'ai.improve', 'ai.tone', 'ai.style', 'ai.edit', 'ai.simplify', 'ai.natural', 'ai.matchVoice']),
+      G('length', 'Length & Structure', ['ai.shorten', 'ai.expand', 'ai.bullets', 'ai.table', 'ai.keyPoints', 'ai.addDetail', 'ai.headings']),
+      G('proof', 'Proofing', ['ai.proofread', 'ai.clarity', 'ai.styleGuide', 'ai.ocrFix']),
+      G('analyze', 'Summarize & Analyze', ['ai.summarize', 'ai.summaryTop', 'ai.actionItems', 'ai.explain', 'ai.analyze', 'ai.faq', 'ai.extractData']),
+      G('translate', 'Translate', ['ai.translate', 'ai.translateDoc', 'ai.bilingual', 'ai.detectLanguage']),
+      G('research', 'Research', ['ai.findSources', 'ai.flagClaims', 'ai.citation']),
+      G('review', 'Review', ['ai.feedback', 'ai.readerView', 'ai.grade', 'ai.critique', 'ai.summarizeComments', 'ai.draftReply', 'ai.reviewEdits']),
+      G('media', 'Pictures', ['ai.altText', 'ai.imageToText', 'ai.describeImage', 'ai.generateImage']),
+      G('creative', 'Creative', ['ai.describe', 'ai.names', 'ai.dialogue', 'ai.storyNotes', 'ai.clearLocal']),
+    ],
+  },
+  {
     id: 'developer', label: 'Developer', groups: [
       G('code', 'Code', ['dev.macros', 'dev.recordMacro', 'dev.pauseRecording', 'dev.stopRecording', 'dev.newScript', 'dev.runScript']),
       G('controls', 'Controls', ['dev.control.rich', 'dev.control.text', 'dev.control.picture', 'dev.control.checkbox', 'dev.control.combo', 'dev.control.dropdown', 'dev.control.date', 'dev.designMode', 'dev.controlProperties']),
@@ -117,7 +133,7 @@ export const DEFAULT_TABS: RibbonTab[] = [
   },
   {
     id: 'help', label: 'Help', groups: [
-      G('help', 'Help', ['view.commandSearch', 'help.shortcuts', 'help.commands', 'help.tour', 'help.whatsNew', 'help.feedback', 'help.about']),
+      G('help', 'Help', ['view.commandSearch', 'help.shortcuts', 'help.commands', 'help.tour', 'help.whatsNew', 'help.feedback', 'help.notices', 'help.about']),
     ],
   },
   {

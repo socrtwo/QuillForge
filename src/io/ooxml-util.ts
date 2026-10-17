@@ -1,6 +1,6 @@
 /**
  * Shared helpers for the DOCX (Office Open XML WordprocessingML) importer and exporter:
- * XML escaping, unit conversion, colours, borders, images, field instructions, style
+ * XML escaping, unit conversion, colors, borders, images, field instructions, style
  * names and the LaTeX <-> OMML symbol tables.
  */
 import { BUILTIN_STYLES } from '../editor/styles';
@@ -106,7 +106,7 @@ export function onOff(v: string | null | undefined): boolean {
 }
 
 // ------------------------------------------------------------------------------------------
-// Colours
+// Colors
 
 export const HIGHLIGHT_COLORS: Record<string, string> = {
   yellow: 'ffff00', green: '00ff00', cyan: '00ffff', magenta: 'ff00ff', blue: '0000ff', red: 'ff0000',
@@ -114,7 +114,7 @@ export const HIGHLIGHT_COLORS: Record<string, string> = {
   darkYellow: '808000', darkGray: '808080', lightGray: 'c0c0c0', black: '000000', white: 'ffffff',
 };
 
-/** Word highlight name for a hex colour, if it matches one of the 16 named colours. */
+/** Word highlight name for a hex color, if it matches one of the 16 named colors. */
 export function highlightName(hex: string): string | null {
   const h = hex.toLowerCase().replace(/^#/, '');
   for (const [name, v] of Object.entries(HIGHLIGHT_COLORS)) if (v === h) return name;
@@ -123,7 +123,7 @@ export function highlightName(hex: string): string | null {
 
 const CSS_NAMED: Record<string, string> = {
   black: '000000', white: 'ffffff', red: 'ff0000', green: '008000', lime: '00ff00', blue: '0000ff', yellow: 'ffff00',
-  cyan: '00ffff', aqua: '00ffff', magenta: 'ff00ff', fuchsia: 'ff00ff', gray: '808080', grey: '808080', silver: 'c0c0c0',
+  cyan: '00ffff', aqua: '00ffff', magenta: 'ff00ff', fuchsia: 'ff00ff', gray: '808080', grey: '808080', /* both CSS keywords */ silver: 'c0c0c0',
   maroon: '800000', olive: '808000', purple: '800080', teal: '008080', navy: '000080', orange: 'ffa500',
   pink: 'ffc0cb', brown: 'a52a2a', gold: 'ffd700', indigo: '4b0082', violet: 'ee82ee', lightgray: 'd3d3d3',
   lightgrey: 'd3d3d3', darkgray: 'a9a9a9', darkgrey: 'a9a9a9', darkred: '8b0000', darkblue: '00008b', darkgreen: '006400',
@@ -132,7 +132,7 @@ const CSS_NAMED: Record<string, string> = {
   whitesmoke: 'f5f5f5', gainsboro: 'dcdcdc', currentcolor: '000000',
 };
 
-/** Lighten (amt > 0) or darken (amt < 0) a 6-digit hex colour. Mirrors styles.ts. */
+/** Lighten (amt > 0) or darken (amt < 0) a 6-digit hex color. Mirrors styles.ts. */
 export function shadeHex(hex: string, amt: number): string {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
   if (!m) return hex;
@@ -144,7 +144,7 @@ export function shadeHex(hex: string, amt: number): string {
 }
 
 /**
- * Convert a CSS colour (hex, rgb(), named, or the editor's `var(--qf-accentN[-dark|-darker|-light|-pale])`
+ * Convert a CSS color (hex, rgb(), named, or the editor's `var(--qf-accentN[-dark|-darker|-light|-pale])`
  * theme variables) to an uppercase 6-digit hex string without '#'. Returns null for
  * transparent / unknown values.
  */
@@ -172,7 +172,7 @@ export function cssColorToHex(css: string | null | undefined, accent: string[] =
   return null;
 }
 
-/** OOXML colour value ("FF0000", "auto") to a CSS colour ("#ff0000"), or null. */
+/** OOXML color value ("FF0000", "auto") to a CSS color ("#ff0000"), or null. */
 export function ooxmlColorToCss(v: string | null | undefined): string | null {
   if (!v || v.toLowerCase() === 'auto') return null;
   if (/^[0-9a-f]{6}$/i.test(v)) return '#' + v.toLowerCase();
@@ -374,7 +374,7 @@ export function svgSize(text: string): { w: number; h: number } | null {
 // ------------------------------------------------------------------------------------------
 // Fonts
 
-/** Open fonts bundled with QuillForge and the proprietary families they are metric-compatible with. */
+/** Open fonts bundled with QuillPen and the proprietary families they are metric-compatible with. */
 export const FONT_ALIASES: Record<string, string> = {
   Carlito: 'Calibri', Caladea: 'Cambria', Tinos: 'Times New Roman', Arimo: 'Arial', Cousine: 'Courier New',
 };

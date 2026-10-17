@@ -2,13 +2,16 @@
  * Shared helpers for the file-format converters (HTML, Markdown, text, RTF, ODT, EPUB).
  *
  * - byte / base64 / data-URL / Blob utilities that work in browsers and in jsdom
- * - settings, colour and font resolution
+ * - settings, color and font resolution
  * - footnote numbering and inline-atom text
  * - export preparation (drop tracked deletions, strip review marks, heading ids)
  * - a DOMSerializer-based "clean HTML" renderer used by HTML and EPUB export
  * - schema repair: turn loosely-built node trees into a valid `doc`
  * - nested-list builder used by importers that only know "paragraph at level n"
  */
+import { stripInvalidXml } from './ooxml-util';
+import { decodeAuto } from './encoding';
+import { sanitizeGeneratedHtml } from '../util/sanitize';
 import { DOMSerializer, Fragment, Mark, type Node as PMNode, type NodeType, type DOMOutputSpec } from 'prosemirror-model';
 import { EditorState } from 'prosemirror-state';
 import { fixTables } from 'prosemirror-tables';
@@ -31,17 +34,9 @@ export function utf8Decode(u8: Uint8Array | ArrayBuffer): string {
   return new TextDecoder('utf-8').decode(u8 instanceof Uint8Array ? u8 : new Uint8Array(u8));
 }
 
-/** Decode text with BOM detection; UTF-8 with Windows-1252 fallback (same rules as io/index decodeText). */
+/** Decode text: BOMs, BOM-less UTF-16, UTF-8, then the most plausible legacy encoding (see encoding.ts). */
 export function decodeTextBytes(data: ArrayBuffer | Uint8Array): string {
-  const u8 = data instanceof Uint8Array ? data : new Uint8Array(data);
-  if (u8[0] === 0xef && u8[1] === 0xbb && u8[2] === 0xbf) return new TextDecoder('utf-8').decode(u8.subarray(3));
-  if (u8[0] === 0xff && u8[1] === 0xfe) return new TextDecoder('utf-16le').decode(u8.subarray(2));
-  if (u8[0] === 0xfe && u8[1] === 0xff) return new TextDecoder('utf-16be').decode(u8.subarray(2));
-  try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(u8);
-  } catch {
-    return new TextDecoder('windows-1252').decode(u8);
-  }
+  return decodeAuto(data);
 }
 
 export function bytesToBase64(u8: Uint8Array): string {
@@ -249,7 +244,7 @@ export function decodeEntities(s: string): string {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Settings, colours, fonts
+// Settings, colors, fonts
 
 export function docSettings(doc: PMNode): DocSettings {
   return normalizeSettings(doc.attrs.settings);
@@ -266,7 +261,7 @@ export function docTitle(doc: PMNode, opts: { fileName?: string; title?: string 
 
 const NAMED_COLORS: Record<string, string> = {
   black: '#000000', white: '#ffffff', red: '#ff0000', green: '#008000', blue: '#0000ff', yellow: '#ffff00',
-  cyan: '#00ffff', aqua: '#00ffff', magenta: '#ff00ff', fuchsia: '#ff00ff', gray: '#808080', grey: '#808080',
+  cyan: '#00ffff', aqua: '#00ffff', magenta: '#ff00ff', fuchsia: '#ff00ff', gray: '#808080', grey: '#808080', // both CSS keywords are valid and occur in documents
   silver: '#c0c0c0', maroon: '#800000', olive: '#808000', lime: '#00ff00', teal: '#008080', navy: '#000080',
   purple: '#800080', orange: '#ffa500', pink: '#ffc0cb', brown: '#a52a2a', darkblue: '#00008b', darkred: '#8b0000',
   darkgreen: '#006400', darkcyan: '#008b8b', darkmagenta: '#8b008b', darkyellow: '#808000', lightgray: '#d3d3d3',
@@ -285,7 +280,7 @@ export function shadeHex(hex: string, amt: number): string {
   return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
 }
 
-/** Normalise any CSS colour we are likely to meet into #rrggbb (lower case), or null. */
+/** Normalize any CSS color we are likely to meet into #rrggbb (lower case), or null. */
 export function toHexColor(c: string | null | undefined, settings?: DocSettings): string | null {
   if (!c) return null;
   const v = String(c).trim().toLowerCase();
@@ -317,10 +312,10 @@ export function toHexColor(c: string | null | undefined, settings?: DocSettings)
 export function resolveFontName(name: string | undefined | null, settings: DocSettings): string | null {
   if (!name) return null;
   if (name !== '+heading' && name !== '+body') return name;
-  const set = STYLE_SETS[settings.styleSet] || STYLE_SETS.QuillForge;
+  const set = STYLE_SETS[settings.styleSet] || STYLE_SETS.QuillPen;
   const fonts = set._fonts || [settings.theme.headingFont, settings.theme.bodyFont];
-  if (name === '+heading') return settings.styleSet === 'QuillForge' ? settings.theme.headingFont : fonts[0];
-  return settings.styleSet === 'QuillForge' ? settings.theme.bodyFont : fonts[1];
+  if (name === '+heading') return settings.styleSet === 'QuillPen' ? settings.theme.headingFont : fonts[0];
+  return settings.styleSet === 'QuillPen' ? settings.theme.bodyFont : fonts[1];
 }
 
 export function isMonospaceFont(f: string | null | undefined): boolean {
@@ -347,7 +342,7 @@ const STYLE_ALIASES: Record<string, string> = {
   'contents 1': 'TOC 1', 'contents 2': 'TOC 2', 'contents 3': 'TOC 3', 'toc 1': 'TOC 1', 'toc 2': 'TOC 2', 'toc 3': 'TOC 3',
 };
 
-/** Map a style name from another application onto a QuillForge built-in style name, or null. */
+/** Map a style name from another application onto a QuillPen built-in style name, or null. */
 export function canonicalStyleName(name: string | null | undefined): string | null {
   if (!name) return null;
   const n = name.replace(/_20_/g, ' ').replace(/_5f_/g, '_').replace(/\s+/g, ' ').trim();
@@ -567,7 +562,8 @@ export function renderHtml(content: Fragment, notes: NoteInfo[], opts: RenderOpt
     const div = tdoc.createElement('div');
     div.className = 'generated';
     div.setAttribute('data-kind', n.attrs.kind);
-    div.innerHTML = n.attrs.cache || '';
+    // The cache comes from the document (a .qpd can hold anything): same allow-list as the editor.
+    div.innerHTML = sanitizeGeneratedHtml(n.attrs.cache || '');
     return div;
   };
   nodes.footnote = (n) => {
@@ -610,6 +606,7 @@ export function renderHtml(content: Fragment, notes: NoteInfo[], opts: RenderOpt
       const code = el.firstElementChild;
       if (lang && code && code.tagName === 'CODE') code.setAttribute('class', `language-${lang.replace(/\s+/g, '-')}`);
     }
+    if (el.tagName === 'OL' && el.hasAttribute('start') && !/^-?\d+$/.test(el.getAttribute('start') || '')) el.removeAttribute('start');
     if (el.tagName === 'UL' && el.getAttribute('data-type') === 'task') el.setAttribute('class', 'task-list');
     if (el.tagName === 'LI' && el.hasAttribute('data-checked') && el.parentElement?.getAttribute('data-type') === 'task') {
       const box = tdoc.createElement('input');
@@ -624,12 +621,18 @@ export function renderHtml(content: Fragment, notes: NoteInfo[], opts: RenderOpt
   return { container, notes: used };
 }
 
-/** Serialise element children as XHTML (well-formed XML). */
+/** Serialize element children as XHTML (well-formed XML). */
 export function toXhtml(el: Element): string {
   const ser = new XMLSerializer();
   let out = '';
-  el.childNodes.forEach((c) => { out += ser.serializeToString(c); });
-  return out.replace(/ xmlns="http:\/\/www\.w3\.org\/1999\/xhtml"/g, '');
+  el.childNodes.forEach((c) => {
+    const s = ser.serializeToString(c);
+    // Each top-level element declares the XHTML namespace, which the page's <html> already does.
+    // Only that start tag is touched: the same characters in text are content.
+    out += c.nodeType === 1 ? s.replace(/^(<[^\s/>]+) xmlns="http:\/\/www\.w3\.org\/1999\/xhtml"/, '$1') : s;
+  });
+  // XHTML must be well-formed XML: drop characters XML 1.0 forbids (control chars, lone surrogates, U+FFFE/F).
+  return stripInvalidXml(out);
 }
 
 /** Base CSS shared by HTML and EPUB exports (layout, tables, lists, notes). */
@@ -834,10 +837,12 @@ export interface FlatListItem {
   start?: number;
   checked?: boolean | null;
   task?: boolean;
+  /** Text after an ordered list number ("." when absent). */
+  suffix?: string;
   blocks: PMNode[];
 }
 
-interface ListBuild { ordered: boolean; task: boolean; format: string; start: number; level: number; items: { blocks: PMNode[]; checked: boolean | null; lists: (PMNode | ListBuild)[] }[] }
+interface ListBuild { ordered: boolean; task: boolean; format: string; start: number; level: number; suffix?: string; items: { blocks: PMNode[]; checked: boolean | null; lists: (PMNode | ListBuild)[] }[] }
 
 function listToNode(l: ListBuild): PMNode {
   const items = l.items.map((it) => {
@@ -848,7 +853,7 @@ function listToNode(l: ListBuild): PMNode {
     return S.nodes.list_item.create({ checked: it.checked ?? null }, content);
   });
   if (l.task) return S.nodes.task_list.create(null, items);
-  if (l.ordered) return S.nodes.ordered_list.create({ order: l.start || 1, format: l.format || 'decimal' }, items);
+  if (l.ordered) return S.nodes.ordered_list.create({ order: l.start || 1, format: l.format || 'decimal', ...(l.suffix ? { suffix: l.suffix } : {}) }, items);
   return S.nodes.bullet_list.create({ bullet: l.format || 'disc' }, items);
 }
 
@@ -865,12 +870,12 @@ export function buildNestedLists(entries: FlatListItem[]): PMNode[] {
     if (top && top.level === level && (top.ordered !== e.ordered || top.task !== task)) {
       stack.pop();
       top = stack[stack.length - 1];
-      const nl: ListBuild = { ordered: e.ordered, task, format: e.format || (e.ordered ? 'decimal' : 'disc'), start: e.start || 1, level, items: [] };
+      const nl: ListBuild = { ordered: e.ordered, task, format: e.format || (e.ordered ? 'decimal' : 'disc'), start: e.start || 1, level, items: [], suffix: e.suffix };
       if (top) top.items[top.items.length - 1]?.lists.push(nl); else roots.push(nl);
       stack.push(nl);
       top = nl;
     } else if (!top || top.level < level) {
-      const nl: ListBuild = { ordered: e.ordered, task, format: e.format || (e.ordered ? 'decimal' : 'disc'), start: e.start || 1, level, items: [] };
+      const nl: ListBuild = { ordered: e.ordered, task, format: e.format || (e.ordered ? 'decimal' : 'disc'), start: e.start || 1, level, items: [], suffix: e.suffix };
       if (top) {
         if (!top.items.length) top.items.push({ blocks: [], checked: null, lists: [] });
         top.items[top.items.length - 1].lists.push(nl);
@@ -903,6 +908,12 @@ function romanValue(s: string): number {
     n += a < b ? -a : a;
   }
   return n || 1;
+}
+
+/** An ordered list's start number from document data (imports can carry NaN or text): an integer, else 1. */
+export function listStart(v: unknown): number {
+  const n = typeof v === 'number' ? v : parseFloat(String(v ?? ''));
+  return Number.isFinite(n) ? Math.round(n) : 1;
 }
 
 /** Points ↔ other units. */
@@ -986,7 +997,7 @@ export function normalizeImportedFormatting(blocks: PMNode[], settings: DocSetti
   };
   const domSize = dominant(sizeCount, total);
   if (domSize != null && domSize > 0) settings.styles = { ...settings.styles, Normal: { ...(settings.styles.Normal || {}), name: 'Normal', type: 'paragraph', size: domSize } as any };
-  if (settings.styleSet === 'QuillForge') {
+  if (settings.styleSet === 'QuillPen') {
     const domFont = dominant(fontCount, total);
     const domHead = dominant(headFont, headTotal);
     const body = domFont || defaultFont;

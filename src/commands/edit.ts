@@ -1,5 +1,5 @@
 /** Clipboard, editing, selection, find/replace and navigation commands. */
-import { def } from './registry';
+import { def, getCommand } from './registry';
 import type { App } from '../app';
 import { undo, redo, undoDepth, redoDepth } from 'prosemirror-history';
 import { TextSelection, NodeSelection, Selection } from 'prosemirror-state';
@@ -52,7 +52,8 @@ async function pasteWith(app: App, mode: 'keep' | 'merge' | 'text' | 'html' | 'm
   try { const { cleanPastedHtml } = await import('../io/html'); html = cleanPastedHtml(html); } catch { /* */ }
   if (mode === 'merge') {
     // Keep structure (paragraphs, lists, tables, links, bold/italic) but drop fonts, sizes, colors.
-    const div = document.createElement('div');
+    // An inert document: nothing in the pasted HTML loads or runs while it is rewritten.
+    const div = document.implementation.createHTMLDocument('').body;
     div.innerHTML = html;
     div.querySelectorAll<HTMLElement>('[style]').forEach((el) => {
       el.style.removeProperty('font-family'); el.style.removeProperty('font-size'); el.style.removeProperty('color');
@@ -295,6 +296,29 @@ def([
   { id: 'edit.lineBreak', label: 'Insert Line Break', icon: 'keyboard_return', tab: 'Insert', group: 'Text', keys: ['Shift-Enter'], edits: true, run: (app) => app.view.dispatch(app.state.tr.replaceSelectionWith(N.hard_break.create()).scrollIntoView()) },
   { id: 'edit.typeText', label: 'Type Text', icon: 'keyboard', tab: 'Home', group: 'Editing', internal: true, edits: true, run: (app, text) => app.view.dispatch(app.state.tr.insertText(String(text ?? '')).scrollIntoView()) },
   {
+    // Replays an editing key recorded in a macro (Enter, Backspace, Delete, Tab...) through the editor's keymaps.
+    id: 'edit.key', label: 'Press Key', icon: 'keyboard', tab: 'Home', group: 'Editing', internal: true, edits: true, noRecord: true,
+    run: (app, key: string) => {
+      const parts = String(key || '').split('-');
+      const base = parts.pop() || '';
+      const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+      const has = (m: string) => parts.includes(m);
+      const ev = new KeyboardEvent('keydown', { key: base, bubbles: true, cancelable: true, ctrlKey: has('Ctrl') || (has('Mod') && !mac), metaKey: has('Mod') && mac, altKey: has('Alt'), shiftKey: has('Shift') });
+      const view = app.view;
+      if (view.someProp('handleKeyDown', (f) => f(view, ev))) return true;
+      // Deleting a character (or word) at a collapsed cursor is the browser's job, so it is done here.
+      const st = view.state, $h = st.selection.$head, back = base === 'Backspace';
+      if (!st.selection.empty || (!back && base !== 'Delete')) return false;
+      if (has('Mod') || has('Alt')) return getCommand(back ? 'edit.deleteWordBack' : 'edit.deleteWordFwd')!.run(app);
+      const off = $h.parentOffset;
+      if (back ? off === 0 : off === $h.parent.content.size) return false;
+      const near = back ? $h.parent.textBetween(Math.max(0, off - 2), off, undefined, '\ufffc') : $h.parent.textBetween(off, Math.min($h.parent.content.size, off + 2), undefined, '\ufffc');
+      const n = (back ? /[\ud800-\udbff][\udc00-\udfff]$/ : /^[\ud800-\udbff][\udc00-\udfff]/).test(near) ? 2 : 1;
+      view.dispatch(st.tr.delete(back ? $h.pos - n : $h.pos, back ? $h.pos : $h.pos + n).setMeta('trackDir', back ? 'back' : 'forward').scrollIntoView());
+      return true;
+    },
+  },
+  {
     id: 'edit.collapseSelection', label: 'Collapse Selection', icon: 'deselect', tab: 'Home', group: 'Editing', noRecord: true,
     run: (app) => app.view.dispatch(app.state.tr.setSelection(TextSelection.create(app.state.doc, app.state.selection.head))),
   },
@@ -338,18 +362,51 @@ function nextMatchIndex(app: App, dir: 1 | -1): number {
   return s.matches.length - 1;
 }
 
-export function replaceAll(app: App, o: { find: string; replace: string; regex?: boolean; caseSensitive?: boolean; wholeWord?: boolean; wildcards?: boolean; inSelection?: boolean; style?: string; preserveCase?: boolean }): number {
+export function replaceAll(app: App, o: { find: string; replace: string; regex?: boolean; caseSensitive?: boolean; wholeWord?: boolean; wildcards?: boolean; inSelection?: boolean; style?: string; preserveCase?: boolean; quiet?: boolean }): number {
   const st = app.state;
   const re = buildMatcher(o.find, !!o.regex, !!o.caseSensitive, !!o.wholeWord, !!o.wildcards);
   if (!re) { toast('Invalid search expression.'); return 0; }
   let matches = findMatches(st.doc, re);
   if (o.inSelection && !st.selection.empty) matches = matches.filter((m) => m.from >= st.selection.from && m.to <= st.selection.to);
   const tr = st.tr;
+  // Block text built exactly like findMatches (one char per position) so regex replacements
+  // see the same context (lookaround, \b, ^) the search did.
+  const blocks = new Map<number, { start: number; text: string; posMap: number[] }>();
+  const blockText = (pos: number) => {
+    const $p = st.doc.resolve(pos);
+    const start = $p.start();
+    let b = blocks.get(start);
+    if (!b) {
+      let text = '';
+      const posMap: number[] = [];
+      $p.parent.forEach((child, off) => {
+        if (child.isText) { for (let k = 0; k < child.text!.length; k++) posMap.push(start + off + k); text += child.text; }
+        else { posMap.push(start + off); text += child.type === N.hard_break ? '\n' : '￼'; }
+      });
+      b = { start, text, posMap };
+      blocks.set(start, b);
+    }
+    return b;
+  };
+  const sticky = (o.regex || o.wildcards) ? new RegExp(re.source, re.flags.replace('g', '') + 'y') : null;
+  const tmpl = o.replace.replace(/\\(\d)/g, '$$$1');
+  let skipped = 0;
   for (let i = matches.length - 1; i >= 0; i--) {
     const m = matches[i];
-    const text = st.doc.textBetween(m.from, m.to, '\n', '￼');
-    let rep = o.replace.replace(/\^p/g, '\n').replace(/\^t/g, '\t').replace(/\^&/g, text);
-    if (o.regex || o.wildcards) { const one = new RegExp(re.source, re.flags.replace('g', '')); rep = text.replace(one, o.replace.replace(/\\(\d)/g, '$$$1')); }
+    const b = blockText(m.from);
+    const idx = b.posMap[m.from - b.start] === m.from ? m.from - b.start : b.posMap.indexOf(m.from);
+    const text = idx < 0 ? '' : b.text.slice(idx, idx + (m.to - m.from));
+    // Matches spanning pictures, fields or other inline objects would destroy them; leave those alone.
+    if (idx < 0 || text.includes('￼')) { matches.splice(i, 1); skipped++; continue; }
+    let rep = o.replace.replace(/\^p/g, '\n').replace(/\^t/g, '\t').replace(/\^&/g, () => text);
+    if (sticky) {
+      sticky.lastIndex = idx;
+      const mm = sticky.exec(b.text);
+      if (!mm || mm[0].length !== text.length) { matches.splice(i, 1); skipped++; continue; }
+      sticky.lastIndex = idx;
+      const out = b.text.replace(sticky, tmpl);
+      rep = out.slice(idx, out.length - (b.text.length - idx - text.length));
+    }
     if (o.preserveCase) {
       if (text === text.toUpperCase()) rep = rep.toUpperCase();
       else if (text[0] === text[0].toUpperCase()) rep = rep.charAt(0).toUpperCase() + rep.slice(1);
@@ -358,6 +415,9 @@ export function replaceAll(app: App, o: { find: string; replace: string; regex?:
     const parts = rep.split('\n');
     if (parts.length === 1) {
       if (rep) tr.replaceWith(m.from, m.to, schema.text(rep, marks)); else tr.delete(m.from, m.to);
+    } else if (sticky) {
+      // In regex/wildcard mode a newline can only come from matched line breaks: keep them as line breaks.
+      tr.replaceWith(m.from, m.to, parts.flatMap((part, j) => [...(j ? [N.hard_break.create()] : []), ...(part ? [schema.text(part, marks)] : [])]));
     } else {
       tr.delete(m.from, m.to);
       let p = m.from;
@@ -372,7 +432,7 @@ export function replaceAll(app: App, o: { find: string; replace: string; regex?:
     }
   }
   if (matches.length) app.view.dispatch(tr);
-  toast(`${matches.length} replacement(s) made`);
+  if (!o.quiet || skipped) toast(`${matches.length} replacement(s) made` + (skipped ? `; ${skipped} skipped (match spans a picture or other object)` : ''));
   return matches.length;
 }
 

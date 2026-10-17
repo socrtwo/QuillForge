@@ -1,9 +1,20 @@
-/** SVG generators for shapes, diagrams and charts. Output is embedded as an editable image. */
+/**
+ * SVG generators for shapes, diagrams and charts. Output is embedded as an editable image.
+ *
+ * The data comes from the document (an image's editData), and edit dialogs show the markup as
+ * HTML, so every value is normalized first: colors must be plain colors, sizes finite numbers,
+ * text is escaped.
+ */
+import { safeColor, safeNum } from '../util/sanitize';
 
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 export const svgToDataUrl = (svg: string) => 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
 
 export const PALETTE = ['#4472c4', '#ed7d31', '#a5a5a5', '#ffc000', '#5b9bd5', '#70ad47', '#264478', '#9e480e', '#636363', '#997300'];
+
+const size = (v: unknown, def: number) => safeNum(v, def, 1, 4000);
+const colorList = (v: unknown): string[] => (Array.isArray(v) ? v.map((c, i) => safeColor(c, PALETTE[i % PALETTE.length])) : []);
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.map((s) => String(s ?? '')) : []);
 
 // ------------------------------------------------------------------------------------------
 // Shapes
@@ -43,7 +54,12 @@ function star(n: number, w: number, h: number, inner = 0.45) {
   return poly(pts);
 }
 
-export function shapeSvg(d: ShapeData): string {
+export function shapeSvg(raw: ShapeData): string {
+  const d: ShapeData = {
+    ...raw, w: size(raw.w, 200), h: size(raw.h, 130), fill: safeColor(raw.fill, PALETTE[0]), stroke: safeColor(raw.stroke, '#2f528f'),
+    strokeWidth: safeNum(raw.strokeWidth, 2, 0, 100), textColor: safeColor(raw.textColor, '#ffffff'), fontSize: safeNum(raw.fontSize || 14, 14, 1, 400),
+    text: String(raw.text ?? ''), font: raw.font == null ? undefined : String(raw.font),
+  };
   const { w, h } = d;
   const m = 2;
   let body = '';
@@ -138,11 +154,13 @@ export const DIAGRAMS: { kind: string; label: string; help: string }[] = [
   { kind: 'radial', label: 'Radial', help: 'First line is the center' },
 ];
 
-export function diagramSvg(d: DiagramData): string {
-  const { w, h } = d;
-  const items = d.items.filter((s) => s.trim());
-  const col = (i: number) => d.colors[i % d.colors.length] || PALETTE[i % PALETTE.length];
-  const tc = d.textColor || '#ffffff';
+export function diagramSvg(raw: DiagramData): string {
+  const w = size(raw.w, 520), h = size(raw.h, 220);
+  const d = { ...raw, w, h, kind: String(raw.kind) };
+  const items = strings(raw.items).filter((s) => s.trim());
+  const colors = colorList(raw.colors);
+  const col = (i: number) => colors[i % colors.length] || PALETTE[i % PALETTE.length];
+  const tc = safeColor(raw.textColor, '#ffffff');
   const n = Math.max(1, items.length);
   let body = '';
   const label = (t: string, x: number, y: number, maxW: number, size = 13, color = tc) => textBlock(t, x, y, color, size, maxW);
@@ -299,15 +317,18 @@ function niceMax(v: number): number {
   return 10 * p;
 }
 
-export function chartSvg(d: ChartData): string {
-  const { w, h } = d;
-  const colors = d.colors?.length ? d.colors : PALETTE;
+export function chartSvg(raw: ChartData): string {
+  const w = size(raw.w, 520), h = size(raw.h, 300);
+  const d = { ...raw, w, h, title: raw.title == null ? '' : String(raw.title) };
+  const given = colorList(raw.colors);
+  const colors = given.length ? given : PALETTE;
   const titleH = d.title ? 28 : 6;
   const legendH = d.legend ? 24 : 0;
   let body = d.title ? `<text x="${w / 2}" y="20" text-anchor="middle" font-size="16" font-weight="bold" fill="#333">${esc(d.title)}</text>` : '';
   const pl = 44, pr = 12, pt = titleH + 6, pb = 30 + legendH;
   const pw = w - pl - pr, ph = h - pt - pb;
-  const cats = d.categories, ser = d.series;
+  const cats = strings(raw.categories);
+  const ser = (Array.isArray(raw.series) ? raw.series : []).map((s) => ({ name: String(s?.name ?? ''), values: Array.isArray(s?.values) ? s.values.map((v) => Number(v) || 0) : [] }));
   const fmt = (n: number) => (Math.abs(n) >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(Math.round(n * 100) / 100));
 
   if (d.kind === 'pie' || d.kind === 'doughnut') {

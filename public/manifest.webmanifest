@@ -1,0 +1,30 @@
+{
+  "name": "QuillPen",
+  "short_name": "QuillPen",
+  "description": "An open-source word processor with a complete, customizable command library.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#ffffff",
+  "theme_color": "#2b4a7e",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "file_handlers": [
+    {
+      "action": "./",
+      "accept": {
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
+        "application/vnd.oasis.opendocument.text": [".odt"],
+        "application/rtf": [".rtf"],
+        "text/markdown": [".md"],
+        "text/plain": [".txt"]
+      }
+    }
+  ]
+}

@@ -58,7 +58,10 @@ export function renderBackstage(app: App, root: HTMLElement, page: string): void
     case 'open': {
       body.append(h('h1', null, 'Open'),
         card('Browse…', 'Open a file from this device, Drive, or any document provider', 'folder_open', () => app.exec('file.open')),
-        card('Encrypted document…', 'Open a password-protected .qfde file', 'lock_open', () => app.exec('file.openEncrypted')),
+        card('Encrypted document…', 'Open a password-protected .qpde file', 'lock_open', () => app.exec('file.openEncrypted')),
+        card('Open and Repair…', 'Rebuild a damaged .docx, .doc or .odt and show what was recovered', 'healing', () => app.exec('file.openRepair')),
+        card('Recover Text from Any File…', 'Pull readable text out of any file, however damaged', 'text_snippet', () => app.exec('file.recoverText')),
+        card('Manual recovery options', 'AutoRecover folders, version history and other ways to find a lost document', 'support', () => app.exec('file.recoveryHelp')),
         card('Recover unsaved documents', 'Drafts saved automatically before a crash or close', 'restore_page', () => app.exec('file.recover')),
         h('h2', null, 'Recent'));
       recentList(app, body, true);
@@ -89,7 +92,7 @@ export function renderBackstage(app: App, root: HTMLElement, page: string): void
       body.append(h('h1', null, page === 'saveas' ? 'Save As' : 'Export'), h('p', { class: 'qf-help' }, page === 'saveas' ? 'Choose a format. The system file dialog lets you pick the folder (device, SD card, Drive, Dropbox…).' : 'Save a copy in another format; the current document keeps its file.'));
       const grid = h('div', { class: 'qf-bs-cards' });
       for (const f of FORMATS.filter((x) => x.canExport)) grid.appendChild(card(f.label, f.note || `.${f.ext[0]}`, f.id === 'pdf' ? 'picture_as_pdf' : 'description', () => (page === 'saveas' ? app.exec('file.saveAsFormat', f.id) : f.id === 'pdf' ? app.exec('file.exportPdf') : app.exec(`file.export.${f.id}`))));
-      grid.appendChild(card('Encrypted QuillForge (.qfde)', 'AES-256 password protected', 'enhanced_encryption', () => app.exec('file.encrypt')));
+      grid.appendChild(card('Encrypted QuillPen (.qpde)', 'AES-256 password protected', 'enhanced_encryption', () => app.exec('file.encrypt')));
       grid.appendChild(card('Template', 'Reuse this document as a starting point', 'bookmark_add', () => app.exec('file.saveTemplate')));
       body.appendChild(grid);
       break;

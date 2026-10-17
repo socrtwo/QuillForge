@@ -7,6 +7,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@style/AppTheme">
 
         <activity
@@ -23,13 +24,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- "Open with QuillForge" for documents identified by MIME type
+            <!-- "Open with QuillPen" for documents identified by MIME type
                  (a mimeType-only <data> matches content: and file: URIs). -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
                 <data android:mimeType="application/vnd.oasis.opendocument.text" />
+                <data android:mimeType="application/msword" />
+                <data android:mimeType="application/vnd.ms-word.document.macroEnabled.12" />
                 <data android:mimeType="application/rtf" />
                 <data android:mimeType="text/rtf" />
                 <data android:mimeType="text/plain" />
@@ -37,6 +40,18 @@
                 <data android:mimeType="text/x-markdown" />
                 <data android:mimeType="text/html" />
                 <data android:mimeType="application/epub+zip" />
+                <data android:mimeType="application/vnd.wordperfect" />
+                <data android:mimeType="application/wordperfect" />
+                <data android:mimeType="application/vnd.ms-works" />
+                <data android:mimeType="application/x-mswrite" />
+                <data android:mimeType="application/vnd.lotus-wordpro" />
+                <data android:mimeType="application/x-hwp" />
+                <data android:mimeType="application/haansofthwp" />
+                <data android:mimeType="application/macwriteii" />
+                <data android:mimeType="message/rfc822" />
+                <data android:mimeType="application/vnd.ms-outlook" />
+                <data android:mimeType="multipart/related" />
+                <data android:mimeType="application/x-mimearchive" />
             </intent-filter>
 
             <!-- Files whose provider reports a generic MIME type: match on extension.
@@ -52,6 +67,9 @@
                 <data android:pathPattern=".*\\.docx" />
                 <data android:pathPattern=".*\\..*\\.docx" />
                 <data android:pathPattern=".*\\..*\\..*\\.docx" />
+                <data android:pathPattern=".*\\.doc" />
+                <data android:pathPattern=".*\\..*\\.doc" />
+                <data android:pathPattern=".*\\..*\\..*\\.doc" />
                 <data android:pathPattern=".*\\.odt" />
                 <data android:pathPattern=".*\\..*\\.odt" />
                 <data android:pathPattern=".*\\..*\\..*\\.odt" />
@@ -64,9 +82,47 @@
                 <data android:pathPattern=".*\\.markdown" />
                 <data android:pathPattern=".*\\..*\\.markdown" />
                 <data android:pathPattern=".*\\..*\\..*\\.markdown" />
+                <data android:pathPattern=".*\\.qpd" />
+                <data android:pathPattern=".*\\..*\\.qpd" />
+                <data android:pathPattern=".*\\..*\\..*\\.qpd" />
+                <!-- rename:keep: documents saved by QuillForge, the app's former name -->
                 <data android:pathPattern=".*\\.qfd" />
                 <data android:pathPattern=".*\\..*\\.qfd" />
                 <data android:pathPattern=".*\\..*\\..*\\.qfd" />
+                <data android:pathPattern=".*\\.wpd" />
+                <data android:pathPattern=".*\\..*\\.wpd" />
+                <data android:pathPattern=".*\\.wp5" />
+                <data android:pathPattern=".*\\..*\\.wp5" />
+                <data android:pathPattern=".*\\.wp6" />
+                <data android:pathPattern=".*\\..*\\.wp6" />
+                <data android:pathPattern=".*\\.wps" />
+                <data android:pathPattern=".*\\..*\\.wps" />
+                <data android:pathPattern=".*\\.wri" />
+                <data android:pathPattern=".*\\..*\\.wri" />
+                <data android:pathPattern=".*\\.lwp" />
+                <data android:pathPattern=".*\\..*\\.lwp" />
+                <data android:pathPattern=".*\\.sam" />
+                <data android:pathPattern=".*\\..*\\.sam" />
+                <data android:pathPattern=".*\\.hwp" />
+                <data android:pathPattern=".*\\..*\\.hwp" />
+                <data android:pathPattern=".*\\.ws" />
+                <data android:pathPattern=".*\\..*\\.ws" />
+                <data android:pathPattern=".*\\.xy" />
+                <data android:pathPattern=".*\\..*\\.xy" />
+                <data android:pathPattern=".*\\.rft" />
+                <data android:pathPattern=".*\\..*\\.rft" />
+                <data android:pathPattern=".*\\.mcw" />
+                <data android:pathPattern=".*\\..*\\.mcw" />
+                <data android:pathPattern=".*\\.cwk" />
+                <data android:pathPattern=".*\\..*\\.cwk" />
+                <data android:pathPattern=".*\\.eml" />
+                <data android:pathPattern=".*\\..*\\.eml" />
+                <data android:pathPattern=".*\\.msg" />
+                <data android:pathPattern=".*\\..*\\.msg" />
+                <data android:pathPattern=".*\\.mht" />
+                <data android:pathPattern=".*\\..*\\.mht" />
+                <data android:pathPattern=".*\\.mhtml" />
+                <data android:pathPattern=".*\\..*\\.mhtml" />
             </intent-filter>
 
             <!-- Receive documents and text shared from other apps. -->
@@ -86,6 +142,14 @@
 
         </activity>
 
+        <!-- Read-only access to the built web app (assets/public) for QuillPost's embedded editor
+             (docs/EMBED.md): content://<applicationId>.embed/index.html -->
+        <provider
+            android:name=".EmbedAssetsProvider"
+            android:authorities="${applicationId}.embed"
+            android:exported="true"
+            android:grantUriPermissions="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -100,4 +164,11 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Sister apps that can open spreadsheets, email and presentations (package visibility, Android 11+). -->
+    <queries>
+        <package android:name="io.github.socrtwo.quillgrid" />
+        <package android:name="io.github.socrtwo.quillpost" />
+        <package android:name="io.github.socrtwo.quillstage" />
+    </queries>
 </manifest>

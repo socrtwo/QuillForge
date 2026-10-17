@@ -1,0 +1,56 @@
+= Pandoc Sample
+Pat Writer
+:lang: en-US
+
+== Introduction
+
+This is _emphasized_, *strong*, [line-through]*struck*, `inline code`,
+H~2~O and x^2^ text with a https://example.com/docs[link] and a
+footnote.footnote:[The footnote text with _emphasis_.]
+
+=== Lists
+
+* Apple
+* Banana
+** Nested banana
+* Cherry
+
+[arabic]
+. First
+. Second
+[loweralpha]
+.. Sub alpha
+. Third
+
+____
+A block quote with *bold* inside.
+____
+
+[source,python]
+----
+def hello():
+    return "world"
+----
+
+=== Table
+
+[cols="<,>,^",options="header",]
+|===
+|Name |Qty |Note
+|Pens |12 |blue
+|Paper |500 |_A4_ sheets
+|===
+
+Math inline latexmath:[$E = mc^2$] and display:
+
+[latexmath]
+++++
+\[\int_0^1 x^2\,dx = \frac{1}{3}\]
+++++
+
+.Swatch image
+image::swatch.png[Swatch image]
+
+'''''
+
+Final paragraph.

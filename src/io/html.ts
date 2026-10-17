@@ -2,7 +2,7 @@
  * HTML import / export and clipboard clean-up.
  *
  * Export produces a standalone HTML5 document: the document is rendered with the schema's
- * DOMSerializer (see serialize.ts › renderHtml), editor-only artefacts are removed and the
+ * DOMSerializer (see serialize.ts › renderHtml), editor-only artifacts are removed and the
  * style sheet produced by stylesCss() is embedded so paragraph styles look the same as in the
  * editor. Footnotes become an endnotes section with back-links; comments are omitted; tracked
  * deletions are dropped and insertions kept as plain text.
@@ -12,6 +12,9 @@
  * links, KaTeX/MathJax math, task lists, nested-list quirks) and then runs
  * DOMParser.fromSchema(schema).
  */
+import { stripActiveContent, escHtml } from '../util/sanitize';
+import { decodeAuto } from './encoding';
+import { applyPageCss, extractHeaderFooter, inlineDocumentCss, moveBlockBackgrounds } from './html-extras';
 import { DOMParser as PMDOMParser, type Node as PMNode } from 'prosemirror-model';
 import { schema } from '../editor/schema';
 import { stylesCss } from '../editor/styles';
@@ -37,7 +40,7 @@ export function decodeHtmlBytes(data: ArrayBuffer): string {
   if (m) {
     try { return new TextDecoder(m[1].toLowerCase()).decode(u8); } catch { /* unknown label */ }
   }
-  return new TextDecoder('windows-1252').decode(u8);
+  return decodeAuto(u8);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -81,7 +84,7 @@ function styleOf(el: Element): string {
   return (el.getAttribute('style') || '').toLowerCase().replace(/\s+/g, '');
 }
 
-/** Remove declarations we never want (mso-*, junk colours, inherit fonts). */
+/** Remove declarations we never want (mso-*, junk colors, inherit fonts). */
 function cleanStyleAttr(el: HTMLElement): void {
   const raw = el.getAttribute('style');
   if (raw == null) return;
@@ -203,7 +206,7 @@ function convertFootnotes(root: Element): void {
       const st = styleOf(e);
       if (/footnote|endnote|rearnote/.test(et) || /\b(footnotes?|endnotes?|notes)\b/.test(cls) || st.includes('mso-element:footnote') || st.includes('mso-element:endnote') ||
         (e.tagName === 'ASIDE' && /note/.test(et + cls))) return e;
-      if (/^(_?ftn|_?edn|fn|footnote|endnote|note)[-_:]?\d+$/i.test(e.id || '')) return e;
+      if (/^(_?ftn|_?edn|fn|(?:sd)?footnote|(?:sd)?endnote|note)[-_:]?\d+(sym|anc)?$/i.test(e.id || '')) return e;
       e = e.parentElement;
     }
     return null;
@@ -212,10 +215,10 @@ function convertFootnotes(root: Element): void {
   const removeTargets = new Set<Element>();
   for (const a of anchors) {
     if (!a.isConnected) continue;
-    const id = decodeURIComponent((a.getAttribute('href') || '').slice(1));
+    const id = safeDecode((a.getAttribute('href') || '').slice(1));
     const et = (a.getAttribute('epub:type') || a.getAttribute('role') || '').toLowerCase();
     const cls = (a.getAttribute('class') || '').toLowerCase();
-    const looksRef = /noteref/.test(et) || /footnote-ref|fnref|noteref|footnote/.test(cls) || /^(_?ftn|_?edn|fn|footnote|endnote|note)[-_:]?\d+$/i.test(id) ||
+    const looksRef = /noteref/.test(et) || /footnote-ref|fnref|noteref|footnote/.test(cls) || /^(_?ftn|_?edn|fn|(?:sd)?footnote|(?:sd)?endnote|note)[-_:]?\d+(sym|anc)?$/i.test(id) ||
       (a.parentElement?.tagName === 'SUP') || !!a.querySelector('sup, .MsoFootnoteReference, .MsoEndnoteReference');
     if (!looksRef) continue;
     if (isNoteContainer(a)) continue; // a back-link inside the notes themselves
@@ -226,7 +229,7 @@ function convertFootnotes(root: Element): void {
     if (target.tagName === 'A' && !target.textContent?.trim().length) body = target.parentElement || target;
     const holder = target.closest('li, aside, div[id], p') || body;
     const container = isNoteContainer(holder) || (holder.tagName === 'LI' || holder.tagName === 'ASIDE' ? holder : null);
-    if (!container && !/^(_?ftn|_?edn|fn|footnote|endnote|note)/i.test(id)) continue;
+    if (!container && !/^(_?ftn|_?edn|fn|(?:sd)?footnote|(?:sd)?endnote|note)/i.test(id)) continue;
     const noteEl = holder.tagName === 'A' ? (holder.parentElement || holder) : holder;
     const clone = noteEl.cloneNode(true) as Element;
     // Strip back-links and labels.
@@ -276,10 +279,20 @@ function latexFromMath(el: Element): string {
 }
 
 /** DOM-level clean-up of pasted or imported HTML (operates in place). */
-export function cleanHtmlDom(root: HTMLElement): void {
+const safeDecode = (u: string) => { try { return decodeURIComponent(u); } catch { return u; } };
+
+export interface CleanOptions {
+  /** Keep <img src="cid:…"> (inline attachments of an email body being edited for its mail app). */
+  keepCidImages?: boolean;
+}
+
+export function cleanHtmlDom(root: HTMLElement, opts: CleanOptions = {}): void {
   const doc = root.ownerDocument;
+  stripActiveContent(root);
   const raw = root.innerHTML;
   const isWord = /mso-|class="?Mso|urn:schemas-microsoft-com/i.test(raw);
+  // <ol start=""> (or any non-number) would give the list a NaN start.
+  root.querySelectorAll('ol[start]').forEach((ol) => { if (!/^\s*-?\d+\s*$/.test(ol.getAttribute('start') || '')) ol.removeAttribute('start'); });
 
   // Math first (MathJax uses <script type="math/tex">).
   root.querySelectorAll('script[type^="math/tex"]').forEach((s) => {
@@ -340,7 +353,7 @@ export function cleanHtmlDom(root: HTMLElement): void {
   });
   root.querySelectorAll('img').forEach((img) => {
     const src = img.getAttribute('src') || '';
-    if (!src || /^(file|cid|blob|about):/i.test(src)) img.remove();
+    if (!src || /^(file|blob|about):/i.test(src) || (/^cid:/i.test(src) && !opts.keepCidImages)) img.remove();
   });
 
   // Inline SVG → image.
@@ -582,7 +595,9 @@ export function cleanPastedHtml(html: string): string {
     cleanHtmlDom(d.body);
     return d.body.innerHTML;
   } catch {
-    return html;
+    // Never fall back to the raw clipboard HTML: paste it as plain text instead.
+    const t = new DOMParser().parseFromString(html, 'text/html').body.textContent || '';
+    return t.split(/\n/).map((l) => `<p>${escHtml(l)}</p>`).join('');
   }
 }
 
@@ -615,7 +630,7 @@ export function htmlToBlocks(html: string): PMNode[] {
   }
 }
 
-export async function importHtml(data: ArrayBuffer, name: string): Promise<PMNode> {
+export async function importHtml(data: ArrayBuffer, name: string, opts: CleanOptions = {}): Promise<PMNode> {
   const settings = newSettings();
   let blocks: PMNode[] = [];
   try {
@@ -628,9 +643,12 @@ export async function importHtml(data: ArrayBuffer, name: string): Promise<PMNod
     if (meta('description')) settings.properties.comments = meta('description');
     if (meta('keywords')) settings.properties.keywords = meta('keywords');
     if (meta('subject')) settings.properties.subject = meta('subject');
-    const lang = d.documentElement.getAttribute('lang');
+    const lang = d.documentElement.getAttribute('lang') || d.body?.getAttribute('lang');
     if (lang) settings.language = lang;
-    cleanHtmlDom(d.body);
+    applyPageCss(inlineDocumentCss(d), settings);
+    extractHeaderFooter(d, settings);
+    cleanHtmlDom(d.body, opts);
+    moveBlockBackgrounds(d.body);
     blocks = normalizeImportedFormatting(domToBlocks(d.body), settings, null);
   } catch { /* fall through with what we have */ }
   void name;
@@ -663,7 +681,7 @@ export function docToHtml(doc: PMNode, opts: ExportOptions): string {
   const metas = [
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
-    '<meta name="generator" content="QuillForge">',
+    '<meta name="generator" content="QuillPen">',
   ];
   if (author) metas.push(`<meta name="author" content="${escapeHtml(author)}">`);
   if (settings.properties.subject) metas.push(`<meta name="subject" content="${escapeHtml(settings.properties.subject)}">`);

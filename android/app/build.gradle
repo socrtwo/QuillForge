@@ -18,14 +18,14 @@ def releaseKeystorePath = System.getenv('ANDROID_KEYSTORE_PATH')
 def hasReleaseKeystore = releaseKeystorePath != null && !releaseKeystorePath.trim().isEmpty() &&
         new File(releaseKeystorePath.trim()).isFile()
 if (!hasReleaseKeystore) {
-    logger.lifecycle('QuillForge: ANDROID_KEYSTORE_PATH not set or missing - release build will be signed with the DEBUG key (sideloading/testing only).')
+    logger.lifecycle('QuillPen: ANDROID_KEYSTORE_PATH not set or missing - release build will be signed with the DEBUG key (sideloading/testing only).')
 }
 
 android {
-    namespace = "io.github.socrtwo.quillforge"
+    namespace = "io.github.socrtwo.quillpen"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "io.github.socrtwo.quillforge"
+        applicationId "io.github.socrtwo.quillpen"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode appVersionCode
@@ -46,6 +46,10 @@ android {
                 keyPassword(System.getenv('ANDROID_KEY_PASSWORD') ?: System.getenv('ANDROID_KEYSTORE_PASSWORD'))
             }
         }
+    }
+    buildFeatures {
+        // BuildConfig.APPLICATION_ID names the embed provider's authority (EmbedAssetsProvider).
+        buildConfig = true
     }
     buildTypes {
         release {

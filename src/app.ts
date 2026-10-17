@@ -1,12 +1,15 @@
-/** QuillForge application core: document tabs, dispatch pipeline, command execution. */
+/** QuillPen application core: document tabs, dispatch pipeline, command execution. */
+import { isSafeExternalUrl } from './util/sanitize';
+import { normalizeTables } from './editor/normalize';
 import { EditorState, TextSelection, type Transaction } from 'prosemirror-state';
+import { DocAttrStep } from 'prosemirror-transform';
 import { EditorView } from 'prosemirror-view';
 import type { Node as PMNode } from 'prosemirror-model';
 import { schema, emptyDoc } from './editor/schema';
-import { buildPlugins, canonicalKey } from './editor/setup';
+import { buildPlugins, canonicalKey, keyName } from './editor/setup';
 import { trackTransaction, trackKey } from './editor/plugins/trackChanges';
 import { pageInfo, repaginate, type PageConfig } from './editor/plugins/pagination';
-import { footnoteLabel, focusKey } from './editor/plugins/decorations';
+import { footnoteLabel, focusKey, proofKey } from './editor/plugins/decorations';
 import { buildNodeViews } from './editor/nodeviews';
 import { normalizeSettings, defaultSettings, pageDims, type DocSettings } from './editor/settings';
 import { stylesCss } from './editor/styles';
@@ -18,10 +21,12 @@ import { toast } from './ui/dialog';
 import { esc } from './ui/dom';
 import type { Shell } from './ui/shell';
 import { Proofer } from './proof/proofing';
+import { embedHidden } from './embed/hidden';
 
 export type ViewMode = 'print' | 'web' | 'mobile' | 'read' | 'outline' | 'draft' | 'focus';
 
 let tabCounter = 0;
+const RECORDED_KEYS = new Set(['Enter', 'Mod-Enter', 'Backspace', 'Mod-Backspace', 'Delete', 'Mod-Delete', 'Tab', 'Shift-Tab']);
 
 export class DocTab {
   id = `t${Date.now().toString(36)}${tabCounter++}`;
@@ -45,6 +50,10 @@ export class DocTab {
   styleEl!: HTMLStyleElement;
   lastSettings: any = null;
   mergeIndex: number | null = null;
+  /** How this document was recovered from a damaged file, if it was. */
+  recovery: import('./io/recover').RecoveryReport | null = null;
+  /** Storage key for documents without a unique URI (see docKey in commands/file). */
+  key = '';
   constructor(public app: App) {}
 
   get state(): EditorState { return this.view.state; }
@@ -69,6 +78,13 @@ export class App {
   keyIndex = new Map<string, string>();
   editPositions: number[] = [];
   proofer: Proofer;
+  /** Embedded editor for QuillPost (?embed=compose): no file commands, drafts or autosave (docs/EMBED.md). */
+  embedded = false;
+  /** Theme requested by the embedding app; overrides the preference without saving it. */
+  embedTheme: 'light' | 'dark' | null = null;
+  /** Done / Cancel of the embedded editor's bar (set by src/embed/mode.ts). */
+  embedControls: { done(): void; cancel(): void } | null = null;
+  private docChangeListeners = new Set<(tab: DocTab) => void>();
 
   constructor(public host: HTMLElement) {
     this.proofer = new Proofer(this);
@@ -81,6 +97,8 @@ export class App {
   get settings(): DocSettings { return this.active.settings; }
 
   onRefresh(fn: (app: App) => void): () => void { this.listeners.add(fn); return () => this.listeners.delete(fn); }
+  /** Called after every user edit (not for loads, field updates or other derived changes). */
+  onDocChange(fn: (tab: DocTab) => void): () => void { this.docChangeListeners.add(fn); return () => this.docChangeListeners.delete(fn); }
 
   savePrefs(): void { savePrefs(this.prefs); this.rebuildKeyIndex(); }
 
@@ -96,6 +114,7 @@ export class App {
   // Documents
 
   createTab(doc?: PMNode, meta: Partial<DocTab> = {}): DocTab {
+    if (doc) doc = normalizeTables(doc);
     const tab = new DocTab(this);
     Object.assign(tab, meta);
     if (!meta.viewMode) tab.viewMode = this.defaultViewMode();
@@ -157,6 +176,12 @@ export class App {
         if (this.recording) this.recordStep('edit.typeText', text);
         return false;
       },
+      handleKeyDown: (view, e) => {
+        // Editing keys handled by the keymap rather than a command are recorded too (replayed by edit.key).
+        const k = this.recording && keyName(e);
+        if (k && RECORDED_KEYS.has(canonicalKey(k)) && !this.keyIndex.has(canonicalKey(k))) this.recordStep('edit.key', k);
+        return false;
+      },
       handleClickOn: (view, pos, node, nodePos, e) => {
         const t = e.target as HTMLElement;
         if (node.type === schema.nodes.task_item || t.closest?.('li.qf-task')) {
@@ -173,9 +198,13 @@ export class App {
         if (node.type === schema.nodes.citation) { this.exec('refs.editCitation', { pos: nodePos }); return true; }
         if (node.type === schema.nodes.field && (e as MouseEvent).detail >= 2) { this.exec('insert.editField', { pos: nodePos }); return true; }
         const link = t.closest?.('a[href]') as HTMLAnchorElement | null;
-        if (link && ((e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey || tab.viewMode === 'read' || !view.editable)) {
-          this.followLink(link.getAttribute('href') || '');
-          return true;
+        if (link) {
+          // Never let the WebView navigate itself to a document link.
+          e.preventDefault();
+          if ((e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey || tab.viewMode === 'read' || !view.editable) {
+            this.followLink(link.getAttribute('href') || '');
+            return true;
+          }
         }
         return false;
       },
@@ -194,6 +223,8 @@ export class App {
 
   defaultViewMode(): ViewMode {
     const pref = this.prefs.defaultView;
+    // A message has no pages: the embedded editor reflows to the frame.
+    if (this.embedded) return window.innerWidth < 700 ? 'mobile' : 'web';
     if (pref !== 'auto') return pref;
     return window.innerWidth < 700 ? 'mobile' : 'print';
   }
@@ -203,7 +234,7 @@ export class App {
     for (const d of this.docs) d.el.classList.toggle('qf-hidden-tab', d !== tab);
     this.ui.tabsChanged();
     this.refresh();
-    document.title = `${tab.displayName}${tab.dirty ? ' •' : ''} – QuillForge`;
+    document.title = `${tab.displayName}${tab.dirty ? ' •' : ''} – QuillPen`;
   }
 
   closeTab(tab: DocTab): void {
@@ -218,7 +249,7 @@ export class App {
   }
 
   replaceDoc(tab: DocTab, doc: PMNode): void {
-    const state = EditorState.create({ doc, plugins: tab.view.state.plugins });
+    const state = EditorState.create({ doc: normalizeTables(doc), plugins: tab.view.state.plugins });
     tab.view.updateState(state);
     this.applySettingsToDom(tab);
     this.updateFields(tab);
@@ -232,11 +263,15 @@ export class App {
   dispatch(tab: DocTab, tr: Transaction): void {
     const view = tab.view;
     const old = view.state;
-    if (tr.docChanged && !tr.getMeta('trackSkip') && !tr.getMeta('allowProtected')) {
+    // Protection applies to every content change (trackSkip only means "do not track this"), except
+    // explicitly allowed ones (field updates, Restrict Editing) and settings-only changes that leave
+    // the protection itself alone.
+    if (tr.docChanged && !tr.getMeta('allowProtected') && !this.isSettingsOnly(tab, tr)) {
       const s = tab.settings;
       if (s.protection.mode === 'readonly' || s.markedFinal) { this.blocked('This document is read-only. Use Review ▸ Restrict Editing to change protection.'); return; }
       if (s.protection.mode === 'comments' && !tr.getMeta('comment')) { this.blocked('Only comments are allowed in this document.'); return; }
       if (s.protection.mode === 'forms' && !tr.getMeta('form')) { this.blocked('Only form fields can be filled in.'); return; }
+      if (s.protection.mode === 'tracked' && tr.getMeta('trackSkip') && !tr.getMeta('comment')) { this.blocked('Only tracked changes are allowed in this document.'); return; }
     }
     const t = trackTransaction(tr, old, tab.settings.protection.mode === 'tracked');
     const next = old.apply(t);
@@ -246,13 +281,24 @@ export class App {
       const lastPos = this.editPositions[this.editPositions.length - 1];
       if (lastPos == null || Math.abs(t.mapping.map(lastPos) - head) > 200) { this.editPositions.push(head); if (this.editPositions.length > 20) this.editPositions.shift(); }
       else this.editPositions[this.editPositions.length - 1] = head;
-      if (!tab.dirty) { tab.dirty = true; this.ui.tabsChanged(); document.title = `${tab.displayName} • – QuillForge`; }
-      this.scheduleAutosave();
+      // noDirty: derived updates (field values refreshed on open) are not user edits.
+      if (!tr.getMeta('noDirty')) {
+        if (!tab.dirty) { tab.dirty = true; this.ui.tabsChanged(); document.title = `${tab.displayName} • – QuillPen`; }
+        this.scheduleAutosave();
+        for (const fn of this.docChangeListeners) fn(tab);
+      }
       this.proofer.schedule(tab);
     }
     if (old.doc.attrs.settings !== next.doc.attrs.settings) this.applySettingsToDom(tab);
-    if (t.docChanged || t.selectionSet || t.storedMarksSet || t.getMeta('refresh')) this.refresh();
+    if (t.docChanged || t.selectionSet || t.storedMarksSet || t.getMeta('refresh') || t.getMeta(proofKey)) this.refresh();
     if (this.prefs.typewriter && (t.docChanged || t.selectionSet)) this.typewriterScroll(tab);
+  }
+
+  /** A transaction that only changes document settings without touching protection. */
+  private isSettingsOnly(tab: DocTab, tr: Transaction): boolean {
+    if (!tr.steps.every((st) => st instanceof DocAttrStep)) return false;
+    const before = tab.settings, after = normalizeSettings(tr.doc.attrs.settings);
+    return JSON.stringify(before.protection) === JSON.stringify(after.protection) && before.markedFinal === after.markedFinal;
   }
 
   private blocked(msg: string): void {
@@ -286,6 +332,7 @@ export class App {
   exec(id: string, arg?: any): unknown {
     const c = getCommand(id);
     if (!c) { toast(`Unknown command: ${id}`); return false; }
+    if (this.embedded && embedHidden(id)) { toast(`${c.label} is not available while you edit a message.`); return false; }
     if (c.edits && !this.view.editable) {
       toast('The document is read-only.');
       return false;
@@ -368,7 +415,8 @@ export class App {
       if (s.differentFirst && page === 1) hf = kind === 'header' ? s.firstHeader : s.firstFooter;
       else if (s.differentOddEven && page % 2 === 0) hf = kind === 'header' ? s.evenHeader : s.evenFooter;
       const c = hfCtx(page, pages);
-      const part = (t: string) => expandTokens(esc(t || ''), c).replace(/\n/g, '<br>');
+      // Escape after expanding: token values (title, author, file name...) come from the document.
+      const part = (t: string) => esc(expandTokens(t || '', c)).replace(/\n/g, '<br>');
       if (!hf.left && !hf.center && !hf.right) return '';
       return `<span class="qf-hf-l">${part(hf.left)}</span><span class="qf-hf-c">${part(hf.center)}</span><span class="qf-hf-r">${part(hf.right)}</span>`;
     };
@@ -447,7 +495,7 @@ export class App {
       pages: info.pages, created: tab.created, saved: tab.saved, mergeRecord: merge, mergeIndex: s.mergePreview ?? undefined, doc: tab.view.state.doc,
     }, range);
     if (!updates.length) return;
-    const tr = applyFieldValues(tab.view.state.tr, updates).setMeta('trackSkip', true).setMeta('addToHistory', false).setMeta('allowProtected', true);
+    const tr = applyFieldValues(tab.view.state.tr, updates).setMeta('trackSkip', true).setMeta('addToHistory', false).setMeta('allowProtected', true).setMeta('noDirty', true);
     tab.view.dispatch(tr);
   }
 
@@ -471,16 +519,18 @@ export class App {
   // Autosave and drafts
 
   scheduleAutosave(): void {
-    if (!this.prefs.autosave) return;
-    clearTimeout(this.autosaveTimer);
-    this.autosaveTimer = setTimeout(() => this.saveDrafts(), Math.max(3, this.prefs.autosaveSeconds) * 1000);
+    // Throttle, not debounce: continuous typing must still save every few seconds.
+    if (this.embedded || !this.prefs.autosave || this.autosaveTimer) return;
+    this.autosaveTimer = setTimeout(() => { this.autosaveTimer = null; void this.saveDrafts(); }, Math.max(3, this.prefs.autosaveSeconds) * 1000);
   }
 
   async saveDrafts(): Promise<void> {
+    // The embedding app owns an embedded message: nothing of it is stored here.
+    if (this.embedded) return;
     for (const tab of this.docs) {
       if (!tab.dirty) continue;
       await kvSet('draft:' + tab.id, {
-        id: tab.id, json: tab.view.state.doc.toJSON(), title: tab.title, fileName: tab.fileName, format: tab.format, uri: tab.uri, time: Date.now(),
+        id: tab.id, json: tab.view.state.doc.toJSON(), title: tab.title, fileName: tab.fileName, format: tab.format, uri: tab.uri, key: tab.key, time: Date.now(),
       });
     }
     this.ui.status?.('Draft saved');
@@ -488,6 +538,7 @@ export class App {
 
   followLink(href: string): void {
     if (href.startsWith('#')) { this.exec('nav.gotoAnchor', href.slice(1)); return; }
+    if (!isSafeExternalUrl(href)) { toast(`Blocked a link with an unsupported or unsafe address: ${href.slice(0, 60)}`); return; }
     import('./platform/native').then(({ openExternal }) => openExternal(href));
   }
 

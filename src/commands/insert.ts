@@ -1,11 +1,11 @@
 /** Insert tab: pages, tables, illustrations, links, header/footer, text, symbols. */
 import { def } from './registry';
 import type { App } from '../app';
-import { TextSelection, NodeSelection } from 'prosemirror-state';
-import { Fragment, Slice, type Node as PMNode } from 'prosemirror-model';
+import { TextSelection, NodeSelection, type EditorState } from 'prosemirror-state';
+import { Fragment, Slice, type Mark, type Node as PMNode } from 'prosemirror-model';
 import { schema } from '../editor/schema';
 import { insertBlock, insertInline, markAttr, selectedText, setMark } from '../editor/ops';
-import { openDialog, toast, promptDialog, showMenu } from '../ui/dialog';
+import { openDialog, toast, promptDialog, showMenu, confirmDialog } from '../ui/dialog';
 import { pickFile, readFileAsDataURL, h } from '../ui/dom';
 import { SHAPES, shapeSvg, svgToDataUrl, rasterize, DIAGRAMS, diagramSvg, CHARTS, chartSvg, parseChartCsv, chartToCsv, PALETTE, type ShapeData, type DiagramData, type ChartData } from '../editor/graphics';
 import { renderLatex } from '../editor/nodeviews';
@@ -42,15 +42,21 @@ def([
   },
   {
     id: 'insert.removeCover', label: 'Remove Cover Page', icon: 'delete', tab: 'Insert', group: 'Pages', edits: true,
-    run: (app) => {
+    run: async (app) => {
       const doc = app.state.doc;
-      let end = -1;
-      doc.forEach((n, pos) => { if (end < 0 && n.type === N.page_break) end = pos + n.nodeSize; });
-      if (end < 0) { toast('No cover page found (a cover page ends with a page break).'); return; }
+      let end = -1, blocks = 0;
+      doc.forEach((n, pos, i) => { if (end < 0 && n.type === N.page_break) { end = pos + n.nodeSize; blocks = i; } });
+      if (end < 0) { toast('No cover page.'); return; }
+      // Covers made by Insert ▸ Cover Page start with a marked paragraph; anything else needs confirmation.
+      if (doc.firstChild?.attrs.id !== COVER_ID && !(await confirmDialog('Remove Cover Page', `The document does not start with a cover page inserted by QuillPen. Remove the ${blocks} paragraph(s) before the first page break?`))) return;
+      if (app.state.doc !== doc) return;
       v(app).dispatch(app.state.tr.delete(0, end));
     },
   },
 ]);
+
+/** Paragraph id marking the first block of a cover page inserted by insert.coverPage. */
+const COVER_ID = 'qf-cover';
 
 function insertCover(app: App, kind: string) {
   const s = app.settings;
@@ -68,6 +74,7 @@ function insertCover(app: App, kind: string) {
     case 'screenplay': blocks = [...spacer(14), P(title.toUpperCase(), { ...center }), P('', center), P('Written by', center), P('', center), P(author, center), ...spacer(16), P('Contact information', { align: 'left' })]; break;
     default: blocks = [...spacer(10), P(title, { style: 'Title', ...center }), P(s.properties.subject || '', { style: 'Subtitle', ...center }), ...spacer(4), P(author, center), P(date, center)];
   }
+  blocks[0] = blocks[0].type.create({ ...blocks[0].attrs, id: COVER_ID }, blocks[0].content, blocks[0].marks);
   blocks.push(N.page_break.create());
   v(app).dispatch(app.state.tr.insert(0, blocks).scrollIntoView());
   app.selectPos(1);
@@ -341,15 +348,17 @@ def([
     id: 'insert.link', label: 'Link', icon: 'link', tab: 'Insert', group: 'Links', keys: ['Mod-k'], edits: true, popular: true,
     run: async (app, arg) => {
       const st = app.state;
-      const cur = markAttr(st, M.link, 'href') || '';
+      // A collapsed cursor inside a link edits that whole link (its text and address).
+      const at = !arg?.href && st.selection.empty ? linkAtCursor(st) : null;
+      const cur = at?.mark.attrs.href || markAttr(st, M.link, 'href') || '';
       let href = arg?.href, text = arg?.text;
       if (!href) {
         const bookmarks: string[] = [];
         st.doc.descendants((n) => { if (n.type === N.bookmark) bookmarks.push('#' + n.attrs.name); return true; });
         const r = await openDialog({ title: cur ? 'Edit Link' : 'Insert Link', fields: [
-          { key: 'text', label: 'Text to display', type: 'text', value: selectedText(st) },
+          { key: 'text', label: 'Text to display', type: 'text', value: at ? st.doc.textBetween(at.from, at.to) : selectedText(st) },
           { key: 'href', label: 'Address (web page, mailto:, tel:, or #bookmark)', type: 'combo', options: bookmarks, value: cur || '', autofocus: true },
-          { key: 'title', label: 'ScreenTip', type: 'text', value: markAttr(st, M.link, 'title') || '' },
+          { key: 'title', label: 'ScreenTip', type: 'text', value: (at ? at.mark.attrs.title : markAttr(st, M.link, 'title')) || '' },
         ], buttons: cur ? [{ label: 'Remove Link', onClick: (_v, ctl) => { app.exec('insert.removeLink'); ctl.close(); } }] : [] });
         if (!r || !r.href) return;
         href = r.href.trim(); text = r.text;
@@ -358,6 +367,14 @@ def([
       }
       const view = v(app);
       const mark = M.link.create({ href, title: arg?.title || null });
+      const link = at && view.state.selection.empty ? linkAtCursor(view.state) : null;
+      if (link) {
+        const tr = view.state.tr;
+        if (text && text !== view.state.doc.textBetween(link.from, link.to)) tr.replaceWith(link.from, link.to, schema.text(text, mark.addToSet(link.mark.removeFromSet(view.state.doc.resolve(link.from + 1).marks()))));
+        else tr.removeMark(link.from, link.to, M.link).addMark(link.from, link.to, mark);
+        view.dispatch(tr.scrollIntoView());
+        return;
+      }
       const { from, to, empty } = view.state.selection;
       if (empty || (text && text !== selectedText(view.state))) {
         const t = text || href;
@@ -374,13 +391,9 @@ def([
       const st = app.state;
       let { from, to } = st.selection;
       if (from === to) {
-        const $p = st.selection.$from;
-        const m = M.link.isInSet($p.marks());
-        if (!m) return;
-        let s = from, e = from;
-        while (s > $p.start() && M.link.isInSet(st.doc.resolve(s - 1).marks()) && m.eq(M.link.isInSet(st.doc.resolve(s).marks())!)) s--;
-        while (e < $p.end() && M.link.isInSet(st.doc.resolve(e + 1).marks())) e++;
-        from = s; to = e;
+        const link = linkAtCursor(st);
+        if (!link) return;
+        ({ from, to } = link);
       }
       v(app).dispatch(st.tr.removeMark(from, to, M.link));
     },
@@ -412,6 +425,24 @@ def([
     },
   },
 ]);
+
+/** The whole link run around a collapsed cursor. Links are non-inclusive, so $pos.marks() is unreliable at
+ *  their edges: look at the inline children around the cursor and take the run carrying the same link mark. */
+function linkAtCursor(st: EditorState): { from: number; to: number; mark: Mark } | null {
+  const $p = st.selection.$from;
+  const parent = $p.parent;
+  let i = $p.index();
+  const linkOf = (k: number) => (k >= 0 && k < parent.childCount ? M.link.isInSet(parent.child(k).marks) : null);
+  let m = $p.textOffset ? linkOf(i) : null;
+  if (!m && !$p.textOffset) { m = linkOf(i - 1); if (m) i--; else m = linkOf(i); }
+  if (!m) return null;
+  let a = i, b = i;
+  while (a > 0 && m.isInSet(parent.child(a - 1).marks)) a--;
+  while (b < parent.childCount - 1 && m.isInSet(parent.child(b + 1).marks)) b++;
+  let from = $p.start(), to = from;
+  for (let k = 0; k <= b; k++) { const size = parent.child(k).nodeSize; if (k < a) from += size; to += size; }
+  return { from, to, mark: m };
+}
 
 // Header & footer ------------------------------------------------------------------------------
 const HF_PRESETS: Record<string, { left: string; center: string; right: string }> = {

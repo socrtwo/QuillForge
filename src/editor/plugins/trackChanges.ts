@@ -8,9 +8,9 @@
  * untracked.
  */
 import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from 'prosemirror-state';
-import { Fragment, Slice, type Mark, type Node as PMNode } from 'prosemirror-model';
+import { Fragment, Slice, type Mark, type MarkType, type Node as PMNode } from 'prosemirror-model';
 import { ReplaceStep, ReplaceAroundStep, AddMarkStep, RemoveMarkStep, AttrStep, DocAttrStep, AddNodeMarkStep, RemoveNodeMarkStep } from 'prosemirror-transform';
-import { ChangeSet } from 'prosemirror-changeset';
+import { ChangeSet, simplifyChanges } from 'prosemirror-changeset';
 import { schema } from '../schema';
 
 export interface TrackState { enabled: boolean; author: string; lockTracking: boolean }
@@ -55,6 +55,18 @@ function markFragment(frag: Fragment, del: Mark): Fragment {
   return Fragment.fromArray(out);
 }
 
+/**
+ * The revision mark of `type` by `author` right next to [from, to): continued typing or deleting
+ * extends that change instead of starting a new one for every keystroke.
+ */
+function adjacentMark(doc: PMNode, from: number, to: number, type: MarkType, author: string): Mark | null {
+  for (const n of [doc.resolve(from).nodeBefore, doc.resolve(to).nodeAfter]) {
+    const m = n?.marks.find((x) => x.type === type && x.attrs.author === author);
+    if (m) return m;
+  }
+  return null;
+}
+
 function hasInlineContent(frag: Fragment): boolean {
   let found = false;
   frag.descendants((n) => {
@@ -87,7 +99,8 @@ export function trackTransaction(tr: Transaction, oldState: EditorState, force =
 
   let cs = ChangeSet.create(oldState.doc);
   cs = cs.addSteps(tr.doc, tr.mapping.maps, null);
-  const changes = [...cs.changes];
+  // 'trackWords' (AI edits): present whole-word changes, as reviewers expect, instead of minimal character runs.
+  const changes = tr.getMeta('trackWords') ? simplifyChanges(cs.changes, tr.doc) : [...cs.changes];
   if (!changes.length) return tr;
 
   const out = tr; // append steps to the same transaction so undo treats it as one unit
@@ -99,11 +112,12 @@ export function trackTransaction(tr: Transaction, oldState: EditorState, force =
     const c = changes[i];
     // Mark inserted inline content.
     if (c.toB > c.fromB) {
+      const ins = adjacentMark(out.doc, c.fromB, c.toB, schema.marks.insertion, author) || insMark;
       out.doc.nodesBetween(c.fromB, c.toB, (node, pos) => {
         if (node.isInline) {
           const from = Math.max(pos, c.fromB);
           const to = Math.min(pos + node.nodeSize, c.toB);
-          if (to > from && !node.marks.some((m) => m.type === schema.marks.deletion)) out.addMark(from, to, insMark);
+          if (to > from && !node.marks.some((m) => m.type === schema.marks.deletion)) out.addMark(from, to, ins);
         }
         return true;
       });
@@ -112,7 +126,8 @@ export function trackTransaction(tr: Transaction, oldState: EditorState, force =
     if (c.toA > c.fromA) {
       const slice = oldState.doc.slice(c.fromA, c.toA);
       if (!hasInlineContent(slice.content)) continue; // structural join: allow untracked
-      const marked = new Slice(markFragment(slice.content, delMark), slice.openStart, slice.openEnd);
+      const del = adjacentMark(out.doc, c.fromB, c.fromB, schema.marks.deletion, author) || delMark;
+      const marked = new Slice(markFragment(slice.content, del), slice.openStart, slice.openEnd);
       if (!hasInlineContent(marked.content)) continue; // only withdrew own insertions
       const before = out.doc.content.size;
       try {
@@ -135,12 +150,18 @@ export function trackTransaction(tr: Transaction, oldState: EditorState, force =
   return out;
 }
 
-export interface ChangeInfo { kind: 'insertion' | 'deletion' | 'format'; id: string; author: string; date: number; from: number; to: number; text: string }
+/** `block`: a block-level object (rule, break, equation...) whose change is its `change` attribute. */
+export interface ChangeInfo { kind: 'insertion' | 'deletion' | 'format'; id: string; author: string; date: number; from: number; to: number; text: string; block?: boolean }
 
 /** List tracked changes in document order, merging adjacent ranges with the same id/kind. */
 export function listChanges(doc: PMNode): ChangeInfo[] {
   const out: ChangeInfo[] = [];
   doc.descendants((node, pos) => {
+    const bc = node.isInline ? null : node.attrs.change;
+    if (bc) {
+      out.push({ kind: bc.kind, id: bc.id, author: bc.author, date: bc.date, from: pos, to: pos + node.nodeSize, text: `[${node.type.name.replace(/_/g, ' ')}]`, block: true });
+      return false;
+    }
     if (!node.isInline) return true;
     for (const m of node.marks) {
       const kind = m.type === schema.marks.insertion ? 'insertion' : m.type === schema.marks.deletion ? 'deletion' : m.type === schema.marks.formatChange ? 'format' : null;
@@ -168,6 +189,11 @@ export function resolveChanges(state: EditorState, changes: ChangeInfo[], accept
     const from = tr.mapping.map(c.from), to = tr.mapping.map(c.to);
     if (c.kind === 'format') { tr.removeMark(from, to, schema.marks.formatChange); continue; }
     const removeText = (c.kind === 'insertion') !== accept; // reject insertion or accept deletion
+    if (c.block) {
+      if (removeText) tr.delete(from, to);
+      else if (tr.doc.nodeAt(from)?.attrs.change) tr.setNodeAttribute(from, 'change', null);
+      continue;
+    }
     if (removeText) tr.delete(from, to);
     else tr.removeMark(from, to, c.kind === 'insertion' ? schema.marks.insertion : schema.marks.deletion);
   }

@@ -23,6 +23,7 @@ import {
 } from './serialize';
 
 const x = escapeXml;
+const safeDecode = (u: string) => { try { return decodeURIComponent(u); } catch { return u; } };
 const EPUB_MIME = 'application/epub+zip';
 
 interface Chapter { title: string; blocks: PMNode[]; file: string }
@@ -114,7 +115,8 @@ export async function exportEpubBytes(doc: PMNode, opts: ExportOptions): Promise
     if (!d) { if (/^https?:/i.test(src)) remote = true; return src; }
     let img = images.get(src);
     if (!img) {
-      const mime = sniffImageMime(d.bytes) || d.mime;
+      // The data URL's own type is document data: keep it only when it is a plain image type.
+      const mime = sniffImageMime(d.bytes) || (/^image\/[\w.+-]+$/.test(d.mime) ? d.mime : 'application/octet-stream');
       const n = images.size + 1;
       img = { path: `images/image${n}.${extForMime(mime)}`, bytes: d.bytes, mime, id: `img${n}` };
       images.set(src, img);
@@ -159,14 +161,14 @@ export async function exportEpubBytes(doc: PMNode, opts: ExportOptions): Promise
     p.comments ? `<dc:description>${x(p.comments)}</dc:description>` : '',
     p.company ? `<dc:publisher>${x(p.company)}</dc:publisher>` : '',
     `<meta property="dcterms:modified">${isoNow()}</meta>`,
-    '<meta name="generator" content="QuillForge"/>',
+    '<meta name="generator" content="QuillPen"/>',
   ].filter(Boolean).join('\n    ');
   const manifest = [
     '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
     '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>',
     '<item id="css" href="styles.css" media-type="text/css"/>',
     ...chapterXml.map((c, i) => `<item id="chapter${i + 1}" href="${c.file}" media-type="application/xhtml+xml"${c.remote ? ' properties="remote-resources"' : ''}/>`),
-    ...[...images.values()].map((im) => `<item id="${im.id}" href="${im.path}" media-type="${im.mime}"/>`),
+    ...[...images.values()].map((im) => `<item id="${im.id}" href="${im.path}" media-type="${x(im.mime)}"/>`),
   ].join('\n    ');
   const spine = chapterXml.map((_c, i) => `<itemref idref="chapter${i + 1}"/>`).join('\n    ');
   const opf = `<?xml version="1.0" encoding="UTF-8"?>
@@ -242,11 +244,11 @@ export async function importEpub(data: ArrayBuffer, name: string): Promise<PMNod
   let zip: JSZip;
   try { zip = await JSZip.loadAsync(data); } catch { return finishDoc([], settings); }
   const read = async (p: string): Promise<string | null> => {
-    const f = zip.file(p) || zip.file(decodeURIComponent(p));
+    const f = zip.file(p) || zip.file(safeDecode(p));
     return f ? f.async('string') : null;
   };
   const readBytes = async (p: string): Promise<Uint8Array | null> => {
-    const f = zip.file(p) || zip.file(decodeURIComponent(p));
+    const f = zip.file(p) || zip.file(safeDecode(p));
     return f ? f.async('uint8array') : null;
   };
   try {
@@ -277,7 +279,7 @@ export async function importEpub(data: ArrayBuffer, name: string): Promise<PMNod
     let spineIds = byLocal(opf, 'itemref').map((r) => r.getAttribute('idref') || '');
     if (!spineIds.length) spineIds = [...manifest.entries()].filter(([, v]) => /html/.test(v.type)).map(([k]) => k);
     const files = spineIds.map((sid) => manifest.get(sid)).filter((m): m is { href: string; type: string; props: string } => !!m && /html|xml/.test(m.type) && !/\bnav\b/.test(m.props))
-      .map((m) => resolvePath(base, decodeURIComponent(m.href.split('#')[0])));
+      .map((m) => resolvePath(base, safeDecode(m.href.split('#')[0])));
     const index = new Map(files.map((f, i) => [f, i]));
     const parts: string[] = [];
     const imageCache = new Map<string, string>();
@@ -302,7 +304,7 @@ export async function importEpub(data: ArrayBuffer, name: string): Promise<PMNod
           const [file, frag] = href.split('#');
           if (!file) el.setAttribute('href', `#${pre}${frag || ''}`);
           else {
-            const target = index.get(resolvePath(dir, decodeURIComponent(file)));
+            const target = index.get(resolvePath(dir, safeDecode(file)));
             if (target != null) el.setAttribute('href', frag ? `#c${target + 1}-${frag}` : `#c${target + 1}-top`);
           }
         }
@@ -312,7 +314,7 @@ export async function importEpub(data: ArrayBuffer, name: string): Promise<PMNod
       for (const im of imgs) {
         const ref = im.localName === 'img' ? im.getAttribute('src') : (im.getAttribute('xlink:href') || im.getAttributeNS('http://www.w3.org/1999/xlink', 'href') || im.getAttribute('href'));
         if (!ref || /^(data|https?):/i.test(ref)) continue;
-        const p = resolvePath(dir, decodeURIComponent(ref));
+        const p = resolvePath(dir, safeDecode(ref));
         let url = imageCache.get(p);
         if (!url) {
           const bytes = await readBytes(p);
@@ -331,7 +333,8 @@ export async function importEpub(data: ArrayBuffer, name: string): Promise<PMNod
         }
       }
       let html = d.contentType === 'text/html' ? (body as HTMLElement).innerHTML : Array.from(body.childNodes).map((n) => ser.serializeToString(n)).join('');
-      html = html.replace(/ xmlns(:\w+)?="[^"]*"/g, '');
+      // Namespace declarations come off the tags only: the same characters in text are content.
+      html = html.replace(/<[^>]*>/g, (tag) => tag.replace(/ xmlns(:\w+)?="[^"]*"/g, ''));
       parts.push(`<div class="epub-chapter" id="${pre}top">${html}</div>`);
     }
     const merged = parseHtmlDocument(`<!DOCTYPE html><html><body>${parts.join('\n')}</body></html>`);

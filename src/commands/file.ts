@@ -4,7 +4,7 @@ import type { App, DocTab } from '../app';
 import type { Node as PMNode } from 'prosemirror-model';
 import { schema } from '../editor/schema';
 import { normalizeSettings } from '../editor/settings';
-import { FORMATS, formatById, formatForName, importFile, exportFile } from '../io';
+import { FORMATS, formatById, formatForName, importFile, exportFile, sniff } from '../io';
 import { openDocument, saveAs, writeBack, printDocument, shareFile, readUri, openExternal, OPEN_ACCEPT, OPEN_MIMES } from '../platform/native';
 import { openDialog, toast, confirmDialog, choiceDialog, alertDialog } from '../ui/dialog';
 import { kvGet, kvSet, kvKeys, kvDel } from '../util/store';
@@ -14,11 +14,38 @@ import { listChanges, resolveChanges } from '../editor/plugins/trackChanges';
 import { DEFAULT_AUTOFORMAT, DEFAULT_REPLACEMENTS } from '../editor/autoformat';
 import { commandCount } from './registry';
 import { h } from '../ui/dom';
+import { showRecoveryReport, showManualRecovery, recoverySummary } from '../ui/recovery';
+import { SPELL_DIALECTS } from '../proof/proofing';
+import { refuseIfProtected } from './review';
+import { sanitizePrefs } from '../prefs';
 
 const N = schema.nodes;
 
+/** Key for a document's cached copy, Recent entry, snapshots and AI notes. Native URIs are unique and lasting;
+ *  other files (the web build, whose File System Access handles last one session) keep the key they opened with. */
 export function docKey(tab: DocTab): string {
-  return tab.uri || `local:${tab.fileName || tab.title}`;
+  return (tab.uri && !tab.uri.startsWith('fsa:') ? tab.uri : '') || tab.key || `doc:${tab.id}`;
+}
+
+/** Key for a file opened without a URI: its name plus a fingerprint of its bytes (same-named files differ). */
+export function localKey(name: string, data: ArrayBuffer): string {
+  const b = new Uint8Array(data);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < b.length; i++) h = Math.imul(h ^ b[i], 0x01000193);
+  return `doc:${name}:${b.length.toString(36)}.${(h >>> 0).toString(36)}`;
+}
+
+/** The key of a Recent file last opened or saved here with exactly these bytes, so a file saved and opened
+ *  again keeps its versions and notes. */
+async function knownKey(app: App, name: string, data: ArrayBuffer): Promise<string | null> {
+  const b = new Uint8Array(data);
+  for (const r of app.prefs.recent) {
+    if (r.name !== name || !r.key.startsWith('doc:')) continue;
+    const c = await kvGet('file:' + r.key);
+    const d = c?.data instanceof ArrayBuffer ? new Uint8Array(c.data) : null;
+    if (d && d.length === b.length && d.every((x, i) => x === b[i])) return r.key;
+  }
+  return null;
 }
 
 function isPristine(tab: DocTab): boolean {
@@ -26,11 +53,42 @@ function isPristine(tab: DocTab): boolean {
   return !tab.dirty && !tab.uri && d.childCount === 1 && d.firstChild!.content.size === 0;
 }
 
-export async function openBuffer(app: App, data: ArrayBuffer, name: string, uri: string | null): Promise<DocTab | null> {
+async function openRecoveredText(app: App, text: string, name: string): Promise<void> {
+  const { textToDoc } = await import('../io/recover');
+  const base = name.replace(/\.[^.]+$/, '');
+  const tab = app.createTab(textToDoc(text, base), { title: `${base} (Recovered text)`, fileName: `${base} (Recovered text).docx`, format: 'docx', uri: null });
+  tab.dirty = true;
+  app.activate(tab);
+}
+
+export async function openBuffer(app: App, data: ArrayBuffer, name: string, uri: string | null, opts: { repair?: boolean; textOnly?: boolean; key?: string } = {}): Promise<DocTab | null> {
   try {
-    const { doc, format } = await importFile(data, name);
+    if (opts.repair || opts.textOnly) toast(opts.textOnly ? `Recovering text from ${name}…` : `Repairing ${name}…`);
+    // Identify the file by its content; the extension only breaks ties.
+    const sniffed = sniff(data, name);
+    if (!opts.repair && !opts.textOnly) {
+      if (sniffed.category === 'spreadsheet' || sniffed.category === 'presentation' || sniffed.category === 'email') {
+        const { chooseCrossOpen } = await import('../ui/crossOpen');
+        const c = await chooseCrossOpen(sniffed, { name, data, uri }, !!formatById(sniffed.format)?.canImport);
+        if (c !== 'import') return null;
+      } else if (sniffed.category === 'unknown' && sniffed.format !== 'unknown') {
+        const why = sniffed.format === 'ooxml-encrypted' ? ' It is password-protected: open it with the password in the program that made it, remove the password and save it again.' : '';
+        const c = await choiceDialog('Not a Document', `${name} is ${/^[aeiou]/i.test(sniffed.label) ? 'an' : 'a'} ${sniffed.label}, not a document.${why}`, ['Recover any text it holds']);
+        if (c !== 0) return null;
+        opts = { ...opts, textOnly: true };
+      }
+    }
+    const { doc, format, recovery, note } = await importFile(data, name, { repair: opts.repair, textOnly: opts.textOnly, sniffed });
+    if (recovery && recovery.mode === 'text' && recovery.bestKey === 'strings' && !opts.textOnly) {
+      const go = await confirmDialog('Only Text Fragments Recovered', `${name} is too badly damaged to open normally. Only loose text fragments (${recovery.bestText.length.toLocaleString()} characters) could be recovered. Open them in a new document?`, 'Open fragments', 'Cancel');
+      if (!go) { void showRecoveryReport(recovery); return null; }
+    }
     const cur = app.tab;
-    const meta = { title: name.replace(/\.[^.]+$/, ''), fileName: name, format: format.id, uri };
+    const base = name.replace(/\.[^.]+$/, '');
+    // A recovered document never writes back over the damaged original: Save asks for a new name.
+    const meta = recovery
+      ? { title: `${base} (Recovered)`, fileName: `${base} (Recovered).${format.ext[0] === 'doc' ? 'docx' : format.ext[0]}`, format: format.canExport ? format.id : 'docx', uri: null, key: '' }
+      : { title: base, fileName: name, format: format.id, uri, key: uri && !uri.startsWith('fsa:') ? '' : opts.key || (await knownKey(app, name, data)) || localKey(name, data) };
     let tab: DocTab;
     if (cur && isPristine(cur)) {
       Object.assign(cur, meta);
@@ -39,10 +97,18 @@ export async function openBuffer(app: App, data: ArrayBuffer, name: string, uri:
       tab = cur;
       app.ui.tabsChanged();
     } else tab = app.createTab(doc, meta);
-    addRecent(app, tab);
-    await kvSet('file:' + docKey(tab), { name, data, uri, when: Date.now() });
+    tab.recovery = recovery || null;
+    if (recovery) tab.dirty = true;
+    else {
+      addRecent(app, tab);
+      await kvSet('file:' + docKey(tab), { name, data, uri, when: Date.now() });
+    }
     app.activate(tab);
-    toast(`Opened ${name}`);
+    if (recovery) {
+      toast(`${name} was damaged. ${recoverySummary(recovery)}`, { action: 'Details', onAction: () => app.exec('file.recoveryReport'), ms: 9000 });
+    } else if (note) toast(`${note} ${format.canExport ? '' : 'Saving makes a new copy in a current format.'}`.trim(), { ms: 7000 });
+    else if (!format.canExport) toast(`Opened ${name} (${sniffed.label}). Saving makes a new copy in a current format.`, { ms: 6000 });
+    else toast(`Opened ${name}`);
     return tab;
   } catch (e: any) {
     console.error(e);
@@ -60,8 +126,8 @@ function addRecent(app: App, tab: DocTab) {
   app.savePrefs();
 }
 
-async function snapshot(app: App, tab: DocTab, label: string) {
-  await kvSet(`snap:${docKey(tab)}:${Date.now()}`, { label, json: tab.view.state.doc.toJSON(), words: countWords(docText(tab.view.state.doc)), when: Date.now(), name: tab.displayName });
+async function snapshot(app: App, tab: DocTab, label: string, doc = tab.view.state.doc) {
+  await kvSet(`snap:${docKey(tab)}:${Date.now()}`, { label, json: doc.toJSON(), words: countWords(docText(doc)), when: Date.now(), name: tab.displayName });
 }
 
 export async function saveTab(app: App, tab: DocTab, opts: { as?: boolean; format?: string; copy?: boolean } = {}): Promise<boolean> {
@@ -78,31 +144,32 @@ export async function saveTab(app: App, tab: DocTab, opts: { as?: boolean; forma
   const base = (tab.fileName || tab.title || 'Document').replace(/\.[^.]+$/, '');
   const name = `${base}.${formatById(format)!.ext[0]}`;
   app.updateFields(tab);
-  const blob = await exportFile(tab.view.state.doc, format, { fileName: name, author: s.properties.author || app.prefs.author, title: s.properties.title || base });
+  const doc = tab.view.state.doc; // the version written; edits made while saving stay unsaved
+  const blob = await exportFile(doc, format, { fileName: name, author: s.properties.author || app.prefs.author, title: s.properties.title || base });
   if (!opts.as && !opts.copy && tab.uri && format === tab.format) {
     try {
-      if (await writeBack(tab.uri, blob)) { markSaved(app, tab); toast(`Saved ${tab.displayName}`); await snapshot(app, tab, 'Saved'); return true; }
+      if (await writeBack(tab.uri, blob)) { markSaved(app, tab, doc); toast(`Saved ${tab.displayName}`); await snapshot(app, tab, 'Saved', doc); return true; }
     } catch (e) { console.warn(e); }
   }
   const r = await saveAs(blob, name);
   if (!r) return false;
   if (!opts.copy) {
     tab.fileName = r.name; tab.title = r.name.replace(/\.[^.]+$/, ''); tab.format = formatForName(r.name)?.id || format; tab.uri = r.uri;
-    markSaved(app, tab);
+    markSaved(app, tab, doc);
     addRecent(app, tab);
     await kvSet('file:' + docKey(tab), { name: r.name, data: await blob.arrayBuffer(), uri: r.uri, when: Date.now() });
-    await snapshot(app, tab, 'Saved');
+    await snapshot(app, tab, 'Saved', doc);
   }
   toast(`Saved ${r.name}`);
   return true;
 }
 
-function markSaved(app: App, tab: DocTab) {
-  tab.dirty = false;
+function markSaved(app: App, tab: DocTab, doc: PMNode) {
   tab.saved = Date.now();
-  kvDel('draft:' + tab.id);
+  // Edits made while the file was being written are not in it: the tab stays unsaved and keeps its draft.
+  if (tab.view.state.doc.eq(doc)) { tab.dirty = false; kvDel('draft:' + tab.id); } else app.scheduleAutosave();
   app.ui.tabsChanged();
-  document.title = `${tab.displayName} – QuillForge`;
+  document.title = `${tab.displayName}${tab.dirty ? ' •' : ''} – QuillPen`;
 }
 
 function hasRichContent(doc: PMNode): boolean {
@@ -132,7 +199,7 @@ def([
       }
       if (prev) { app.ui.hideBackstage(); app.focus(); return; }
       const tab = app.createTab();
-      try { const d = JSON.parse(localStorage.getItem('quillforge.defaultDesign') || 'null'); if (d) app.updateSettings((s) => { s.styleSet = d.styleSet; s.theme = d.theme; s.styles = d.styles; }, tab); } catch { /* */ }
+      try { const d = JSON.parse(localStorage.getItem('quillpen.defaultDesign') || 'null'); if (d) app.updateSettings((s) => { s.styleSet = d.styleSet; s.theme = d.theme; s.styles = d.styles; }, tab); } catch { /* */ }
       app.ui.hideBackstage();
     },
   },
@@ -147,6 +214,41 @@ def([
     },
   },
   {
+    id: 'file.openRepair', label: 'Open and Repair…', icon: 'healing', tab: 'Backstage', group: 'Open', noRecord: true,
+    tip: 'Open a damaged document: rebuild its package from raw bytes, repair its XML, and show what was recovered',
+    keywords: 'corrupt damaged recover fix broken',
+    run: async (app) => {
+      const f = await openDocument('*/*', ['*/*']);
+      if (!f) return;
+      const tab = await openBuffer(app, f.data, f.name, f.uri, { repair: true });
+      app.ui.hideBackstage();
+      if (tab?.recovery) await showRecoveryReport(tab.recovery, { openText: (t) => openRecoveredText(app, t, f.name) });
+    },
+  },
+  {
+    id: 'file.recoverText', label: 'Recover Text from Any File…', icon: 'text_snippet', tab: 'Backstage', group: 'Open', noRecord: true,
+    tip: 'Extract readable text from any file: damaged documents, .doc/.wbk/.asd/.tmp files, or unknown data',
+    keywords: 'corrupt salvage strings extract',
+    run: async (app) => {
+      const f = await openDocument('*/*', ['*/*']);
+      if (!f) return;
+      const tab = await openBuffer(app, f.data, f.name, null, { textOnly: true });
+      app.ui.hideBackstage();
+      if (tab?.recovery) toast(recoverySummary(tab.recovery), { action: 'Details', onAction: () => app.exec('file.recoveryReport') });
+    },
+  },
+  {
+    id: 'file.recoveryReport', label: 'Recovery Report', icon: 'fact_check', tab: 'Backstage', group: 'Open', noRecord: true,
+    tip: 'Show how the current document was recovered',
+    isEnabled: (app) => !!app.tab?.recovery,
+    run: async (app) => {
+      const r = app.tab?.recovery;
+      if (!r) { toast('This document was not recovered from a damaged file.'); return; }
+      await showRecoveryReport(r, { openText: (t) => openRecoveredText(app, t, r.fileName) });
+    },
+  },
+  { id: 'file.recoveryHelp', label: 'Manual Recovery Options', icon: 'support', tab: 'Backstage', group: 'Open', noRecord: true, tip: 'AutoRecover locations, version history, and other ways to get a lost document back', run: () => showManualRecovery() },
+  {
     id: 'file.openRecent', label: 'Open Recent', icon: 'history', tab: 'Backstage', group: 'Open', kind: 'menu', noRecord: true,
     run: async (app, key) => {
       if (!key) return app.ui.showBackstage('open');
@@ -157,7 +259,10 @@ def([
       let f = rec.uri ? await readUri(rec.uri) : null;
       if (!f) { const cached = await kvGet('file:' + key); if (cached) f = { name: cached.name, data: cached.data, uri: cached.uri }; }
       if (!f) { toast('That file is no longer available. Use Open to locate it.'); return; }
-      await openBuffer(app, f.data, f.name, f.uri);
+      // Keep the entry's key (its snapshots and notes); old name-only keys collided, so those get a new one.
+      const legacy = key.startsWith('local:');
+      const tab = await openBuffer(app, f.data, f.name, f.uri, { key: legacy ? undefined : key });
+      if (tab && legacy && docKey(tab) !== key) { app.prefs.recent = app.prefs.recent.filter((r) => r.key !== key); app.savePrefs(); }
       app.ui.hideBackstage();
     },
     menu: (app) => app.prefs.recent.slice(0, 12).map((r) => ({ id: 'file.openRecent', arg: r.key, label: (r.pinned ? '📌 ' : '') + r.name })),
@@ -170,7 +275,7 @@ def([
     id: 'file.saveAsFormat', label: 'Save As Format', icon: 'save_as', tab: 'Backstage', group: 'Save', internal: true, noRecord: true,
     run: async (app, format: string) => {
       if (format === 'pdf') return app.exec('file.exportPdf');
-      if (format === 'qfde') return app.exec('file.encrypt');
+      if (format === 'qpde') return app.exec('file.encrypt');
       await saveTab(app, app.tab, { as: true, format });
       app.ui.hideBackstage();
     },
@@ -278,6 +383,7 @@ def([
   {
     id: 'file.inspect', label: 'Inspect Document…', icon: 'policy', tab: 'Backstage', group: 'Info', noRecord: true,
     run: async (app) => {
+      if (refuseIfProtected(app)) return;
       const st = app.state;
       const s = app.settings;
       let hidden = 0, ink = 0;
@@ -320,25 +426,25 @@ def([
   {
     id: 'file.encrypt', label: 'Encrypt with Password…', icon: 'enhanced_encryption', tab: 'Backstage', group: 'Info', noRecord: true,
     run: async (app) => {
-      const r = await openDialog({ title: 'Encrypt Document', help: 'Saves an AES-256-GCM encrypted QuillForge file (.qfde). If you lose the password, the file cannot be recovered.', fields: [{ key: 'p1', label: 'Password', type: 'password' }, { key: 'p2', label: 'Confirm', type: 'password' }], validate: (x) => (!x.p1 ? 'Enter a password.' : x.p1 !== x.p2 ? 'Passwords do not match.' : null) });
+      const r = await openDialog({ title: 'Encrypt Document', help: 'Saves an AES-256-GCM encrypted QuillPen file (.qpde). If you lose the password, the file cannot be recovered.', fields: [{ key: 'p1', label: 'Password', type: 'password' }, { key: 'p2', label: 'Confirm', type: 'password' }], validate: (x) => (!x.p1 ? 'Enter a password.' : x.p1 !== x.p2 ? 'Passwords do not match.' : null) });
       if (!r) return;
       const { encryptJson } = await import('../util/crypto');
       const data = await encryptJson(app.state.doc.toJSON(), r.p1);
-      const name = `${app.tab.title}.qfde`;
+      const name = `${app.tab.title}.qpde`;
       await saveAs(new Blob([data as BlobPart], { type: 'application/octet-stream' }), name);
     },
   },
   {
     id: 'file.openEncrypted', label: 'Open Encrypted Document…', icon: 'lock_open', tab: 'Backstage', group: 'Open', noRecord: true,
     run: async (app) => {
-      const f = await openDocument('.qfde', ['application/octet-stream', '*/*']);
+      const f = await openDocument('.qpde,.qfde', ['application/octet-stream', '*/*']);
       if (!f) return;
       const r = await openDialog({ title: 'Password', fields: [{ key: 'p', label: `Password for ${f.name}`, type: 'password', autofocus: true }] });
       if (!r) return;
       try {
         const { decryptJson } = await import('../util/crypto');
         const json = await decryptJson(f.data, r.p);
-        app.createTab(schema.nodeFromJSON(json), { title: f.name.replace(/\.qfde$/, ''), fileName: f.name.replace(/\.qfde$/, '.qfd'), format: 'qfd' });
+        app.createTab(schema.nodeFromJSON(json), { title: f.name.replace(/\.(qpde|qfde)$/, ''), fileName: f.name.replace(/\.qpde$/, '.qpd'), format: 'qpd' });
       } catch { toast('Wrong password or damaged file.'); }
     },
   },
@@ -353,7 +459,7 @@ def([
       const r = await openDialog({ title: 'Document Recovery', fields: [{ key: 'k', label: 'Available drafts', type: 'list', multiple: true, rows: 8, options: drafts.map(({ k, d }) => ({ value: k, label: `${d.fileName || d.title} — ${new Date(d.time).toLocaleString()}` })), value: keys }], buttons: [{ label: 'Discard All', onClick: async (_v, ctl) => { for (const k of keys) await kvDel(k); ctl.close(); toast('Drafts discarded'); } }], ok: 'Recover' });
       if (!r?.k?.length) return;
       for (const { k, d } of drafts.filter((x) => r.k.includes(x.k))) {
-        app.createTab(schema.nodeFromJSON(d.json), { title: d.title, fileName: d.fileName, format: d.format, uri: d.uri, dirty: true } as any);
+        app.createTab(schema.nodeFromJSON(d.json), { title: d.title, fileName: d.fileName, format: d.format, uri: d.uri, key: d.key || '', dirty: true } as any);
         await kvDel(k);
       }
     },
@@ -366,7 +472,7 @@ def([
     id: 'file.options', label: 'Options…', icon: 'settings', tab: 'Backstage', group: 'Options', popular: true, noRecord: true,
     run: async (app) => {
       const p = app.prefs;
-      const r = await openDialog({ title: 'QuillForge Options', wide: true, fields: [
+      const r = await openDialog({ title: 'QuillPen Options', wide: true, fields: [
         { key: 'h1', type: 'heading', label: 'General' },
         { key: 'author', label: 'User name', type: 'text', value: p.author, half: true },
         { key: 'initials', label: 'Initials', type: 'text', value: p.initials, half: true },
@@ -385,6 +491,7 @@ def([
         { key: 'h3', type: 'heading', label: 'Proofing & Editing' },
         { key: 'spellcheck', label: 'Check spelling as you type', type: 'checkbox', value: p.spellcheck, half: true },
         { key: 'grammar', label: 'Mark grammar errors', type: 'checkbox', value: p.grammar, half: true },
+        { key: 'spellDialect', label: 'English spelling', type: 'select', options: SPELL_DIALECTS, value: p.spellDialect || 'any' },
         { key: 'nativeSpellcheck', label: 'Also use the keyboard’s spell checker', type: 'checkbox', value: p.nativeSpellcheck, half: true },
         { key: 'wordCompletion', label: 'Word completion', type: 'checkbox', value: p.wordCompletion, half: true },
         { key: 'slashMenu', label: 'Type “/” for the command menu', type: 'checkbox', value: p.slashMenu, half: true },
@@ -402,7 +509,7 @@ def([
       Object.assign(p, {
         author: r.author || 'Author', initials: r.initials || (r.author || 'A')[0], theme: r.theme, units: r.units, defaultView: r.defaultView, uiScale: parseFloat(r.uiScale),
         miniToolbar: r.miniToolbar, qatPosition: r.qatBottom ? 'bottom' : 'top', qatLabels: r.qatLabels, autosave: r.autosave, autosaveSeconds: Math.max(3, r.autosaveSeconds || 10),
-        defaultSaveFormat: r.defaultSaveFormat, confirmClose: r.confirmClose, spellcheck: r.spellcheck, grammar: r.grammar, nativeSpellcheck: r.nativeSpellcheck,
+        defaultSaveFormat: r.defaultSaveFormat, confirmClose: r.confirmClose, spellcheck: r.spellcheck, grammar: r.grammar, nativeSpellcheck: r.nativeSpellcheck, spellDialect: r.spellDialect || 'any',
         wordCompletion: r.wordCompletion, slashMenu: r.slashMenu, pasteDefault: r.pasteDefault, clipboardHistory: r.clipboardHistory || 24,
       });
       app.savePrefs();
@@ -447,7 +554,20 @@ def([
     run: async (app) => {
       const r = await openDialog({ title: 'Settings Transfer', help: 'Copy this text to back up your Quick Access Bar, custom tabs, shortcuts, macros, building blocks, AutoCorrect and preferences. Paste settings text here and choose Import to restore.', fields: [{ key: 'json', label: 'Settings (JSON)', type: 'textarea', rows: 12, value: JSON.stringify({ ...app.prefs, recent: [] }, null, 1) }], ok: 'Import', buttons: [{ label: 'Copy', onClick: (x) => { navigator.clipboard?.writeText(x.json); toast('Copied'); } }] });
       if (!r) return;
-      try { const p = JSON.parse(r.json); Object.assign(app.prefs, p, { recent: app.prefs.recent }); app.savePrefs(); app.ui.applyPrefs(); app.ui.rebuild(); toast('Settings imported'); } catch { toast('That is not valid settings JSON.'); }
+      let p: unknown;
+      try { p = JSON.parse(r.json); } catch { /* reported below */ }
+      if (!p || typeof p !== 'object' || Array.isArray(p)) { toast('That is not valid settings JSON.'); return; }
+      // Only well-formed values are taken, and nothing is stored until the interface has rebuilt with them.
+      const before = JSON.parse(JSON.stringify(app.prefs));
+      const s = sanitizePrefs(p);
+      Object.assign(app.prefs, s, { autoformat: { ...app.prefs.autoformat, ...(s.autoformat || {}) }, recent: app.prefs.recent });
+      try { app.ui.applyPrefs(); app.ui.rebuild(); } catch (e: any) {
+        Object.assign(app.prefs, before); app.ui.applyPrefs(); app.ui.rebuild();
+        toast(`These settings could not be applied: ${e?.message || e}`);
+        return;
+      }
+      app.savePrefs();
+      toast('Settings imported');
     },
   },
   { id: 'file.resetCustomizations', label: 'Reset All Customizations', icon: 'restart_alt', tab: 'Backstage', group: 'Options', noRecord: true, run: async (app) => { if (!(await confirmDialog('Reset', 'Reset the Quick Access Bar, custom tabs and keyboard shortcuts to defaults?'))) return; const { DEFAULT_QAT } = await import('../prefs'); app.prefs.qat = [...DEFAULT_QAT]; app.prefs.customTabs = []; app.prefs.hiddenTabs = []; app.prefs.keymap = {}; app.savePrefs(); app.ui.rebuild(); } },
@@ -459,14 +579,22 @@ def([
   { id: 'help.commands', label: 'Command Reference', icon: 'menu_book', tab: 'Help', group: 'Help', noRecord: true, run: (app) => app.ui.showCommandReference() },
   { id: 'help.tour', label: 'Show the Quick Tour', icon: 'tour', tab: 'Help', group: 'Help', noRecord: true, run: (app) => app.ui.tour() },
   {
-    id: 'help.about', label: 'About QuillForge', icon: 'info', tab: 'Help', group: 'Help', noRecord: true,
-    run: () => alertDialog('About QuillForge', h('div', { class: 'qf-msg' },
-      h('p', null, h('b', null, 'QuillForge 0.1.0'), ' — an original, open-source word processor (MIT License).'),
+    id: 'help.about', label: 'About QuillPen', icon: 'info', tab: 'Help', group: 'Help', noRecord: true,
+    run: () => alertDialog('About QuillPen', h('div', { class: 'qf-msg' },
+      h('p', null, h('b', null, `QuillPen ${__APP_VERSION__}`), ' — an original, open-source word processor (MIT License).'),
       h('p', null, `${commandCount()} commands, every one available to the Quick Access Bar, custom tabs, keyboard shortcuts, macros and command search.`),
-      h('p', null, 'QuillForge is not affiliated with, endorsed by, or sponsored by Microsoft, Google, Apple, Corel, The Document Foundation, or any other vendor. Product names are used only to describe file-format compatibility.'),
-      h('p', null, 'Open-source components: ProseMirror (MIT), prosemirror-tables (MIT), JSZip (MIT/GPLv3 dual), KaTeX (MIT), nspell (MIT) with the SCOWL en_US Hunspell dictionary (BSD-style), Material Symbols (Apache 2.0), Capacitor (MIT), fonts Carlito, Caladea, Gelasio, EB Garamond, Courier Prime, Libre Baskerville, Lato, Merriweather, Open Sans (SIL OFL 1.1) and Tinos, Arimo, Cousine (Apache 2.0).'),
+      h('p', null, 'QuillPen is not affiliated with, endorsed by, or sponsored by Microsoft, Google, Apple, Corel, The Document Foundation, or any other vendor. Product names are used only to describe file-format compatibility.'),
+      h('p', null, 'Open-source components: ProseMirror (MIT), prosemirror-tables (MIT), JSZip (MIT/GPLv3 dual), KaTeX (MIT), nspell (MIT) with the SCOWL American, British, Canadian and Australian English Hunspell dictionaries (MIT and BSD-style), Material Symbols (Apache 2.0), Capacitor (MIT), fonts Carlito, Caladea, Gelasio, EB Garamond, Courier Prime, Libre Baskerville, Lato, Merriweather, Open Sans (SIL OFL 1.1) and Tinos, Arimo, Cousine (Apache 2.0). Their licenses are in Help ▸ Third-Party Notices.'),
     )),
   },
-  { id: 'help.feedback', label: 'Report an Issue', icon: 'bug_report', tab: 'Help', group: 'Help', noRecord: true, run: () => openExternal('https://github.com/socrtwo/QuillForge/issues') },
-  { id: 'help.whatsNew', label: 'What’s New', icon: 'new_releases', tab: 'Help', group: 'Help', noRecord: true, run: () => alertDialog('What’s New in 0.1', 'First release: full command library with a fully customizable Quick Access Bar and tabs, Print Layout pagination, DOCX/ODT/RTF/HTML/Markdown/EPUB/TXT, track changes, comments, references, mail merge, macros, and Android packaging.') },
+  {
+    id: 'help.notices', label: 'Third-Party Notices', icon: 'license', tab: 'Help', group: 'Help', noRecord: true,
+    run: async () => {
+      let text = '';
+      try { const r = await fetch('./third-party-notices.txt'); if (r.ok) text = await r.text(); } catch { /* offline web build without the file */ }
+      await alertDialog('Third-Party Notices', h('pre', { class: 'qf-notices' }, text || 'The notices file is missing from this build. The licenses are listed at https://github.com/socrtwo/QuillPen/blob/main/docs/LEGAL.md.'));
+    },
+  },
+  { id: 'help.feedback', label: 'Report an Issue', icon: 'bug_report', tab: 'Help', group: 'Help', noRecord: true, run: () => openExternal('https://github.com/socrtwo/QuillPen/issues') },
+  { id: 'help.whatsNew', label: 'What’s New', icon: 'new_releases', tab: 'Help', group: 'Help', noRecord: true, run: () => alertDialog('What’s New in 0.3', 'QuillPen now runs on Windows, macOS, Linux, Raspberry Pi OS, ChromeOS, iOS and the web as well as Android (see the Releases page). Review ▸ Spelling Dictionaries downloads free dictionaries for 90+ languages, verified and kept offline, checked with Hunspell. Desktop apps save straight back to your files and keep API keys in the system keychain; the web app works offline and can be installed.\nVersion 0.2.1: spelling accepts every variety of English, AI keeps the author’s variety, recovery fixes, and Help ▸ Third-Party Notices.\nVersion 0.2 added recovery of damaged documents (Word Recovery engine), the AI tab with 67 commands, a free on-device model and a setup wizard for AI providers, and Word 97–2003 .doc files. Version 0.1 introduced the full command library, customizable Quick Access Bar and tabs, Print Layout, DOCX/ODT/RTF/HTML/Markdown/EPUB/TXT, track changes, comments, references, mail merge and macros.') },
 ]);

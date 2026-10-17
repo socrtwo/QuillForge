@@ -1,5 +1,6 @@
 /** Minimal IndexedDB key-value store with a localStorage fallback. */
-const DB = 'quillforge';
+import { migrateIndexedDb } from './legacy';
+const DB = 'quillpen';
 const OS = 'kv';
 let dbp: Promise<IDBDatabase | null> | null = null;
 
@@ -9,7 +10,7 @@ function open(): Promise<IDBDatabase | null> {
     try {
       const req = indexedDB.open(DB, 1);
       req.onupgradeneeded = () => req.result.createObjectStore(OS);
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => { const db = req.result; void migrateIndexedDb(db, OS).finally(() => resolve(db)); };
       req.onerror = () => resolve(null);
     } catch {
       resolve(null);
