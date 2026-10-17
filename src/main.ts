@@ -22,7 +22,7 @@ installFonts();
 // command search and the customize lists. Not on the document itself or the sideways ribbon strips.
 installScrollCues({
   selector: ['.qf-menu', '.qf-dialog-body', '.qf-dialog-preview', 'select.qf-listbox', 'select[size]', '.qf-cmdlist', '.qf-pane-body', '.qf-ai-log', '.qf-ai-out',
-    '.qf-bs-nav', '.qf-bs-body', '.qf-palette-list', '.qf-symbol-grid', '.qf-dict-list', '.qf-notices'].join(', '),
+    '.qf-bs-nav', '.qf-bs-body', '.qf-palette-list', '.qf-symbol-grid', '.qf-dict-list', '.qf-notices', '.qf-ai-ens-text'].join(', '),
   ignore: '.qf-scroll',
 });
 (window as any).__qfSerializer = DOMSerializer.fromSchema(schema);
