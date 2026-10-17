@@ -1156,7 +1156,14 @@ class OdtReader {
     if (tb) {
       const blocks: PMNode[] = [];
       this.blocks(tb, blocks, { listDepth: 0, listStyle: null });
-      this.deferred.push(...blocks);
+      // A text frame becomes a text box with the frame's width, fill, border and wrap side.
+      const fs = this.style(att(el, 'draw', 'style-name'), 'graphic');
+      const g = fs?.graphic || {};
+      const hp = g['style:horizontal-pos'], wrapMode = g['style:wrap'];
+      const float = wrapMode === 'none' || wrapMode === 'run-through' ? 'none' : hp === 'right' ? 'right' : hp === 'left' || hp === 'from-left' ? 'left' : 'none';
+      const bg = toHexColor(g['fo:background-color']);
+      const border = g['fo:border'] && g['fo:border'] !== 'none' ? g['fo:border'] : null;
+      if (blocks.length) this.deferred.push(S.nodes.text_box.create({ width: w ? String(Math.round(w)) : null, float, bg, border }, blocks));
       return;
     }
     const images = elKids(el).filter((k) => qn(k) === 'draw:image');
@@ -1483,13 +1490,14 @@ class OdtReader {
         const st = this.style(att(c, 'table', 'style-name'), 'table-cell');
         const bg = st ? toHexColor(st.cell['fo:background-color']) : null;
         const va = st?.cell['style:vertical-align'];
+        const borders = st ? odfCellBorders(st.cell) : null;
         for (let k = 0; k < rep; k++) {
           const blocks: PMNode[] = [];
           this.blocks(c, blocks, { listDepth: 0, listStyle: null });
           const widths = Array.from({ length: colspan }, (_, j) => colWidths[col + j]);
           const colwidth = widths.every((w) => w) ? widths.map((w) => Math.round(w! / 0.75)) : null;
           cells.push((ri < headerRows ? S.nodes.table_header : S.nodes.table_cell).create(
-            { colspan, rowspan, colwidth, background: bg, valign: va && va !== 'top' && va !== 'automatic' ? va : null },
+            { colspan, rowspan, colwidth, background: bg, valign: va && va !== 'top' && va !== 'automatic' ? va : null, borders },
             blocks.length ? blocks : [para()],
           ));
           col += colspan;
@@ -1803,4 +1811,15 @@ export async function importFodt(data: ArrayBuffer, name: string): Promise<PMNod
 /** Build a document from already-parsed ODF parts (used by converters that translate older XML dialects to ODF). */
 export function odfPartsToDoc(parts: { content: Document; styles: Document | null; meta: Document | null; files: Map<string, Uint8Array> }): PMNode {
   return new OdtReader(parts).parse();
+}
+
+/** Cell borders from ODF table-cell properties (fo:border and per-side fo:border-*). */
+function odfCellBorders(cell: Record<string, string>): string | null {
+  const out: Record<string, string> = {};
+  const all = cell['fo:border'];
+  for (const side of ['top', 'right', 'bottom', 'left']) {
+    const v = cell[`fo:border-${side}`] ?? all;
+    if (v && v !== 'none' && !/^0(\.0+)?[a-z]*\b/.test(v)) out[side] = v.replace(/(\d*\.?\d+)(cm|mm|in)/, (m) => `${Math.max(0.25, Math.round((lengthToPt(m) || 0.5) * 100) / 100)}pt`);
+  }
+  return Object.keys(out).length ? JSON.stringify(out) : null;
 }

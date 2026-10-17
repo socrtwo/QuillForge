@@ -203,6 +203,14 @@ describe('Word 2003 XML, flat OPC and OOXML Strict', () => {
   });
 });
 
+describe('ODF fidelity (LibreOffice flat ODT)', () => {
+  it('keeps text frames as text boxes and cell borders', async () => {
+    const { s } = await open(fixture('rich.fodt'), 'rich.fodt');
+    expect(s.boxes).toBeGreaterThan(0);
+    expect(s.tables[0].borders).toBeGreaterThan(0);
+  });
+});
+
 // =============================================================================================
 
 describe('RTF fidelity (LibreOffice, Word and TextEdit RTF, RTFD)', () => {
