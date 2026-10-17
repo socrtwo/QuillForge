@@ -41,6 +41,10 @@ src/
     panes.ts              task panes (navigation, styles, find, comments, revisions, spelling, Reveal Codes…)
     dialog.ts             declarative dialog builder, menus, color pickers, toasts
   io/                     format converters: docx, odt/fodt, rtf, html, markdown, text, epub, native
+                          XML/archive/markup readers (see docs/FORMATS.md): wordml2003, flatopc, sxw,
+                          abiword, kword, pages (+ iwa), hwpx, fb2, docbook, rtfd (+ tiff), mhtml, latex,
+                          rst, textile, asciidoc, org, troff; sniff-b (content detection), encoding
+                          (text encoding detection), xml-read, runs, archive (gzip/tar)
     recover/              damaged-document recovery (Word Recovery port): fileid (S2 identifier), inflate
                           (ImmortalInflate + CRC + resync), salvage (ZIP scan, XML fixes/healing, extractors),
                           doc97 (OLE2 + FIB + piece table), index (pipeline, package rebuild, report)
