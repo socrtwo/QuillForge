@@ -1242,7 +1242,10 @@ export async function importWord6(data: ArrayBuffer, name: string): Promise<PMNo
 export async function importWord97(data: ArrayBuffer, name: string): Promise<PMNode> {
   const r = openWin(data, 8);
   void name;
-  return r.build();
+  const doc = r.build();
+  // The FIB promises text that the pieces did not deliver: damaged, let the recovery path try.
+  if (!doc.textContent.trim() && r.ccp.text > 2) throw new Error('No text could be read from the WordDocument stream');
+  return doc;
 }
 
 export async function importWord2(data: ArrayBuffer, name: string): Promise<PMNode> {

@@ -48,7 +48,15 @@ export const FORMATS: FormatDef[] = [
     id: 'doc', label: 'Word 97-2003 Document (.doc)', ext: ['doc', 'dot', 'wbk', 'asd'], mime: 'application/msword', canImport: true, canExport: false,
     import: async (d, n) => {
       // Formatted reader first; the text-only piece-table reader is the fallback for unusual files.
-      try { return await (await import('./legacy/word')).importWord97(d, n); } catch { return (await import('./recover')).importDoc97(d, n); }
+      const rec = await import('./recover');
+      try {
+        const doc = await (await import('./legacy/word')).importWord97(d, n);
+        // A formatted import that lost much of the piece-table text means unusual structures: keep the text instead.
+        const plain = (await import('./recover/doc97')).extractDoc97(new Uint8Array(d));
+        const want = plain && !plain.encrypted ? plain.main.replace(/\s+/g, '').length : 0;
+        if (want > 200 && doc.textContent.replace(/\s+/g, '').length < want * 0.6) return rec.importDoc97(d, n);
+        return doc;
+      } catch { return rec.importDoc97(d, n); }
     },
     fidelity: 'high',
     note: 'Text, character and paragraph formatting, styles, lists, tables, notes, pictures, headers and footers',
@@ -172,7 +180,8 @@ async function importRaw(data: ArrayBuffer, name: string, opts: ImportOptions, s
     return recover(e, false);
   }
   // A package that "opens" but yields nothing from a sizable file is usually damaged inside.
-  if (['docx', 'doc', 'odt', 'rtf', 'epub', 'fodt'].includes(fmt.id) && data.byteLength > 4096 && !doc.textContent.trim() && !hasAtoms(doc)) {
+  // (.doc runs its own checks: an empty main story there is a genuinely empty document.)
+  if (['docx', 'odt', 'rtf', 'epub', 'fodt'].includes(fmt.id) && data.byteLength > 4096 && !doc.textContent.trim() && !hasAtoms(doc)) {
     try {
       const r = await recover(null, true);
       if (r.doc.textContent.trim()) return r;

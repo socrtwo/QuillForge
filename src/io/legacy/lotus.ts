@@ -96,29 +96,35 @@ export function extractAmiProText(u8: Uint8Array): string {
  * give the run length minus one, ending with the record terminator 01 02.
  */
 export function wordProParagraphs(u8: Uint8Array): string[] {
-  const out: string[] = [];
   const n = u8.length;
-  for (let i = 16; i < n - 3; i++) {
+  // Prefix counts of control bytes, so "is this run printable" is O(1).
+  const ctrl = new Uint32Array(n + 1);
+  for (let i = 0; i < n; i++) ctrl[i + 1] = ctrl[i] + (u8[i] < 0x20 && u8[i] !== 0x09 ? 1 : 0);
+  const clean = (a: number, z: number) => ctrl[z] - ctrl[a] === 0;
+  // end[i]: where a valid chain of runs starting at i ends (just past its 01 02 terminator), else 0.
+  // Computed from the end of the file backwards, so the whole scan is linear.
+  const end = new Uint32Array(n + 1);
+  for (let i = n - 2; i >= 16; i--) {
     const c = u8[i];
     if (c < 0x40) continue;
-    let p = i, text = '', ok = false;
-    for (let guard = 0; guard < 400 && p < n; guard++) {
-      const code = u8[p];
-      if (code < 0x40) break;
-      const len = (code & 0x3f) + 1;
-      const run = u8.subarray(p + 1, p + 1 + len);
-      if (run.length < len) break;
-      const endsRecord = run[len - 2] === 0x01 && run[len - 1] === 0x02;
-      const body = endsRecord ? run.subarray(0, len - 2) : run;
-      // A run that holds an inline code (control byte) ends the decodable part of the record.
-      let printable = true;
-      for (const x of body) if (x < 0x20 && x !== 0x09) { printable = false; break; }
-      if (!printable) break;
-      text += decodeWin1252(body);
+    const len = (c & 0x3f) + 1, r = i + 1, z = r + len;
+    if (z > n) continue;
+    if (len >= 2 && u8[z - 2] === 0x01 && u8[z - 1] === 0x02) { if (clean(r, z - 2)) end[i] = z; }
+    else if (clean(r, z) && z < n && end[z]) end[i] = end[z];
+  }
+  const out: string[] = [];
+  for (let i = 16; i < n; i++) {
+    if (!end[i]) continue;
+    let text = '';
+    for (let p = i; p < end[i]; ) {
+      const len = (u8[p] & 0x3f) + 1;
+      const last = p + 1 + len === end[i];
+      text += decodeWin1252(u8.subarray(p + 1, p + 1 + len - (last ? 2 : 0)));
       p += 1 + len;
-      if (endsRecord) { ok = true; break; }
     }
-    if (ok && text.length >= 1 && /[\p{L}\p{N}]/u.test(text)) { out.push(text); i = p - 1; }
+    // Style and font names also sit in such records; keep runs that read like text.
+    const wordy = (text.match(/[\p{L}\p{N}\s.,;:'"!?()\-–—%&/]/gu) || []).length;
+    if (/[\p{L}\p{N}]/u.test(text) && wordy >= text.length * 0.85) { out.push(text); i = end[i] - 1; }
   }
   return out;
 }

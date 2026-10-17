@@ -523,6 +523,12 @@ const RULES: SniffRule[] = [
   }),
   R('latex', 'LaTeX document', DOC, ['tex', 'latex', 'ltx'], (c) => (!c.binary() && /\\documentclass|\\begin\{document\}/.test(c.text().slice(0, 8192)) ? 0.85 : 0)),
   R('man', 'troff / man page', DOC, ['man', 'ms', 'me', 'mm', 'roff', 't', '1', '2', '3', '4', '5', '6', '7', '8'], (c) => (!c.binary() && /^\.(TH|SH|PP|LP|NH|TL)\b/m.test(c.text().slice(0, 4096)) && (c.text().match(/^\.[A-Z]{1,2}\b/gm) || []).length > 3 ? 0.6 : 0)),
+  R('rtfd', 'RTFD document (zipped)', DOC, ['rtfd', 'zip'], (c) => (c.zip()?.find(/(^|\/)TXT\.rtf$/) ? 0.85 : 0)),
+  // Plain-text markup languages: recognized by extension (their importers add content rules).
+  R('rst', 'reStructuredText document', DOC, ['rst', 'rest']),
+  R('textile', 'Textile document', DOC, ['textile']),
+  R('asciidoc', 'AsciiDoc document', DOC, ['adoc', 'asciidoc', 'asc']),
+  R('org', 'Org mode document', DOC, ['org']),
   R('md', 'Markdown document', DOC, ['md', 'markdown', 'mdown', 'mkd', 'mkdn', 'txt.md'], (c) => {
     if (c.binary()) return 0;
     const t = c.text().slice(0, 8192);
