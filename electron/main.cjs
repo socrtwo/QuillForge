@@ -15,7 +15,13 @@ const { pathToFileURL, fileURLToPath } = require('node:url');
 const DIST = path.join(__dirname, '..', 'dist');
 const SCHEME = 'app';
 const ORIGIN = `${SCHEME}://quillforge`;
-const OPENABLE = ['docx', 'docm', 'dotx', 'dotm', 'doc', 'dot', 'wbk', 'asd', 'odt', 'ott', 'fodt', 'rtf', 'html', 'htm', 'md', 'markdown', 'txt', 'epub', 'qfd', 'qfde', 'json'];
+const OPENABLE = ['docx', 'docm', 'dotx', 'dotm', 'doc', 'dot', 'wbk', 'asd', 'odt', 'ott', 'fodt', 'rtf', 'html', 'htm', 'md', 'markdown', 'txt', 'epub', 'qfd', 'qfde', 'json',
+  // Legacy word processors (opened by content, so the extension is only a hint)
+  'wpd', 'wp', 'wp4', 'wp5', 'wp6', 'wpt', 'wps', 'wri', 'lwp', 'sam', 'mcw', 'cwk', 'wn', 'ws', 'ws4', 'ws5', 'ws6', 'ws7', 'xy', 'xyw', 'rft', 'dca', 'hwp',
+  // Spreadsheets, presentations and email (imported as documents, or handed to the sister apps)
+  'csv', 'tsv', 'xlsx', 'xls', 'ods', 'dbf', 'wk1', 'wks', 'pptx', 'ppt', 'odp', 'eml', 'emlx', 'mbox', 'mht', 'mhtml', 'msg',
+  // XML, archive and text-markup formats
+  'xml', 'wml', 'sxw', 'stw', 'abw', 'zabw', 'kwd', 'pages', 'hwpx', 'fb2', 'fbz', 'dbk', 'rtfd', 'tex', 'latex', 'rst', 'textile', 'adoc', 'asciidoc', 'org', 'man', 'roff'];
 
 protocol.registerSchemesAsPrivileged([{ scheme: SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 
@@ -47,19 +53,45 @@ function grantedPath(uri) {
   if (!grants.has(p)) throw new Error('QuillForge has no permission for this file; open it again.');
   return p;
 }
-const MIME = { docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', odt: 'application/vnd.oasis.opendocument.text', rtf: 'application/rtf', html: 'text/html', htm: 'text/html', md: 'text/markdown', txt: 'text/plain', epub: 'application/epub+zip', doc: 'application/msword', json: 'application/json' };
+const MIME = { csv: 'text/csv', eml: 'message/rfc822', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', odt: 'application/vnd.oasis.opendocument.text', rtf: 'application/rtf', html: 'text/html', htm: 'text/html', md: 'text/markdown', txt: 'text/plain', epub: 'application/epub+zip', doc: 'application/msword', json: 'application/json' };
 function fileResult(p) {
   const data = fs.readFileSync(p);
   const ext = path.extname(p).slice(1).toLowerCase();
   return { uri: pathToFileURL(p).href, name: path.basename(p), mime: MIME[ext] || 'application/octet-stream', data: data.toString('base64') };
 }
 function fileFromArgs(argv) {
+  // Any file the system hands over opens: the content, not the extension, decides how.
   for (const a of argv.slice(1)) {
     if (!a || a.startsWith('-')) continue;
-    const ext = path.extname(a).slice(1).toLowerCase();
-    if (OPENABLE.includes(ext) && fs.existsSync(a)) return path.resolve(a);
+    try { if (fs.statSync(a).isFile() && !/\.(asar|js|cjs|exe|app)$/i.test(a)) return path.resolve(a); } catch { /* not a file */ }
   }
   return null;
+}
+
+// ------------------------------------------------------------------------------------------
+// Sister apps (QuillGrid, QuillPost, QuillStage): open a file there when the system says that app
+// handles the file type.
+
+const SISTERS = { quillgrid: 'QuillGrid', quillpost: 'QuillPost', quillstage: 'QuillStage' };
+function run(cmd, args) {
+  try { return require('node:child_process').execFileSync(cmd, args, { encoding: 'utf8', timeout: 5000, windowsHide: true }).trim(); } catch { return ''; }
+}
+/** The application registered for a file, as a name the sister-app check can match. */
+function handlerFor(p) {
+  const ext = path.extname(p).toLowerCase();
+  if (process.platform === 'linux') {
+    const mime = run('xdg-mime', ['query', 'filetype', p]);
+    return mime ? run('xdg-mime', ['query', 'default', mime]) : '';
+  }
+  if (process.platform === 'win32') {
+    const user = run('reg', ['query', `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\${ext}\\UserChoice`, '/v', 'ProgId']);
+    return user || run('cmd', ['/c', 'assoc', ext]);
+  }
+  if (process.platform === 'darwin') {
+    // Launch Services: the default app's path for this file (empty when unknown).
+    return run('osascript', ['-l', 'JavaScript', '-e', `ObjC.import('AppKit'); var u = $.NSWorkspace.sharedWorkspace.URLForApplicationToOpenURL($.NSURL.fileURLWithPath(${JSON.stringify(p)})); u ? u.path.js : ''`]);
+  }
+  return '';
 }
 function openExternalFile(p) {
   grant(p);
@@ -167,6 +199,23 @@ function registerIpc() {
   });
   handle('stopLoopback', async () => stopLoop());
   handle('openExternal', async ({ url }) => { if (safeUrl(url)) await shell.openExternal(url); });
+  handle('openWith', async ({ app: id, uri, name, data }) => {
+    const label = SISTERS[id];
+    if (!label) throw new Error('Unknown app');
+    let p;
+    if (typeof uri === 'string' && uri.startsWith('file:')) p = grantedPath(uri);
+    else {
+      // A file without a path on disk (opened from the web build or a recovered copy): write a temporary copy.
+      const dir = path.join(app.getPath('temp'), 'quillforge-open');
+      fs.mkdirSync(dir, { recursive: true });
+      p = path.join(dir, path.basename(String(name || 'document')).replace(/[\\/:*?"<>|]/g, '_'));
+      fs.writeFileSync(p, Buffer.from(String(data || ''), 'base64'));
+    }
+    const handler = handlerFor(p);
+    if (!new RegExp(id, 'i').test(handler.replace(/\s+/g, ''))) return { ok: false, handler, app: label };
+    const err = await shell.openPath(p);
+    return err ? { ok: false, error: err, app: label } : { ok: true, app: label };
+  });
   handle('http', async ({ url, method, headers, data }) => {
     if (typeof url !== 'string' || !/^https:\/\//i.test(url)) throw new Error('Only https requests are allowed');
     const res = await net.fetch(url, { method: method || 'GET', headers: headers || {}, body: data == null ? undefined : typeof data === 'string' ? data : JSON.stringify(data) });

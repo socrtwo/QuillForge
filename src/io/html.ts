@@ -13,6 +13,8 @@
  * DOMParser.fromSchema(schema).
  */
 import { stripActiveContent, escHtml } from '../util/sanitize';
+import { decodeAuto } from './encoding';
+import { applyPageCss, extractHeaderFooter, inlineDocumentCss, moveBlockBackgrounds } from './html-extras';
 import { DOMParser as PMDOMParser, type Node as PMNode } from 'prosemirror-model';
 import { schema } from '../editor/schema';
 import { stylesCss } from '../editor/styles';
@@ -38,7 +40,7 @@ export function decodeHtmlBytes(data: ArrayBuffer): string {
   if (m) {
     try { return new TextDecoder(m[1].toLowerCase()).decode(u8); } catch { /* unknown label */ }
   }
-  return new TextDecoder('windows-1252').decode(u8);
+  return decodeAuto(u8);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -204,7 +206,7 @@ function convertFootnotes(root: Element): void {
       const st = styleOf(e);
       if (/footnote|endnote|rearnote/.test(et) || /\b(footnotes?|endnotes?|notes)\b/.test(cls) || st.includes('mso-element:footnote') || st.includes('mso-element:endnote') ||
         (e.tagName === 'ASIDE' && /note/.test(et + cls))) return e;
-      if (/^(_?ftn|_?edn|fn|footnote|endnote|note)[-_:]?\d+$/i.test(e.id || '')) return e;
+      if (/^(_?ftn|_?edn|fn|(?:sd)?footnote|(?:sd)?endnote|note)[-_:]?\d+(sym|anc)?$/i.test(e.id || '')) return e;
       e = e.parentElement;
     }
     return null;
@@ -216,7 +218,7 @@ function convertFootnotes(root: Element): void {
     const id = safeDecode((a.getAttribute('href') || '').slice(1));
     const et = (a.getAttribute('epub:type') || a.getAttribute('role') || '').toLowerCase();
     const cls = (a.getAttribute('class') || '').toLowerCase();
-    const looksRef = /noteref/.test(et) || /footnote-ref|fnref|noteref|footnote/.test(cls) || /^(_?ftn|_?edn|fn|footnote|endnote|note)[-_:]?\d+$/i.test(id) ||
+    const looksRef = /noteref/.test(et) || /footnote-ref|fnref|noteref|footnote/.test(cls) || /^(_?ftn|_?edn|fn|(?:sd)?footnote|(?:sd)?endnote|note)[-_:]?\d+(sym|anc)?$/i.test(id) ||
       (a.parentElement?.tagName === 'SUP') || !!a.querySelector('sup, .MsoFootnoteReference, .MsoEndnoteReference');
     if (!looksRef) continue;
     if (isNoteContainer(a)) continue; // a back-link inside the notes themselves
@@ -227,7 +229,7 @@ function convertFootnotes(root: Element): void {
     if (target.tagName === 'A' && !target.textContent?.trim().length) body = target.parentElement || target;
     const holder = target.closest('li, aside, div[id], p') || body;
     const container = isNoteContainer(holder) || (holder.tagName === 'LI' || holder.tagName === 'ASIDE' ? holder : null);
-    if (!container && !/^(_?ftn|_?edn|fn|footnote|endnote|note)/i.test(id)) continue;
+    if (!container && !/^(_?ftn|_?edn|fn|(?:sd)?footnote|(?:sd)?endnote|note)/i.test(id)) continue;
     const noteEl = holder.tagName === 'A' ? (holder.parentElement || holder) : holder;
     const clone = noteEl.cloneNode(true) as Element;
     // Strip back-links and labels.
@@ -641,9 +643,12 @@ export async function importHtml(data: ArrayBuffer, name: string, opts: CleanOpt
     if (meta('description')) settings.properties.comments = meta('description');
     if (meta('keywords')) settings.properties.keywords = meta('keywords');
     if (meta('subject')) settings.properties.subject = meta('subject');
-    const lang = d.documentElement.getAttribute('lang');
+    const lang = d.documentElement.getAttribute('lang') || d.body?.getAttribute('lang');
     if (lang) settings.language = lang;
+    applyPageCss(inlineDocumentCss(d), settings);
+    extractHeaderFooter(d, settings);
     cleanHtmlDom(d.body, opts);
+    moveBlockBackgrounds(d.body);
     blocks = normalizeImportedFormatting(domToBlocks(d.body), settings, null);
   } catch { /* fall through with what we have */ }
   void name;

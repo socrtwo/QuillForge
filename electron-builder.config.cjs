@@ -23,6 +23,12 @@ module.exports = {
     { ext: 'rtf', name: 'Rich Text Document', role: 'Editor', mimeType: 'application/rtf' },
     { ext: 'doc', name: 'Word 97-2003 Document', role: 'Viewer', mimeType: 'application/msword' },
     { ext: 'qfd', name: 'QuillForge Document', role: 'Editor' },
+    { ext: ['wpd', 'wp5', 'wp6'], name: 'WordPerfect Document', role: 'Viewer', mimeType: 'application/vnd.wordperfect' },
+    { ext: 'wps', name: 'Microsoft Works Document', role: 'Viewer', mimeType: 'application/vnd.ms-works' },
+    { ext: 'wri', name: 'Windows Write Document', role: 'Viewer', mimeType: 'application/x-mswrite' },
+    { ext: ['lwp', 'sam'], name: 'Lotus Word Pro / Ami Pro Document', role: 'Viewer' },
+    { ext: 'hwp', name: 'Hangul Document', role: 'Viewer', mimeType: 'application/x-hwp' },
+    { ext: ['ws', 'xy', 'rft', 'mcw', 'cwk'], name: 'Legacy Word Processor Document', role: 'Viewer' },
   ],
   win: {
     target: [{ target: 'nsis', arch: ['x64', 'arm64'] }, { target: 'portable', arch: ['x64'] }],

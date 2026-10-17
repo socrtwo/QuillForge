@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" office:version="1.3" office:mimetype="application/vnd.oasis.opendocument.text">
+ <office:font-face-decls>
+  <style:font-face style:name="Liberation Serif" svg:font-family="'Liberation Serif'"/>
+  <style:font-face style:name="Liberation Sans" svg:font-family="'Liberation Sans'"/>
+  <style:font-face style:name="Liberation Mono" svg:font-family="'Liberation Mono'"/>
+ </office:font-face-decls>
+ <office:styles>
+  <style:default-style style:family="paragraph"><style:text-properties style:font-name="Liberation Serif" fo:font-size="12pt"/></style:default-style>
+  <style:style style:name="Standard" style:family="paragraph"/>
+  <style:style style:name="Heading_20_1" style:display-name="Heading 1" style:family="paragraph" style:parent-style-name="Standard" style:next-style-name="Standard" style:default-outline-level="1"><style:paragraph-properties fo:margin-top="12pt" fo:margin-bottom="6pt" fo:keep-with-next="always"/><style:text-properties style:font-name="Liberation Sans" fo:font-size="18pt" fo:font-weight="bold"/></style:style>
+  <style:style style:name="Heading_20_2" style:display-name="Heading 2" style:family="paragraph" style:parent-style-name="Standard" style:default-outline-level="2"><style:text-properties style:font-name="Liberation Sans" fo:font-size="14pt" fo:font-weight="bold" fo:font-style="italic"/></style:style>
+  <style:style style:name="Footnote" style:family="paragraph" style:parent-style-name="Standard"><style:text-properties fo:font-size="10pt"/></style:style>
+ </office:styles>
+ <office:automatic-styles>
+  <style:style style:name="P1" style:family="paragraph"><style:paragraph-properties fo:text-align="center"/></style:style>
+  <style:style style:name="P2" style:family="paragraph"><style:paragraph-properties fo:text-align="justify" fo:margin-left="0.5in" fo:margin-right="0.25in" fo:text-indent="0.25in" fo:margin-bottom="6pt"/></style:style>
+  <style:style style:name="P3" style:family="paragraph"><style:paragraph-properties fo:text-align="end"/></style:style>
+  <style:style style:name="P4" style:family="paragraph"><style:paragraph-properties fo:break-before="page"/></style:style>
+  <style:style style:name="T1" style:family="text"><style:text-properties fo:font-weight="bold"/></style:style>
+  <style:style style:name="T2" style:family="text"><style:text-properties fo:font-style="italic"/></style:style>
+  <style:style style:name="T3" style:family="text"><style:text-properties style:text-underline-style="solid" style:text-underline-width="auto" style:text-underline-color="font-color"/></style:style>
+  <style:style style:name="T4" style:family="text"><style:text-properties fo:color="#c00000"/></style:style>
+  <style:style style:name="T5" style:family="text"><style:text-properties style:font-name="Liberation Mono" fo:font-size="16pt"/></style:style>
+  <style:style style:name="T6" style:family="text"><style:text-properties style:text-line-through-style="solid"/></style:style>
+  <style:style style:name="T7" style:family="text"><style:text-properties style:text-position="super 58%"/></style:style>
+  <style:style style:name="Tbl" style:family="table"><style:table-properties style:width="6in" table:align="left"/></style:style>
+  <style:style style:name="Tbl.A" style:family="table-column"><style:table-column-properties style:column-width="2in"/></style:style>
+  <style:style style:name="Tbl.C1" style:family="table-cell"><style:table-cell-properties fo:background-color="#ffff00" fo:border="0.5pt solid #000000" fo:padding="0.04in"/></style:style>
+  <style:style style:name="Tbl.C2" style:family="table-cell"><style:table-cell-properties fo:border="0.5pt solid #000000" fo:padding="0.04in"/></style:style>
+  <style:style style:name="Fr" style:family="graphic"><style:graphic-properties style:wrap="none" style:vertical-pos="top" style:horizontal-pos="center"/></style:style>
+  <text:list-style style:name="L1"><text:list-level-style-bullet text:level="1" text:bullet-char="•"><style:list-level-properties text:list-level-position-and-space-mode="label-alignment"><style:list-level-label-alignment text:label-followed-by="listtab" fo:text-indent="-0.25in" fo:margin-left="0.5in"/></style:list-level-properties></text:list-level-style-bullet></text:list-style>
+  <text:list-style style:name="L2"><text:list-level-style-number text:level="1" style:num-suffix="." style:num-format="1"><style:list-level-properties text:list-level-position-and-space-mode="label-alignment"><style:list-level-label-alignment text:label-followed-by="listtab" fo:text-indent="-0.25in" fo:margin-left="0.5in"/></style:list-level-properties></text:list-level-style-number></text:list-style>
+  <style:page-layout style:name="pm1"><style:page-layout-properties fo:page-width="8.5in" fo:page-height="11in" fo:margin-top="1in" fo:margin-bottom="1in" fo:margin-left="1.25in" fo:margin-right="1.25in"/><style:header-style><style:header-footer-properties fo:min-height="0in" fo:margin-bottom="0.2in"/></style:header-style><style:footer-style><style:header-footer-properties fo:min-height="0in" fo:margin-top="0.2in"/></style:footer-style></style:page-layout>
+ </office:automatic-styles>
+ <office:master-styles>
+  <style:master-page style:name="Standard" style:page-layout-name="pm1">
+   <style:header><text:p text:style-name="P1">Fixture Header Text</text:p></style:header>
+   <style:footer><text:p text:style-name="P1">Page <text:page-number text:select-page="current">1</text:page-number></text:p></style:footer>
+  </style:master-page>
+ </office:master-styles>
+ <office:body><office:text>
+  <text:h text:style-name="Heading_20_1" text:outline-level="1">Legacy Fixture Title</text:h>
+  <text:p text:style-name="Standard">Plain text with <text:span text:style-name="T1">bold words</text:span>, <text:span text:style-name="T2">italic words</text:span>, <text:span text:style-name="T3">underlined words</text:span>, <text:span text:style-name="T4">red words</text:span>, <text:span text:style-name="T5">big mono</text:span>, <text:span text:style-name="T6">struck</text:span> and E=mc<text:span text:style-name="T7">2</text:span>.</text:p>
+  <text:p text:style-name="P1">Centered paragraph here.</text:p>
+  <text:p text:style-name="P2">Justified and indented paragraph that is long enough to wrap onto a second line so the indentation and justification can be seen clearly in the output.<text:note text:id="ftn1" text:note-class="footnote"><text:note-citation>1</text:note-citation><text:note-body><text:p text:style-name="Footnote">Footnote body text.</text:p></text:note-body></text:note></text:p>
+  <text:p text:style-name="P3">Right aligned line.</text:p>
+  <text:h text:style-name="Heading_20_2" text:outline-level="2">Lists and Tables</text:h>
+  <text:list text:style-name="L1"><text:list-item><text:p>First bullet item</text:p></text:list-item><text:list-item><text:p>Second bullet item</text:p></text:list-item></text:list>
+  <text:list text:style-name="L2"><text:list-item><text:p>Numbered one</text:p></text:list-item><text:list-item><text:p>Numbered two</text:p></text:list-item></text:list>
+  <table:table table:name="Tbl" table:style-name="Tbl">
+   <table:table-column table:style-name="Tbl.A" table:number-columns-repeated="3"/>
+   <table:table-row><table:table-cell table:style-name="Tbl.C1"><text:p>Cell A1</text:p></table:table-cell><table:table-cell table:style-name="Tbl.C1"><text:p>Cell B1</text:p></table:table-cell><table:table-cell table:style-name="Tbl.C1"><text:p>Cell C1</text:p></table:table-cell></table:table-row>
+   <table:table-row><table:table-cell table:style-name="Tbl.C2"><text:p>Cell A2</text:p></table:table-cell><table:table-cell table:style-name="Tbl.C2"><text:p>Cell B2</text:p></table:table-cell><table:table-cell table:style-name="Tbl.C2"><text:p>Cell C2</text:p></table:table-cell></table:table-row>
+  </table:table>
+  <text:p text:style-name="Standard">Picture follows:</text:p>
+  <text:p text:style-name="Standard"><draw:frame draw:style-name="Fr" draw:name="img1" text:anchor-type="as-char" svg:width="0.5in" svg:height="0.5in"><draw:image><office:binary-data>iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGM4ISdHEmIY1TCqYfhqAADkYgQQ60fIxgAAAABJRU5ErkJggg==</office:binary-data></draw:image></draw:frame></text:p>
+  <text:p text:style-name="P4">Second page paragraph after a page break.</text:p>
+ </office:text></office:body>
+</office:document>

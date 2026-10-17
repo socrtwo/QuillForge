@@ -446,6 +446,88 @@ public class QuillNativePlugin extends Plugin {
         });
     }
 
+    /** Sister apps that may receive a file: QuillGrid, QuillPost, QuillStage (and nothing else). */
+    private static boolean isSisterPackage(String pkg) {
+        return "io.github.socrtwo.quillgrid".equals(pkg) || "io.github.socrtwo.quillpost".equals(pkg) || "io.github.socrtwo.quillstage".equals(pkg);
+    }
+
+    /** Whether a sister app is installed (the manifest's <queries> makes it visible on Android 11+). */
+    @PluginMethod
+    public void canLaunchApp(PluginCall call) {
+        final String pkg = call.getString("package", "");
+        JSObject ret = new JSObject();
+        ret.put("installed", isSisterPackage(pkg) && getContext().getPackageManager().getLaunchIntentForPackage(pkg) != null);
+        call.resolve(ret);
+    }
+
+    /**
+     * Open a file in a sister app: ACTION_VIEW on the original document URI when there is one
+     * (read permission granted to that app only), else on a cache copy shared through FileProvider.
+     */
+    @PluginMethod
+    public void launchApp(PluginCall call) {
+        final String pkg = call.getString("package", "");
+        final String uriStr = call.getString("uri");
+        final String name = sanitizeFileName(call.getString("name", "document"));
+        final String mime = call.getString("mime", "application/octet-stream");
+        final String data = call.getString("data");
+        if (!isSisterPackage(pkg)) {
+            call.reject("Not a QuillForge sister app");
+            return;
+        }
+        final Context context = getContext();
+        if (context.getPackageManager().getLaunchIntentForPackage(pkg) == null) {
+            JSObject ret = new JSObject();
+            ret.put("launched", false);
+            ret.put("installed", false);
+            call.resolve(ret);
+            return;
+        }
+        io.execute(() -> {
+            try {
+                Uri uri = null;
+                if (uriStr != null && uriStr.startsWith("content:")) uri = Uri.parse(uriStr);
+                if (uri == null) {
+                    if (data == null) throw new IOException("No file to open");
+                    File dir = new File(context.getCacheDir(), SHARE_DIR);
+                    if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("Cannot create " + dir.getAbsolutePath());
+                    pruneOldShares(dir);
+                    File file = new File(dir, name);
+                    try (FileOutputStream out = new FileOutputStream(file)) {
+                        out.write(decodeBase64(data));
+                    }
+                    uri = FileProvider.getUriForFile(context, context.getPackageName() + ".fileprovider", file);
+                }
+                final Intent view = new Intent(Intent.ACTION_VIEW);
+                view.setDataAndType(uri, mime == null || mime.isEmpty() ? "application/octet-stream" : mime);
+                view.setPackage(pkg);
+                view.setClipData(ClipData.newRawUri(name, uri));
+                view.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                final Activity activity = getActivity();
+                if (activity == null) {
+                    call.reject("The app is not in the foreground");
+                    return;
+                }
+                activity.runOnUiThread(() -> {
+                    JSObject ret = new JSObject();
+                    ret.put("installed", true);
+                    try {
+                        activity.startActivity(view);
+                        ret.put("launched", true);
+                    } catch (ActivityNotFoundException e) {
+                        // Installed, but it does not accept this file type: open the app itself.
+                        Intent launch = context.getPackageManager().getLaunchIntentForPackage(pkg);
+                        if (launch != null) activity.startActivity(launch);
+                        ret.put("launched", false);
+                    }
+                    call.resolve(ret);
+                });
+            } catch (Throwable e) {
+                call.reject("Could not open the file in the other app: " + e.getMessage(), asException(e));
+            }
+        });
+    }
+
     @PluginMethod
     public void keepAwake(PluginCall call) {
         final boolean on = Boolean.TRUE.equals(call.getBoolean("on", Boolean.TRUE));
