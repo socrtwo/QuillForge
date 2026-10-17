@@ -161,9 +161,11 @@ export function openDialog(opts: DialogOptions): Promise<Record<string, any> | n
       h('button', { class: 'qf-iconbtn', 'aria-label': 'Close', onclick: () => finish(null) }, icon('close')));
     const footer = h('div', { class: 'qf-dialog-foot' });
     for (const b of opts.buttons || []) footer.appendChild(h('button', { class: 'qf-btn' + (b.primary ? ' qf-primary' : ''), onclick: () => b.onClick(values(), ctl) }, b.label));
-    footer.appendChild(h('span', { class: 'qf-spacer' }));
-    if (opts.cancel !== false) footer.appendChild(h('button', { class: 'qf-btn', onclick: () => finish(null) }, opts.cancel || 'Cancel'));
-    if (opts.ok !== false) footer.appendChild(h('button', { class: 'qf-btn qf-primary', onclick: okClick }, opts.ok || 'OK'));
+    // OK and Cancel stay together at the right; on narrow screens the extra buttons wrap onto their own line.
+    const main = h('span', { class: 'qf-foot-main' });
+    if (opts.cancel !== false) main.appendChild(h('button', { class: 'qf-btn', onclick: () => finish(null) }, opts.cancel || 'Cancel'));
+    if (opts.ok !== false) main.appendChild(h('button', { class: 'qf-btn qf-primary', onclick: okClick }, opts.ok || 'OK'));
+    footer.appendChild(main);
 
     box.append(header, body, footer);
     overlay.appendChild(box);
@@ -488,13 +490,15 @@ export function showMenu(entries: MenuEntry[], opts: MenuOptions): HTMLElement {
   openMenus.push(menu);
   (menu as any)._back = prior;
   menu.addEventListener('keydown', (ev) => menuKey(ev, menu, opts.level || 0));
-  // position
-  const vw = window.innerWidth, vh = window.innerHeight;
+  // Position: next to the anchor, kept inside the area not covered by status, navigation or gesture bars.
+  const sa = safeInsets();
+  const left = sa.left + 4, top = sa.top + 4, right = window.innerWidth - sa.right - 4, bottom = window.innerHeight - sa.bottom - 4;
   const mr = menu.getBoundingClientRect();
   let x = opts.x ?? 0, y = opts.y ?? 0;
-  if (opts.anchor) { const r = opts.anchor.getBoundingClientRect(); x = r.left; y = r.bottom + 2; if (y + mr.height > vh - 8 && r.top - mr.height > 8) y = r.top - mr.height - 2; }
-  if (x + mr.width > vw - 4) x = Math.max(4, vw - mr.width - 4);
-  if (y + mr.height > vh - 4) y = Math.max(4, vh - mr.height - 4);
+  if (opts.anchor) { const r = opts.anchor.getBoundingClientRect(); x = r.left; y = r.bottom + 2; if (y + mr.height > bottom - 4 && r.top - mr.height > top + 4) y = r.top - mr.height - 2; }
+  if (x + mr.width > right) x = right - mr.width;
+  if (y + mr.height > bottom) y = bottom - mr.height;
+  x = Math.max(left, x); y = Math.max(top, y);
   menu.style.left = x + 'px';
   menu.style.top = y + 'px';
   if (opts.focus ?? keyboardInput) menuItems(menu)[0]?.focus();
@@ -505,6 +509,17 @@ export function showMenu(entries: MenuEntry[], opts: MenuOptions): HTMLElement {
     }, 0);
   }
   return menu;
+}
+
+/** Current system-bar insets in CSS pixels (the --sat/--sab/--sal/--sar variables in app.css). */
+export function safeInsets(): { top: number; bottom: number; left: number; right: number } {
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding:var(--sat) var(--sar) var(--sab) var(--sal)';
+  document.body.appendChild(probe);
+  const cs = getComputedStyle(probe);
+  const r = { top: parseFloat(cs.paddingTop) || 0, bottom: parseFloat(cs.paddingBottom) || 0, left: parseFloat(cs.paddingLeft) || 0, right: parseFloat(cs.paddingRight) || 0 };
+  probe.remove();
+  return r;
 }
 
 // ------------------------------------------------------------------------------------------

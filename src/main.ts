@@ -2,6 +2,7 @@
 import 'material-symbols/outlined.css';
 import 'katex/dist/katex.min.css';
 import './styles/app.css';
+import './styles/scrollcue.css';
 import { DOMSerializer } from 'prosemirror-model';
 import { installFonts } from './fonts';
 import './commands';
@@ -11,10 +12,18 @@ import { schema } from './editor/schema';
 import { wordAt } from './editor/ops';
 import { launchFile, onFileOpened, onBackButton, isNative, isDesktop, isCapacitor } from './platform/native';
 import { closeMenus, inDialog, toast } from './ui/dialog';
+import { installScrollCues } from './ui/scrollcue';
 import { kvKeys } from './util/store';
 import { allCommands, getCommand } from './commands/registry';
 
 installFonts();
+// "More below" cues on every scrollable list of choices: menus, dialogs, list boxes, panes, the File screen,
+// command search and the customize lists. Not on the document itself or the sideways ribbon strips.
+installScrollCues({
+  selector: ['.qf-menu', '.qf-dialog-body', '.qf-dialog-preview', 'select.qf-listbox', 'select[size]', '.qf-cmdlist', '.qf-pane-body', '.qf-ai-log', '.qf-ai-out',
+    '.qf-bs-nav', '.qf-bs-body', '.qf-palette-list', '.qf-symbol-grid', '.qf-dict-list', '.qf-notices'].join(', '),
+  ignore: '.qf-scroll',
+});
 (window as any).__qfSerializer = DOMSerializer.fromSchema(schema);
 (window as any).__qfWordAt = wordAt;
 

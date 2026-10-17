@@ -6,7 +6,7 @@ import { NodeSelection } from 'prosemirror-state';
 import { isInTable } from 'prosemirror-tables';
 import { getCommand, allCommands, searchCommands, type Command, type MenuEntry } from '../commands/registry';
 import { h, icon, clear, isPhone, esc } from './dom';
-import { showMenu, closeMenus, openDialog, toast } from './dialog';
+import { showMenu, closeMenus, openDialog, toast, safeInsets } from './dialog';
 import { DEFAULT_TABS, tabsFor, type RibbonTab } from './ribbonLayout';
 import { prettyKey, canonicalKey, keyName } from '../editor/setup';
 import { pageInfo, pageOfPos } from '../editor/plugins/pagination';
@@ -683,9 +683,10 @@ export class Shell {
     if (!show) { this.miniBar.classList.remove('qf-show'); return; }
     try {
       const a = app.view.coordsAtPos(st.selection.from), b = app.view.coordsAtPos(st.selection.to);
+      const sa = safeInsets();
       const top = Math.min(a.top, b.top) - 50;
-      const left = Math.max(6, Math.min(window.innerWidth - this.miniBar.offsetWidth - 6, (a.left + b.left) / 2 - this.miniBar.offsetWidth / 2));
-      this.miniBar.style.top = `${top < 60 ? Math.max(a.bottom, b.bottom) + 8 : top}px`;
+      const left = Math.max(sa.left + 6, Math.min(window.innerWidth - sa.right - this.miniBar.offsetWidth - 6, (a.left + b.left) / 2 - this.miniBar.offsetWidth / 2));
+      this.miniBar.style.top = `${top < sa.top + 60 ? Math.min(Math.max(a.bottom, b.bottom) + 8, window.innerHeight - sa.bottom - this.miniBar.offsetHeight - 6) : top}px`;
       this.miniBar.style.left = `${left}px`;
       this.miniBar.classList.add('qf-show');
     } catch { this.miniBar.classList.remove('qf-show'); }
