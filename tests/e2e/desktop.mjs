@@ -27,7 +27,8 @@ try {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.waitForFunction(() => window.qf && window.qf.view, null, { timeout: 30000 });
-  check('loads from app://', page.url().startsWith('app://quillpen/'), page.url());
+  // The origin keeps the app's former name so data stored by earlier versions stays readable (electron/main.cjs).
+  check('loads from app://', page.url().startsWith('app://quillforge/'), page.url()); // rename:keep
   check('bridge is exposed', await page.evaluate(() => typeof window.quillDesktop?.openDocument === 'function' && !('require' in window)));
 
   // The file given on the command line opens.
