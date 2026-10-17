@@ -41,6 +41,10 @@ src/
     panes.ts              task panes (navigation, styles, find, comments, revisions, spelling, Reveal Codes…)
     dialog.ts             declarative dialog builder, menus, color pickers, toasts
   io/                     format converters: docx, odt/fodt, rtf, html, markdown, text, epub, native
+                          XML/archive/markup readers (see docs/FORMATS.md): wordml2003, flatopc, sxw,
+                          abiword, kword, pages (+ iwa), hwpx, fb2, docbook, rtfd (+ tiff), mhtml, latex,
+                          rst, textile, asciidoc, org, troff; sniff-b (content detection), encoding
+                          (text encoding detection, shared code pages), xml-read, runs, archive (gzip/tar)
     sniff.ts              content-based identification (rule table; registerSniffer() for format modules)
     cfb.ts                compound file (OLE2, MS-CFB) reader shared by every binary Office-era format
     formats-legacy.ts     import-only FormatDefs for the legacy and cross-category converters

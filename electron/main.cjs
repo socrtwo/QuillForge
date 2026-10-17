@@ -19,7 +19,9 @@ const OPENABLE = ['docx', 'docm', 'dotx', 'dotm', 'doc', 'dot', 'wbk', 'asd', 'o
   // Legacy word processors (opened by content, so the extension is only a hint)
   'wpd', 'wp', 'wp4', 'wp5', 'wp6', 'wpt', 'wps', 'wri', 'lwp', 'sam', 'mcw', 'cwk', 'wn', 'ws', 'ws4', 'ws5', 'ws6', 'ws7', 'xy', 'xyw', 'rft', 'dca', 'hwp',
   // Spreadsheets, presentations and email (imported as documents, or handed to the sister apps)
-  'csv', 'tsv', 'xlsx', 'xls', 'ods', 'dbf', 'wk1', 'wks', 'pptx', 'ppt', 'odp', 'eml', 'emlx', 'mbox', 'mht', 'mhtml', 'msg'];
+  'csv', 'tsv', 'xlsx', 'xls', 'ods', 'dbf', 'wk1', 'wks', 'pptx', 'ppt', 'odp', 'eml', 'emlx', 'mbox', 'mht', 'mhtml', 'msg',
+  // XML, archive and text-markup formats
+  'xml', 'wml', 'sxw', 'stw', 'abw', 'zabw', 'kwd', 'pages', 'hwpx', 'fb2', 'fbz', 'dbk', 'rtfd', 'tex', 'latex', 'rst', 'textile', 'adoc', 'asciidoc', 'org', 'man', 'roff'];
 
 protocol.registerSchemesAsPrivileged([{ scheme: SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 

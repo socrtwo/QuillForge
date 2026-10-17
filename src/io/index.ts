@@ -8,10 +8,29 @@
 import type { Node as PMNode } from 'prosemirror-model';
 import type { RecoveryReport } from './recover';
 import { normalizeTables } from '../editor/normalize';
-import { sniff, type SniffCategory, type SniffResult } from './sniff';
+import { sniff, registerSniffer, type SniffCategory, type SniffResult } from './sniff';
 import { LEGACY_FORMATS } from './formats-legacy';
+import { FORMATS_B } from './formats-b';
+import { snifferRulesB } from './sniff-b';
 
 export { sniff, registerSniffer, sniffRules, type SniffResult, type SniffRule, type SniffCategory } from './sniff';
+
+// The XML, archive and text-markup formats bring their own detection rules (one rule per format:
+// a registered rule replaces the built-in rule for the same format).
+// A message that went through a mail system (transport headers) is email even when its body is
+// multipart/related; browser-saved web archives never carry these headers.
+const MAIL_TRANSPORT = /^(Received|Message-ID|Delivered-To|Return-Path|To|Cc):/im;
+for (const r of snifferRulesB()) {
+  if (r.format !== 'mhtml') { registerSniffer(r); continue; }
+  registerSniffer({
+    ...r,
+    test: (ctx) => {
+      const ext = (ctx.name.split('.').pop() || '').toLowerCase();
+      if (ext !== 'mht' && ext !== 'mhtml' && MAIL_TRANSPORT.test(ctx.head.slice(0, 8192).split(/\r?\n\r?\n/)[0])) return 0;
+      return r.test(ctx);
+    },
+  });
+}
 
 export interface ExportOptions {
   fileName: string;
@@ -101,6 +120,7 @@ export const FORMATS: FormatDef[] = [
     import: async (d) => (await import('./native')).importNative(d),
     export: async (doc) => (await import('./native')).exportNative(doc),
   },
+  ...FORMATS_B,
   ...LEGACY_FORMATS,
   { id: 'pdf', label: 'PDF (via Print ▸ Save as PDF)', ext: ['pdf'], mime: 'application/pdf', canImport: false, canExport: true, note: 'Uses the system print service' },
 ];

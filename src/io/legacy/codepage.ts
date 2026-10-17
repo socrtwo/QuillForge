@@ -1,11 +1,11 @@
+import { decodeAs } from '../encoding';
+
 /**
  * Single-byte code pages used by DOS, Mac and IBM-host word processors. The upper halves
  * come from the published code page charts; the Encoding Standard decoders (TextDecoder)
  * are used where browsers provide them.
  */
 
-const CP437_HI = 'ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ ';
-const CP850_HI = 'ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø×ƒáíóúñÑªº¿®¬½¼¡«»░▒▓│┤ÁÂÀ©╣║╗╝¢¥┐└┴┬├─┼ãÃ╚╔╩╦╠═╬¤ðÐÊËÈıÍÎÏ┘┌█▄¦Ì▀ÓßÔÒõÕµþÞÚÛÙýÝ¯´­±‗¾¶§÷¸°¨·¹³²■ ';
 // IBM EBCDIC code page 037 (US/Canada), 256 entries.
 const EBCDIC037 =
   '\x00\x01\x02\x03\x9c\t\x86\x7f\x97\x8d\x8e\x0b\x0c\r\x0e\x0f\x10\x11\x12\x13\x9d\x85\x08\x87\x18\x19\x92\x8f\x1c\x1d\x1e\x1f' +
@@ -13,17 +13,12 @@ const EBCDIC037 =
   '  âäàáãåçñ¢.<(+|&éêëèíîïìß!$*);¬-/ÂÄÀÁÃÅÇÑ¦,%_>?øÉÊËÈÍÎÏÌ`:#@\'="' +
   'Øabcdefghi«»ðýþ±°jklmnopqrªºæ¸Æ¤µ~stuvwxyz¡¿ÐÝÞ®^£¥·©§¶¼½¾[]¯¨´×{ABCDEFGHI­ôöòóõ}JKLMNOPQR¹ûüùúÿ\\÷STUVWXYZ²ÔÖÒÓÕ0123456789³ÛÜÙÚ\x9f';
 
-const tables: Record<string, string> = { cp437: CP437_HI, cp850: CP850_HI };
-
-/** Decode bytes in a DOS code page (cp437 or cp850); control bytes pass through. */
+/** Decode bytes in a DOS code page (cp437 or cp850, from the shared tables in ../encoding); control bytes pass through. */
 export function decodeDos(u8: Uint8Array, cp: 'cp437' | 'cp850' = 'cp437'): string {
-  const hi = tables[cp];
-  let s = '';
-  for (let i = 0; i < u8.length; i++) s += u8[i] < 0x80 ? String.fromCharCode(u8[i]) : hi[u8[i] - 0x80];
-  return s;
+  return decodeAs(u8, cp) ?? '';
 }
 
-export const dosChar = (b: number, cp: 'cp437' | 'cp850' = 'cp437') => (b < 0x80 ? String.fromCharCode(b) : tables[cp][b - 0x80]);
+export const dosChar = (b: number, cp: 'cp437' | 'cp850' = 'cp437') => (b < 0x80 ? String.fromCharCode(b) : decodeAs(new Uint8Array([b]), cp) ?? '');
 
 export function decodeEbcdic(u8: Uint8Array): string {
   let s = '';
@@ -52,9 +47,7 @@ export const macChar = (b: number) => (b < 0x80 ? String.fromCharCode(b) : MAC_R
 const WIN1252_80 = '€\u0081‚ƒ„…†‡ˆ‰Š‹Œ\u008dŽ\u008f\u0090‘’“”•–—˜™š›œ\u009džŸ';
 export const winChar = (b: number) => (b >= 0x80 && b < 0xa0 ? WIN1252_80[b - 0x80] : String.fromCharCode(b));
 export function decodeWin1252(u8: Uint8Array): string {
-  let s = '';
-  for (let i = 0; i < u8.length; i++) s += winChar(u8[i]);
-  return s;
+  return decodeAs(u8, 'windows-1252') ?? '';
 }
 
 /** Windows code page number to an Encoding Standard label. */

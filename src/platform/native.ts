@@ -10,6 +10,7 @@
  */
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { download, pickFile } from '../ui/dom';
+import { OPEN_EXTENSIONS_B, OPEN_MIMES_B } from '../io/sniff-b';
 
 export interface OpenedFile { name: string; data: ArrayBuffer; uri: string | null; mime?: string }
 
@@ -260,16 +261,19 @@ export async function onBackButton(cb: () => boolean): Promise<void> {
 }
 
 // Files are identified by content, so the picker offers every type it can (and "All files").
-export const OPEN_ACCEPT = [
-  '.docx,.docm,.dotx,.dotm,.doc,.dot,.wbk,.asd,.odt,.ott,.fodt,.rtf,.html,.htm,.md,.markdown,.txt,.epub,.qfd,.json',
-  '.wpd,.wp,.wp4,.wp5,.wp6,.wpt,.wps,.wri,.lwp,.sam,.mcw,.cwk,.wn,.ws,.ws4,.ws5,.ws6,.ws7,.xy,.xyw,.rft,.dca,.hwp,.sdw,.sxw,.abw,.pages',
-  '.csv,.tsv,.xlsx,.xlsm,.xls,.ods,.dbf,.wk1,.wks,.pptx,.ppt,.odp,.key,.eml,.emlx,.mbox,.mht,.mhtml,.msg',
-].join(',');
+export const OPEN_ACCEPT = [...new Set([
+  ...'docx docm dotx dotm doc dot wbk asd odt ott fodt rtf html htm md markdown txt epub qfd json'.split(' '),
+  ...'wpd wp wp4 wp5 wp6 wpt wps wri lwp sam mcw cwk wn ws ws4 ws5 ws6 ws7 xy xyw rft dca hwp sdw'.split(' '),
+  ...'csv tsv xlsx xlsm xls ods dbf wk1 wks pptx ppt odp key eml emlx mbox msg'.split(' '),
+  ...OPEN_EXTENSIONS_B,
+])].map((e) => '.' + e).join(',');
 export const OPEN_MIMES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.oasis.opendocument.text',
   'application/msword', 'application/vnd.ms-word.document.macroEnabled.12',
-  'application/rtf', 'text/rtf', 'text/html', 'text/markdown', 'text/plain', 'application/epub+zip', 'application/json', 'application/octet-stream', '*/*',
+  'application/rtf', 'text/rtf', 'text/html', 'text/markdown', 'text/plain', 'application/epub+zip', 'application/json',
+  ...OPEN_MIMES_B.filter((m) => !['text/plain', 'text/html'].includes(m)),
+  'application/octet-stream', '*/*',
 ];
 
 // ------------------------------------------------------------------------------------------

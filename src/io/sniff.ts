@@ -291,6 +291,8 @@ export function wp42Score(b: Uint8Array): number {
     if (c === 0x0a || c === 0x0d || c === 0x09 || c === 0x0c || c === 0x0b) { i++; continue; }
     if (c >= 0x80 && c < 0xc0) { i++; continue; } // one-byte codes
     if (c >= 0xc0 && c < 0xff) {
+      // A run of one repeated byte (DOS box-drawing lines) is text, not a bracketed code.
+      if (b[i + 1] === c) { let j = i; while (j < n && b[j] === c) j++; bad++; i = j; continue; }
       const end = b.indexOf(c, i + 2);
       if (end > 0 && end - i < 300) { good++; i = end + 1; continue; }
     }
@@ -667,14 +669,20 @@ const TXT: SniffRule = R('txt', 'Plain text', DOC, ['txt', 'text', 'log', 'asc',
 
 const extra: SniffRule[] = [];
 
-/** Add a detection rule (format modules call this at load time). Later rules win ties. */
+/**
+ * Add a detection rule (format modules call this at load time). A module's rule replaces the
+ * built-in rule for the same format, so each format has one rule; registering again replaces it.
+ */
 export function registerSniffer(rule: SniffRule): void {
-  const i = extra.findIndex((r) => r.format === rule.format && r.label === rule.label && r.test === rule.test);
-  if (i < 0) extra.push(rule);
+  const i = extra.findIndex((r) => r.format === rule.format);
+  if (i >= 0) extra[i] = rule; else extra.push(rule);
 }
 
-/** Every rule, built in and registered. */
-export function sniffRules(): readonly SniffRule[] { return [...RULES, ...extra]; }
+/** Every rule: the built-in ones not replaced by a registered rule, then the registered ones. */
+export function sniffRules(): readonly SniffRule[] {
+  const replaced = new Set(extra.map((r) => r.format));
+  return [...RULES.filter((r) => !replaced.has(r.format)), ...extra];
+}
 
 const article = (s: string) => (/^[aeiou]/i.test(s) && !/^(one|uni|use|eu)/i.test(s) ? 'an' : 'a');
 /** "Opened as a WordPerfect document; the file name says .doc". */

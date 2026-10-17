@@ -77,8 +77,6 @@ export const LEGACY_FORMATS: FormatDef[] = [
     import: async (d, n) => (await email()).importEmail(d, n, 'emlx') },
   { id: 'mbox', label: 'Mailbox (.mbox)', ext: ['mbox', 'mbx'], mime: 'application/mbox', canImport: true, canExport: false, category: 'email', fidelity: 'high',
     import: async (d, n) => (await email()).importEmail(d, n, 'mbox') },
-  { id: 'mhtml', label: 'Web Archive (.mht)', ext: ['mht', 'mhtml'], mime: 'multipart/related', canImport: true, canExport: false, fidelity: 'high',
-    import: async (d, n) => (await email()).importEmail(d, n, 'mhtml') },
   { id: 'msg', label: 'Outlook Message (.msg)', ext: ['msg'], mime: 'application/vnd.ms-outlook', canImport: true, canExport: false, category: 'email', fidelity: 'high',
     import: async (d, n) => (await email()).importEmail(d, n, 'msg') },
   { id: 'tnef', label: 'TNEF Attachment Bundle (winmail.dat)', ext: ['dat', 'tnef'], mime: 'application/ms-tnef', canImport: true, canExport: false, category: 'email', fidelity: 'basic',

@@ -10,6 +10,7 @@
  * - nested-list builder used by importers that only know "paragraph at level n"
  */
 import { stripInvalidXml } from './ooxml-util';
+import { decodeAuto } from './encoding';
 import { sanitizeGeneratedHtml } from '../util/sanitize';
 import { DOMSerializer, Fragment, Mark, type Node as PMNode, type NodeType, type DOMOutputSpec } from 'prosemirror-model';
 import { EditorState } from 'prosemirror-state';
@@ -33,17 +34,9 @@ export function utf8Decode(u8: Uint8Array | ArrayBuffer): string {
   return new TextDecoder('utf-8').decode(u8 instanceof Uint8Array ? u8 : new Uint8Array(u8));
 }
 
-/** Decode text with BOM detection; UTF-8 with Windows-1252 fallback (same rules as io/index decodeText). */
+/** Decode text: BOMs, BOM-less UTF-16, UTF-8, then the most plausible legacy encoding (see encoding.ts). */
 export function decodeTextBytes(data: ArrayBuffer | Uint8Array): string {
-  const u8 = data instanceof Uint8Array ? data : new Uint8Array(data);
-  if (u8[0] === 0xef && u8[1] === 0xbb && u8[2] === 0xbf) return new TextDecoder('utf-8').decode(u8.subarray(3));
-  if (u8[0] === 0xff && u8[1] === 0xfe) return new TextDecoder('utf-16le').decode(u8.subarray(2));
-  if (u8[0] === 0xfe && u8[1] === 0xff) return new TextDecoder('utf-16be').decode(u8.subarray(2));
-  try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(u8);
-  } catch {
-    return new TextDecoder('windows-1252').decode(u8);
-  }
+  return decodeAuto(data);
 }
 
 export function bytesToBase64(u8: Uint8Array): string {
@@ -844,10 +837,12 @@ export interface FlatListItem {
   start?: number;
   checked?: boolean | null;
   task?: boolean;
+  /** Text after an ordered list number ("." when absent). */
+  suffix?: string;
   blocks: PMNode[];
 }
 
-interface ListBuild { ordered: boolean; task: boolean; format: string; start: number; level: number; items: { blocks: PMNode[]; checked: boolean | null; lists: (PMNode | ListBuild)[] }[] }
+interface ListBuild { ordered: boolean; task: boolean; format: string; start: number; level: number; suffix?: string; items: { blocks: PMNode[]; checked: boolean | null; lists: (PMNode | ListBuild)[] }[] }
 
 function listToNode(l: ListBuild): PMNode {
   const items = l.items.map((it) => {
@@ -858,7 +853,7 @@ function listToNode(l: ListBuild): PMNode {
     return S.nodes.list_item.create({ checked: it.checked ?? null }, content);
   });
   if (l.task) return S.nodes.task_list.create(null, items);
-  if (l.ordered) return S.nodes.ordered_list.create({ order: l.start || 1, format: l.format || 'decimal' }, items);
+  if (l.ordered) return S.nodes.ordered_list.create({ order: l.start || 1, format: l.format || 'decimal', ...(l.suffix ? { suffix: l.suffix } : {}) }, items);
   return S.nodes.bullet_list.create({ bullet: l.format || 'disc' }, items);
 }
 
@@ -875,12 +870,12 @@ export function buildNestedLists(entries: FlatListItem[]): PMNode[] {
     if (top && top.level === level && (top.ordered !== e.ordered || top.task !== task)) {
       stack.pop();
       top = stack[stack.length - 1];
-      const nl: ListBuild = { ordered: e.ordered, task, format: e.format || (e.ordered ? 'decimal' : 'disc'), start: e.start || 1, level, items: [] };
+      const nl: ListBuild = { ordered: e.ordered, task, format: e.format || (e.ordered ? 'decimal' : 'disc'), start: e.start || 1, level, items: [], suffix: e.suffix };
       if (top) top.items[top.items.length - 1]?.lists.push(nl); else roots.push(nl);
       stack.push(nl);
       top = nl;
     } else if (!top || top.level < level) {
-      const nl: ListBuild = { ordered: e.ordered, task, format: e.format || (e.ordered ? 'decimal' : 'disc'), start: e.start || 1, level, items: [] };
+      const nl: ListBuild = { ordered: e.ordered, task, format: e.format || (e.ordered ? 'decimal' : 'disc'), start: e.start || 1, level, items: [], suffix: e.suffix };
       if (top) {
         if (!top.items.length) top.items.push({ blocks: [], checked: null, lists: [] });
         top.items[top.items.length - 1].lists.push(nl);
