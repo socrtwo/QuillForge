@@ -8,9 +8,10 @@ import type { App } from '../app';
 import { schema } from '../editor/schema';
 import { FEATURES, BASE_SYSTEM, parseCommentJson, varietyName, type AiFeature } from '../ai/features';
 import { dialectFor } from '../proof/proofing';
-import { aiSettings, saveAiSettings, resolveProvider } from '../ai/store';
+import { aiSettings, saveAiSettings, resolveProvider, ensemblePlan, receivingProviders } from '../ai/store';
 import { providerById } from '../ai/providers';
-import { chat, AiError, type ChatMessage, type ContentPart } from '../ai/client';
+import { chat, AiError, type ChatMessage, type ChatResult, type ContentPart } from '../ai/client';
+import { MIN_MEMBERS, type EnsembleMode } from '../ai/ensemble';
 import { selectionOrParagraph, documentText, textBefore, rangeText, cleanOutput, splitAlternatives, replaceRange, insertBelow, insertAtCursor, addComments, blocksFromText, anchorSelection, anchorBelow, anchorRange, resolveRange, resolveSelection, findNode } from '../ai/apply';
 import type { Node as PMNode } from 'prosemirror-model';
 import { openDialog, toast, promptDialog, confirmDialog } from '../ui/dialog';
@@ -32,25 +33,36 @@ async function ensureProvider(app: App, reason: string): Promise<boolean> {
   return openAiSetup(app, { reason });
 }
 
-const isCloud = () => { const p = providerById(aiSettings().active || ''); return !!p && p.kind !== 'local' && p.kind !== 'builtin'; };
+const cloudDef = (id: string) => { const p = providerById(id); return p && p.kind !== 'local' && p.kind !== 'builtin' ? p : null; };
+/** The cloud services that receive the text of an AI command (several with an ensemble). */
+const cloudReceivers = () => receivingProviders().map(cloudDef).filter((p): p is NonNullable<typeof p> => !!p);
+const isCloud = () => cloudReceivers().length > 0;
+const listNames = (names: string[]) => (names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
 
-/** First use of a cloud provider: say plainly where the text goes. */
+/** First use of a cloud provider: say plainly where the text goes (every service, with several AIs). */
 async function privacyCheck(): Promise<boolean> {
   const s = aiSettings();
-  const id = s.active!;
-  if (!isCloud() || s.privacyAck.includes(id)) return true;
-  const p = providerById(id)!;
+  const fresh = cloudReceivers().filter((p) => !s.privacyAck.includes(p.id));
+  if (!fresh.length) return true;
+  const names = listNames(fresh.map((p) => p.name));
+  const free = fresh.some((p) => p.free === 'free');
   const ok = await confirmDialog('Sending Text to an AI Service',
-    `AI commands send the text they need directly from this device to ${p.name}. QuillForge has no server and keeps no copy. ${p.name}'s terms and privacy policy apply${p.free === 'free' ? ', and free tiers may use what you send to improve their models' : ''}. Continue?`, 'Continue', 'Cancel');
-  if (ok) saveAiSettings((x) => { x.privacyAck.push(id); });
+    `AI commands send the text they need directly from this device to ${names}. QuillForge has no server and keeps no copy. ${fresh.length > 1 ? 'Each service\'s' : `${names}'s`} terms and privacy policy apply${free ? ', and free tiers may use what you send to improve their models' : ''}. Continue?`, 'Continue', 'Cancel');
+  if (ok) saveAiSettings((x) => { for (const p of fresh) if (!x.privacyAck.includes(p.id)) x.privacyAck.push(p.id); });
   return ok;
 }
 
 async function confirmWholeDoc(app: App, words: number): Promise<boolean> {
   const s = aiSettings();
   if (!s.confirmDocument || !isCloud()) return true;
-  const p = providerById(s.active!)!;
-  return confirmDialog('Send the Whole Document?', `This sends the whole document (${words.toLocaleString()} words) to ${p.name}. Select a passage first to send only that.`, 'Send', 'Cancel');
+  return confirmDialog('Send the Whole Document?', `This sends the whole document (${words.toLocaleString()} words) to ${listNames(cloudReceivers().map((p) => p.name))}. Select a passage first to send only that.`, 'Send', 'Cancel');
+}
+
+/** With "Show the discussion" on, an answer that was applied to the document is also shown in the AI pane with how the AIs answered. */
+async function showDiscussion(app: App, title: string, text: string, r: ChatResult): Promise<void> {
+  if (!r.ensemble || !aiSettings().ensemble.showDeliberation) return;
+  const { paneResult } = await import('../ui/aiPane');
+  paneResult(app, `${title}: how the AIs answered`, true).done(text, r);
 }
 
 async function storyNotes(app: App): Promise<string> {
@@ -149,7 +161,7 @@ export async function runFeature(app: App, f: AiFeature, arg?: string): Promise<
         range = { from: st.selection.from, to: st.selection.to };
         text = rangeText(st.doc, range.from, range.to);
       } else {
-        const d = documentText(app, providerById(s.active!)?.kind === 'local' ? 6000 : 120000);
+        const d = documentText(app, receivingProviders(s).some((id) => providerById(id)?.kind === 'local') ? 6000 : 120000);
         if (!d.text) { toast('The document is empty.'); return; }
         if (!(await confirmWholeDoc(app, d.words))) return;
         text = d.text;
@@ -162,7 +174,8 @@ export async function runFeature(app: App, f: AiFeature, arg?: string): Promise<
     case 'image': {
       const im = selectedImage(app);
       if (!im) { toast('Select a picture first.'); return; }
-      const p = providerById(s.active!);
+      // With several AIs the master or clerk writes the final answer, so it must read images.
+      const p = providerById(ensemblePlan(s)?.master.provider || s.active!);
       if (p && !p.vision && p.kind !== 'openai') { toast(`${p.name} cannot read images here. Use a provider with vision models (OpenAI, Anthropic, Gemini, OpenRouter, xAI).`); return; }
       try { images = [{ type: 'image', dataUrl: await imageDataUrl(im.node.attrs.src) }]; } catch { toast('This picture could not be read.'); return; }
       break;
@@ -187,7 +200,8 @@ export async function runFeature(app: App, f: AiFeature, arg?: string): Promise<
   const sys = await systemPrompt(app, f);
   const messages: ChatMessage[] = [{ role: 'system', content: sys }, { role: 'user', content: images.length ? [{ type: 'text', text: userText }, ...images] : userText }];
   const base = { messages, tier: f.tier, temperature: f.temperature, maxTokens: f.maxTokens };
-  const { aiBusy, aiIdle, showAiPreview, paneResult, aiAuthor } = await import('../ui/aiPane');
+  const { aiBusy, aiIdle, aiStatus, showAiPreview, paneResult, aiAuthor } = await import('../ui/aiPane');
+  const title = f.label.replace(/…$/, '');
   const author = aiAuthor();
   const track = s.trackAsRevisions;
   // Where the answer goes, remembered by the blocks holding it: the user may type meanwhile.
@@ -195,7 +209,8 @@ export async function runFeature(app: App, f: AiFeature, arg?: string): Promise<
   const rangeAt = range ? anchorRange(tab.view.state.doc, range) : null;
   const cutNote = () => toast('The answer was cut off (length limit or content filter); check its end.', { ms: 7000 });
   /** The document changed where the answer was to go (or was closed): show it in the AI pane. */
-  const toPane = (text: string) => { paneResult(app, f.label.replace(/…$/, ''), true).done(text); toast('The text changed while the AI was working, so the answer is shown in the AI pane instead.', { ms: 7000 }); };
+  let last: ChatResult | undefined, inPane = false;
+  const toPane = (text: string) => { inPane = true; paneResult(app, f.label.replace(/…$/, ''), true).done(text, last); toast('The text changed while the AI was working, so the answer is shown in the AI pane instead.', { ms: 7000 }); };
 
   try {
     switch (f.output) {
@@ -207,9 +222,10 @@ export async function runFeature(app: App, f: AiFeature, arg?: string): Promise<
           range: primary === 'replace' ? range : undefined,
           primary,
           markdown: f.markdown,
-          generate: async (onToken, signal) => {
-            const r = await chat({ ...base, signal, onToken: (_d, full) => onToken(f.alternatives ? full.split(/\n\s*-{3,}\s*\n/)[0] : full) });
+          generate: async (onToken, signal, ctx) => {
+            const r = await chat({ ...base, signal, onToken: (_d, full) => onToken(f.alternatives ? full.split(/\n\s*-{3,}\s*\n/)[0] : full), onStatus: ctx.status });
             if (r.truncated) cutNote();
+            ctx.result(r);
             return f.alternatives ? splitAlternatives(r.text) : [r.text];
           },
           refine: async (current, instruction) => {
@@ -222,10 +238,10 @@ export async function runFeature(app: App, f: AiFeature, arg?: string): Promise<
       }
       case 'pane': {
         const out = paneResult(app, f.label.replace(/…$/, '') + (arg ? `: ${arg}` : ''), f.markdown);
-        const ctl = aiBusy(`${f.label.replace(/…$/, '')}…`);
+        const ctl = aiBusy(`${title}…`);
         try {
-          const r = await chat({ ...base, signal: ctl.signal, onToken: (_d, full) => out.update(full) });
-          out.done(cleanOutput(r.text, { keepMarkdown: true }));
+          const r = await chat({ ...base, signal: ctl.signal, onToken: (_d, full) => out.update(full), onStatus: (t) => { aiStatus(ctl, t); out.status(t); } });
+          out.done(cleanOutput(r.text, { keepMarkdown: true }), r);
           if (r.truncated) cutNote();
         } finally { aiIdle(ctl); }
         return;
@@ -234,12 +250,14 @@ export async function runFeature(app: App, f: AiFeature, arg?: string): Promise<
       case 'cursor':
       case 'newDoc':
       case 'comments': {
-        const ctl = aiBusy(`${f.label.replace(/…$/, '')}…`);
+        const ctl = aiBusy(`${title}…`);
         let r;
-        try { r = await chat({ ...base, signal: ctl.signal }); } finally { aiIdle(ctl); }
+        try { r = await chat({ ...base, signal: ctl.signal, onStatus: (t) => aiStatus(ctl, t) }); } finally { aiIdle(ctl); }
+        // Only the final answer is applied; the discussion is shown in the pane, never inserted.
         const result = cleanOutput(r.text, { keepMarkdown: !!f.markdown || f.output === 'comments' });
         if (!result) { toast('The AI returned nothing.'); return; }
         if (r.truncated) cutNote();
+        last = r;
         const open = app.docs.includes(tab);
         if (f.output === 'insertBelow') { if (!open || !(await insertBelow(app, result, { track, author, markdown: f.markdown, heading: f.id === 'ai.keyPoints' ? 'Key points' : undefined, tab, below }))) toPane(result); }
         else if (f.output === 'cursor') { if (!open || !(await insertAtCursor(app, result, { track, author, markdown: f.markdown, tab, at }))) toPane(result); }
@@ -252,12 +270,13 @@ export async function runFeature(app: App, f: AiFeature, arg?: string): Promise<
           app.activate(tab);
         } else {
           const items = parseCommentJson(result);
-          if (!items.length) { const p = paneResult(app, f.label, true); p.done(result); toast('The notes could not be matched to the text; they are shown in the AI pane.'); return; }
+          if (!items.length) { const p = paneResult(app, f.label, true); p.done(result, r); toast('The notes could not be matched to the text; they are shown in the AI pane.'); return; }
           if (!open) { toPane(result); return; }
           const placed = addComments(app, items, author, tab);
           toast(`${placed} comment${placed === 1 ? '' : 's'} added${placed < items.length ? ` (${items.length - placed} could not be matched to the text)` : ''}`);
           if (placed) app.ui.openPane('comments');
         }
+        if (!inPane) void showDiscussion(app, title, result, r);
         return;
       }
       case 'tracked': {
@@ -267,12 +286,13 @@ export async function runFeature(app: App, f: AiFeature, arg?: string): Promise<
       case 'replace': {
         const ctl = aiBusy(`${f.label}…`);
         let r;
-        try { r = await chat({ ...base, signal: ctl.signal }); } finally { aiIdle(ctl); }
+        try { r = await chat({ ...base, signal: ctl.signal, onStatus: (t) => aiStatus(ctl, t) }); } finally { aiIdle(ctl); }
         const out = cleanOutput(r.text, { keepMarkdown: f.markdown });
+        last = r;
         // A cut-off answer would replace the whole range with part of it: show it instead.
         const where = rangeAt && !r.truncated && app.docs.includes(tab) ? resolveRange(tab.view.state.doc, rangeAt) : null;
-        if (where) await replaceRange(app, where, out, { track, author, markdown: f.markdown, tab });
-        else if (r.truncated) { paneResult(app, f.label.replace(/…$/, ''), true).done(out); cutNote(); }
+        if (where) { await replaceRange(app, where, out, { track, author, markdown: f.markdown, tab }); void showDiscussion(app, title, out, r); }
+        else if (r.truncated) { paneResult(app, f.label.replace(/…$/, ''), true).done(out, r); cutNote(); }
         else if (range) toPane(out);
         return;
       }
@@ -372,12 +392,12 @@ def([
     run: async (app) => { const { openAiSetup } = await import('../ui/aiWizard'); await openAiSetup(app); },
   },
   {
-    id: 'ai.providers', label: 'Providers & Models…', icon: 'tune', tab: 'AI', group: 'Assistant', noRecord: true,
+    id: 'ai.providers', label: 'Providers & Models…', icon: 'tune', tab: 'AI', group: 'Providers', noRecord: true,
     tip: 'Switch AI provider, choose models, test or remove keys',
     run: async (app) => { const { openAiProviders } = await import('../ui/aiWizard'); await openAiProviders(app); },
   },
   {
-    id: 'ai.chooseProvider', label: 'Active AI', icon: 'swap_horiz', tab: 'AI', group: 'Assistant', kind: 'menu', noRecord: true,
+    id: 'ai.chooseProvider', label: 'Active AI', icon: 'swap_horiz', tab: 'AI', group: 'Providers', kind: 'menu', noRecord: true,
     tip: 'Switch between the AI providers you have set up',
     run: async (app, id?: string) => {
       if (!id) { const { openAiProviders } = await import('../ui/aiWizard'); await openAiProviders(app); return; }
@@ -397,6 +417,45 @@ def([
     run: (app) => app.ui.togglePane('ai'),
     isActive: (app) => (app.ui as any).pane?.def?.id === 'ai',
   },
+  {
+    id: 'ai.ensembleMode', label: 'Several AIs', icon: 'hub', tab: 'AI', group: 'Providers', kind: 'menu',
+    tip: 'Use one AI, or send each request to several AIs: one combines their answers (master), or they deliberate until they agree (Quaker consensus)',
+    keywords: 'ensemble multiple several ais master synthesize combine consensus quaker deliberate compare providers',
+    run: async (app, mode?: string) => {
+      if (mode !== 'single' && mode !== 'master' && mode !== 'consensus') { await openEnsembleSettings(app); return; }
+      if (mode !== 'single' && !hasEnsembleMembers()) {
+        toast('Choose at least two AIs first.');
+        await openEnsembleSettings(app, mode as EnsembleMode);
+        return;
+      }
+      saveAiSettings((s) => { s.ensemble.mode = mode as EnsembleMode; });
+      toast(mode === 'single' ? 'AI: one AI answers' : mode === 'master' ? 'AI: several AIs; one combines the answers' : 'AI: several AIs deliberate until they agree');
+      app.ui.refresh?.();
+    },
+    menu: () => {
+      const m = aiSettings().ensemble.mode;
+      return [
+        { id: 'ai.ensembleMode', arg: 'single', label: 'Single AI', checked: m === 'single' },
+        { id: 'ai.ensembleMode', arg: 'master', label: 'Master Combines Answers', checked: m === 'master' },
+        { id: 'ai.ensembleMode', arg: 'consensus', label: 'Quaker Consensus', checked: m === 'consensus' },
+        { separator: true },
+        { id: 'ai.ensembleMembers', label: 'Choose AIs…' },
+      ];
+    },
+  },
+  {
+    id: 'ai.ensembleMembers', label: 'Choose AIs…', icon: 'groups', tab: 'AI', group: 'Providers',
+    tip: 'Choose which AIs answer together, which one is the master or clerk, and how many rounds of discussion',
+    keywords: 'ensemble several ais members master clerk consensus quaker rounds',
+    run: (app) => openEnsembleSettings(app),
+  },
+  {
+    id: 'ai.showDeliberation', label: 'Show AI Discussion', icon: 'reviews', tab: 'AI', group: 'Providers', kind: 'toggle',
+    tip: 'With several AIs, show each AI\'s answer and the rounds of discussion below the result',
+    keywords: 'ensemble several ais discussion deliberation rounds consensus',
+    run: (app) => { saveAiSettings((s) => { s.ensemble.showDeliberation = !s.ensemble.showDeliberation; }); toast(aiSettings().ensemble.showDeliberation ? 'The AI discussion will be shown' : 'The AI discussion will be hidden'); app.ui.refresh?.(); },
+    isActive: () => aiSettings().ensemble.showDeliberation,
+  },
   { id: 'ai.stop', label: 'Stop AI', icon: 'stop_circle', tab: 'AI', group: 'Assistant', noRecord: true, tip: 'Stop the request in progress', run: async () => { const { stopAi } = await import('../ui/aiPane'); stopAi(); } },
   {
     id: 'ai.settings', label: 'AI Settings…', icon: 'settings_suggest', tab: 'AI', group: 'Assistant', noRecord: true,
@@ -409,9 +468,14 @@ def([
     run: async () => {
       const s = aiSettings();
       const p = providerById(s.active || '');
+      const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      const plan = ensemblePlan(s);
+      const who = plan
+        ? `<p><b>Several AIs:</b> each request goes to ${esc(listNames(receivingProviders(s).map((id) => { const d = providerById(id); return d ? `${d.name}${d.kind === 'local' || d.kind === 'builtin' ? ' (on this device)' : ''}` : id; })))}. Each cloud service receives the selected text (or the document, after asking) and the other AIs' answers; each one's terms apply.</p>`
+        : `<p><b>Active provider:</b> ${p ? esc(p.name) : 'none'}${p && (p.kind === 'local' || p.kind === 'builtin') ? ' — runs on this device; your text does not leave it.' : p ? ' — the selected text (or the document, after asking) is sent to this service; its terms apply.' : ''}</p>`;
       await openDialog({ title: 'AI & Privacy', ok: 'Close', cancel: false, fields: [{ key: 'i', type: 'info', html: [
         '<p><b>QuillForge has no server.</b> AI requests go directly from this device to the provider you choose, using your own key. Nothing is sent until you run an AI command.</p>',
-        `<p><b>Active provider:</b> ${p ? p.name.replace(/</g, '&lt;') : 'none'}${p && (p.kind === 'local' || p.kind === 'builtin') ? ' — runs on this device; your text does not leave it.' : p ? ' — the selected text (or the document, after asking) is sent to this service; its terms apply.' : ''}</p>`,
+        who,
         '<p><b>Keys</b> are stored on this device only: in the Android Keystore-encrypted store in the app, or in this browser\'s IndexedDB on the web. They are never placed in documents, drafts or exported settings.</p>',
         '<p><b>Free tiers</b> of some services may use prompts to improve their models. Use the on-device model for confidential text.</p>',
         '<p><b>AI can be wrong.</b> Turn on "Insert AI edits as tracked changes" in AI Settings to review every change it makes.</p>',
@@ -483,6 +547,17 @@ def([
     },
   },
 ]);
+
+/** At least two set-up providers are chosen as members. */
+function hasEnsembleMembers(): boolean {
+  const s = aiSettings();
+  return s.ensemble.members.filter((m) => s.providers[m.provider] && providerById(m.provider)).length >= MIN_MEMBERS;
+}
+
+async function openEnsembleSettings(app: App, mode?: EnsembleMode): Promise<void> {
+  const { openAiSettings } = await import('../ui/aiWizard');
+  await openAiSettings(app, { section: 'ensemble', mode });
+}
 
 async function managePrompts(app: App): Promise<void> {
   for (;;) {

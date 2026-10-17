@@ -9,6 +9,7 @@
 import { kvGet, kvSet, kvDel } from '../util/store';
 import { isNative, secureGet, secureSet, secureRemove } from '../platform/native';
 import { providerById, type ProviderDef } from './providers';
+import { defaultEnsembleSettings, normalizeEnsemble, MIN_MEMBERS, type EnsembleSettings, type EnsemblePlan } from './ensemble';
 
 export interface ProviderConfig {
   id: string;
@@ -48,6 +49,8 @@ export interface AiSettings {
   prompts: SavedPrompt[];
   usage: { requests: number; tokensIn: number; tokensOut: number; since: number };
   privacyAck: string[];
+  /** Several AIs on one request (master or Quaker consensus). Never contains keys. */
+  ensemble: EnsembleSettings;
 }
 
 const KEY = 'quillforge.ai.v1';
@@ -57,6 +60,7 @@ export function defaultAiSettings(): AiSettings {
     enabled: true, active: null, providers: {}, trackAsRevisions: false, confirmDocument: true, clipboardWatch: true, clearClipboard: true,
     alternatives: 3, language: 'auto', styleGuide: '', voiceProfile: '', prompts: [],
     usage: { requests: 0, tokensIn: 0, tokensOut: 0, since: Date.now() }, privacyAck: [],
+    ensemble: defaultEnsembleSettings(),
   };
 }
 
@@ -73,6 +77,8 @@ export function aiSettings(): AiSettings {
   if (!s.providers || typeof s.providers !== 'object') s.providers = {};
   if (!Array.isArray(s.prompts)) s.prompts = [];
   s.prompts = s.prompts.filter((p) => p && typeof p.name === 'string' && typeof p.prompt === 'string');
+  if (!Array.isArray(s.privacyAck)) s.privacyAck = [];
+  s.ensemble = normalizeEnsemble(s.ensemble);
   cache = s;
   return s;
 }
@@ -162,4 +168,35 @@ export async function resolveProvider(id?: string | null): Promise<ResolvedProvi
 
 export function recordUsage(tokensIn: number, tokensOut: number): void {
   saveAiSettings((s) => { s.usage.requests++; s.usage.tokensIn += tokensIn || 0; s.usage.tokensOut += tokensOut || 0; });
+}
+
+// ------------------------------------------------------------------------------------------
+// Several AIs
+
+/** The provider's quality model as configured here (or its default). */
+export function qualityModel(id: string, s: AiSettings = aiSettings()): string {
+  return s.providers[id]?.model || providerById(id)?.models.quality || '';
+}
+
+/**
+ * The ensemble that normal AI commands use, or null for one AI: mode 'single', AI turned off, or
+ * fewer than two members that are set up. The master/clerk must be set up; otherwise the active
+ * provider (or the first member) takes that role.
+ */
+export function ensemblePlan(s: AiSettings = aiSettings()): EnsemblePlan | null {
+  const e = s.ensemble;
+  if (!s.enabled || !e || e.mode === 'single') return null;
+  const usable = (id: string) => !!s.providers[id] && !!providerById(id);
+  const members = e.members.filter((m) => usable(m.provider)).map((m) => ({ provider: m.provider, model: m.model || qualityModel(m.provider, s) }));
+  if (members.length < MIN_MEMBERS) return null;
+  const masterId = usable(e.master) ? e.master : s.active && usable(s.active) ? s.active : members[0].provider;
+  const asMember = members.find((m) => m.provider === masterId);
+  return { mode: e.mode, members, master: { provider: masterId, model: asMember?.model || qualityModel(masterId, s) }, maxRounds: e.maxRounds, memberTimeoutMs: e.memberTimeoutMs };
+}
+
+/** Every provider that receives the text of an AI command: the ensemble's members and master, or the active provider. */
+export function receivingProviders(s: AiSettings = aiSettings()): string[] {
+  const plan = ensemblePlan(s);
+  if (!plan) return s.active ? [s.active] : [];
+  return [...new Set([...plan.members.map((m) => m.provider), plan.master.provider])];
 }

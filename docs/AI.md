@@ -1,6 +1,6 @@
 # AI in QuillForge
 
-The **AI** tab has 67 commands. Like every other command, each one can go on the Quick Access Bar, a custom tab or a keyboard shortcut, and macros can record it. AI is optional: nothing is sent anywhere until you set up a provider and run an AI command. You can turn AI off in **AI ▸ AI Settings**.
+The **AI** tab has 70 commands. Like every other command, each one can go on the Quick Access Bar, a custom tab or a keyboard shortcut, and macros can record it. AI is optional: nothing is sent anywhere until you set up a provider and run an AI command. You can turn AI off in **AI ▸ AI Settings**.
 
 ## Choosing where AI runs
 
@@ -13,7 +13,7 @@ Open **AI ▸ Set Up AI**. The first AI command you use also offers this. The ch
 | On your own computer | Ollama, LM Studio | Free. Models run on your PC or Mac. |
 | Paid | OpenAI, Anthropic, DeepSeek, xAI, Perplexity, Together, Fireworks, Hugging Face, Moonshot, Alibaba Qwen, Azure OpenAI, Amazon Bedrock, any OpenAI-compatible service | Pay as you go, on your own account. |
 
-You can set up several providers and switch between them with **AI ▸ Active AI**.
+You can set up several providers and switch between them with **AI ▸ Active AI**, or use several at once (see [Using several AIs](#using-several-ais)).
 
 ### The on-device model (free, private, offline)
 
@@ -49,6 +49,44 @@ Then the key comes back to QuillForge in one of three ways:
 
 Every key is checked against the provider's model list before it is saved. That list also fills the model pickers, so outdated default model names correct themselves.
 
+## Using several AIs
+
+If you have set up two or more providers, every AI command can ask several of them at once and give you one answer. Open **AI ▸ Choose AIs** (or **AI Settings ▸ Use several AIs**):
+
+- tick the AIs to use (2 to 6) and, for each, the model it should use (its usual writing model unless you pick another);
+- choose what happens **when several AIs answer**: "One AI combines the answers (master)" or "The AIs deliberate until they agree (Quaker consensus)";
+- choose the **master / clerk**: the AI that writes the final answer. It can also be one of the AIs that answer;
+- for consensus, choose the **rounds of discussion** (1 to 5, normally 3);
+- **Show the discussion** puts a "How the AIs answered" section below each answer.
+
+**AI ▸ Several AIs** switches between "Single AI", "Master Combines Answers" and "Quaker Consensus", and **AI ▸ Show AI Discussion** turns the discussion on or off. Like every command, they can go on the Quick Access Bar, a custom tab, a shortcut or a macro.
+
+### One AI combines the answers (master)
+
+Each AI answers the request on its own, at the same time. The master then reads all of their answers and writes the single best one: it keeps what is correct, fixes mistakes, settles disagreements on the merits, and keeps to the format the command asked for. The answers are shuffled and labeled Response A, B, C…, so the master does not know which service wrote which. An AI that fails or takes too long (90 seconds) is left out, and the discussion says so. If only one AI answers, its answer is used as it is.
+
+### The AIs deliberate until they agree (Quaker consensus)
+
+This follows the way a Quaker business meeting makes decisions. The meeting does not vote; it looks for unity. A **clerk** listens to everyone and writes down the "sense of the meeting" as a **minute**. Each member then does one of three things:
+
+- **unite** with the minute: they support it;
+- **stand aside**: they would prefer something different but do not stop the meeting from adopting it; their concern is recorded;
+- **block**: they hold a principled objection that the minute is wrong, and it cannot be adopted as it stands.
+
+In QuillForge, every AI first answers on its own. The clerk (the AI you chose) reads the answers and writes a draft minute. Each AI reads the minute and unites, stands aside or blocks, saying why. If no one blocks, the minute is adopted ("United (3 of 3)", or "United; 1 stood aside"). If someone blocks, the clerk revises the minute to meet the objections that are right, and the AIs consider it again. If an AI still blocks after the last round, you get the clerk's last minute with the warning "The AIs did not reach unity" and each objection, so you can judge for yourself.
+
+### What you see
+
+While the AIs work, the busy indicator and the AI pane show progress ("Asking 3 AIs…", "Round 2 of 3: 1 objection"); **Stop** cancels every request still running. Only the final answer streams in and only the final answer is inserted, replaced or added as comments; the discussion is never put into your document. With **Show the discussion** on, a collapsible "How the AIs answered" section lists each AI's own answer (service, model and time, or why it was left out), each round's minute with every stance and reason, and the outcome. For commands that change the document directly, the answer and its discussion also appear in the AI pane.
+
+Key tests, model lists and the setup wizard's "Try it" always use one AI.
+
+### Cost and privacy
+
+Several AIs cost more. For N AIs, a request makes about N+1 calls in master mode and up to N×(rounds+1)+rounds in consensus (3 AIs and 3 rounds: up to 15). Paid services charge for each call, and usage counts all of them. The settings show this for your choice.
+
+Every service you choose receives the text of each request and, for the master or clerk and in consensus, the other AIs' answers. The settings list every service that will receive the text, and the first time you use a cloud service QuillForge tells you where the text goes. The on-device model can be one of the AIs; it answers one request at a time.
+
 ## Privacy and keys
 
 - QuillForge has no server. Requests go directly from your device to the provider you chose.
@@ -73,7 +111,8 @@ These commands come from a survey of how word processors and writing tools expos
 
 | Group | Commands |
 |---|---|
-| Assistant | AI Pane (chat), Ask About Document, Inline AI Command, Set Up AI, Active AI, Providers & Models, My Prompts, Prompt Library, AI Settings, AI & Privacy, Stop AI |
+| Assistant | AI Pane (chat), Ask About Document, Inline AI Command, Set Up AI, My Prompts, Prompt Library, AI Settings, AI & Privacy, Stop AI |
+| Providers | Active AI, Providers & Models, Several AIs (Single AI, Master Combines Answers, Quaker Consensus), Choose AIs, Show AI Discussion |
 | Write | Draft with AI, Continue Writing, Draft from Template (25 document types), Create Document from Brief, Brainstorm Ideas, Generate Outline, Suggest Titles |
 | Rewrite | Rewrite (several versions), Improve Writing, Change Tone (14 tones), Change Style (12 registers), Edit with Instruction, Simplify, Make It Sound Natural, Match My Voice |
 | Length & Structure | Shorten, Expand, Make Bulleted List, Convert to Table, Key Points, Add Detail (examples, counterarguments, definitions…), Add Headings |
@@ -94,6 +133,7 @@ Results appear in one of four places, depending on the command:
 
 ## Limits
 
+- Several AIs agreeing does not make an answer right: they can share the same mistakes. Check facts as you would with one AI.
 - AI output can be wrong. Proofreading and OCR repair are applied as tracked changes, so you review each edit. Research commands suggest where to look; they do not verify facts.
 - **Picture commands** need a model that accepts images (OpenAI, Anthropic, Gemini, OpenRouter vision models, xAI).
 - **Generate Image** currently uses OpenAI's image model.

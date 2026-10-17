@@ -109,7 +109,8 @@ export const DEFAULT_TABS: RibbonTab[] = [
   },
   {
     id: 'ai', label: 'AI', groups: [
-      G('assistant', 'Assistant', ['ai.chat', 'ai.ask', 'ai.command', 'ai.setup', 'ai.chooseProvider', 'ai.providers', 'ai.runPrompt', 'ai.prompts', 'ai.settings', 'ai.privacy', 'ai.stop'], 'ai.settings'),
+      G('assistant', 'Assistant', ['ai.chat', 'ai.ask', 'ai.command', 'ai.setup', 'ai.runPrompt', 'ai.prompts', 'ai.settings', 'ai.privacy', 'ai.stop'], 'ai.settings'),
+      G('providers', 'Providers', ['ai.chooseProvider', 'ai.providers', 'ai.ensembleMode', 'ai.ensembleMembers', 'ai.showDeliberation'], 'ai.ensembleMembers'),
       G('write', 'Write', ['ai.draft', 'ai.continue', 'ai.fromTemplate', 'ai.createDocument', 'ai.brainstorm', 'ai.outline', 'ai.titles']),
       G('rewrite', 'Rewrite', ['ai.rewrite', 'ai.improve', 'ai.tone', 'ai.style', 'ai.edit', 'ai.simplify', 'ai.natural', 'ai.matchVoice']),
       G('length', 'Length & Structure', ['ai.shorten', 'ai.expand', 'ai.bullets', 'ai.table', 'ai.keyPoints', 'ai.addDetail', 'ai.headings']),
