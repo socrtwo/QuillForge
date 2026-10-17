@@ -4,7 +4,7 @@ import type { App, DocTab } from '../app';
 import type { Node as PMNode } from 'prosemirror-model';
 import { schema } from '../editor/schema';
 import { normalizeSettings } from '../editor/settings';
-import { FORMATS, formatById, formatForName, importFile, exportFile } from '../io';
+import { FORMATS, formatById, formatForName, importFile, exportFile, sniff } from '../io';
 import { openDocument, saveAs, writeBack, printDocument, shareFile, readUri, openExternal, OPEN_ACCEPT, OPEN_MIMES } from '../platform/native';
 import { openDialog, toast, confirmDialog, choiceDialog, alertDialog } from '../ui/dialog';
 import { kvGet, kvSet, kvKeys, kvDel } from '../util/store';
@@ -64,7 +64,21 @@ async function openRecoveredText(app: App, text: string, name: string): Promise<
 export async function openBuffer(app: App, data: ArrayBuffer, name: string, uri: string | null, opts: { repair?: boolean; textOnly?: boolean; key?: string } = {}): Promise<DocTab | null> {
   try {
     if (opts.repair || opts.textOnly) toast(opts.textOnly ? `Recovering text from ${name}…` : `Repairing ${name}…`);
-    const { doc, format, recovery } = await importFile(data, name, { repair: opts.repair, textOnly: opts.textOnly });
+    // Identify the file by its content; the extension only breaks ties.
+    const sniffed = sniff(data, name);
+    if (!opts.repair && !opts.textOnly) {
+      if (sniffed.category === 'spreadsheet' || sniffed.category === 'presentation' || sniffed.category === 'email') {
+        const { chooseCrossOpen } = await import('../ui/crossOpen');
+        const c = await chooseCrossOpen(sniffed, { name, data, uri }, !!formatById(sniffed.format)?.canImport);
+        if (c !== 'import') return null;
+      } else if (sniffed.category === 'unknown' && sniffed.format !== 'unknown') {
+        const why = sniffed.format === 'ooxml-encrypted' ? ' It is password-protected: open it with the password in the program that made it, remove the password and save it again.' : '';
+        const c = await choiceDialog('Not a Document', `${name} is ${/^[aeiou]/i.test(sniffed.label) ? 'an' : 'a'} ${sniffed.label}, not a document.${why}`, ['Recover any text it holds']);
+        if (c !== 0) return null;
+        opts = { ...opts, textOnly: true };
+      }
+    }
+    const { doc, format, recovery, note } = await importFile(data, name, { repair: opts.repair, textOnly: opts.textOnly, sniffed });
     if (recovery && recovery.mode === 'text' && recovery.bestKey === 'strings' && !opts.textOnly) {
       const go = await confirmDialog('Only Text Fragments Recovered', `${name} is too badly damaged to open normally. Only loose text fragments (${recovery.bestText.length.toLocaleString()} characters) could be recovered. Open them in a new document?`, 'Open fragments', 'Cancel');
       if (!go) { void showRecoveryReport(recovery); return null; }
@@ -92,7 +106,8 @@ export async function openBuffer(app: App, data: ArrayBuffer, name: string, uri:
     app.activate(tab);
     if (recovery) {
       toast(`${name} was damaged. ${recoverySummary(recovery)}`, { action: 'Details', onAction: () => app.exec('file.recoveryReport'), ms: 9000 });
-    } else if (format.id === 'doc') toast(`Opened ${name}. Word 97-2003 files open as text and paragraphs; save as .docx to keep them.`, { ms: 6000 });
+    } else if (note) toast(`${note} ${format.canExport ? '' : 'Saving makes a new copy in a current format.'}`.trim(), { ms: 7000 });
+    else if (!format.canExport) toast(`Opened ${name} (${sniffed.label}). Saving makes a new copy in a current format.`, { ms: 6000 });
     else toast(`Opened ${name}`);
     return tab;
   } catch (e: any) {

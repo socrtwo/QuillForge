@@ -42,6 +42,10 @@ interface QuillNativePlugin {
   /** One-shot http://127.0.0.1:<port>/ listener for OAuth redirects (OpenRouter PKCE); only requests for `path` count. */
   startLoopback(opts: { timeoutMs: number; successHtml?: string; path?: string }): Promise<{ port: number }>;
   stopLoopback(): Promise<void>;
+  /** Android: is a sister app (QuillGrid, QuillPost, QuillStage) installed? */
+  canLaunchApp?(opts: { package: string }): Promise<{ installed: boolean }>;
+  /** Android: open a file in a sister app (ACTION_VIEW restricted to that package). */
+  launchApp?(opts: { package: string; uri?: string | null; name: string; mime: string; data?: string }): Promise<{ installed: boolean; launched: boolean }>;
 }
 
 /** The desktop bridge adds what Android gets from Capacitor itself. */
@@ -49,6 +53,8 @@ interface DesktopBridge extends QuillNativePlugin {
   /** 'win32' | 'darwin' | 'linux' */
   platform: string;
   openExternal(opts: { url: string }): Promise<void>;
+  /** Open a file with a sister app when the system registers it for that file type. */
+  openWith(opts: { app: string; uri?: string | null; name: string; data?: string }): Promise<{ ok: boolean; app: string; handler?: string; error?: string }>;
   /** HTTP from the main process (no CORS), for AI providers that block browsers. */
   http(opts: { url: string; method: string; headers: Record<string, string>; data?: unknown }): Promise<{ status: number; text: string }>;
 }
@@ -253,13 +259,53 @@ export async function onBackButton(cb: () => boolean): Promise<void> {
   App.addListener('backButton', () => { if (!cb()) App.minimizeApp(); });
 }
 
-export const OPEN_ACCEPT = '.docx,.docm,.dotx,.dotm,.doc,.dot,.wbk,.asd,.odt,.ott,.fodt,.rtf,.html,.htm,.md,.markdown,.txt,.epub,.qfd,.json';
+// Files are identified by content, so the picker offers every type it can (and "All files").
+export const OPEN_ACCEPT = [
+  '.docx,.docm,.dotx,.dotm,.doc,.dot,.wbk,.asd,.odt,.ott,.fodt,.rtf,.html,.htm,.md,.markdown,.txt,.epub,.qfd,.json',
+  '.wpd,.wp,.wp4,.wp5,.wp6,.wpt,.wps,.wri,.lwp,.sam,.mcw,.cwk,.wn,.ws,.ws4,.ws5,.ws6,.ws7,.xy,.xyw,.rft,.dca,.hwp,.sdw,.sxw,.abw,.pages',
+  '.csv,.tsv,.xlsx,.xlsm,.xls,.ods,.dbf,.wk1,.wks,.pptx,.ppt,.odp,.key,.eml,.emlx,.mbox,.mht,.mhtml,.msg',
+].join(',');
 export const OPEN_MIMES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.oasis.opendocument.text',
   'application/msword', 'application/vnd.ms-word.document.macroEnabled.12',
   'application/rtf', 'text/rtf', 'text/html', 'text/markdown', 'text/plain', 'application/epub+zip', 'application/json', 'application/octet-stream', '*/*',
 ];
+
+// ------------------------------------------------------------------------------------------
+// Sister apps: QuillGrid (spreadsheets), QuillPost (email), QuillStage (presentations)
+
+export interface SisterApp { id: 'quillgrid' | 'quillpost' | 'quillstage'; name: string; package: string; web: string; what: string }
+export const SISTER_APPS: Record<'spreadsheet' | 'email' | 'presentation', SisterApp> = {
+  spreadsheet: { id: 'quillgrid', name: 'QuillGrid', package: 'io.github.socrtwo.quillgrid', web: 'https://socrtwo.github.io/QuillGrid/', what: 'spreadsheet' },
+  email: { id: 'quillpost', name: 'QuillPost', package: 'io.github.socrtwo.quillpost', web: 'https://socrtwo.github.io/QuillPost/', what: 'email' },
+  presentation: { id: 'quillstage', name: 'QuillStage', package: 'io.github.socrtwo.quillstage', web: 'https://socrtwo.github.io/QuillStage/', what: 'presentation' },
+};
+
+/** 'yes' when the sister app can be launched here, 'maybe' when only trying will tell (desktop), 'web' for a link. */
+export async function sisterAppReach(app: SisterApp): Promise<'yes' | 'maybe' | 'no' | 'web'> {
+  if (desktop) return 'maybe';
+  if (isCapacitor() && !isIOS() && Native.canLaunchApp) {
+    try { return (await Native.canLaunchApp({ package: app.package })).installed ? 'yes' : 'no'; } catch { return 'no'; }
+  }
+  return 'web';
+}
+
+/** Hand a file to a sister app. Resolves with a message for the user when it did not open there. */
+export async function openInSisterApp(app: SisterApp, f: OpenedFile): Promise<{ ok: boolean; message?: string }> {
+  if (desktop) {
+    const r = await desktop.openWith({ app: app.id, uri: f.uri, name: f.name, data: f.uri ? undefined : b64FromBuffer(f.data) });
+    if (r.ok) return { ok: true };
+    return { ok: false, message: r.error || `${app.name} is not the program your system uses for this kind of file${r.handler ? ` (it uses ${r.handler.replace(/\.desktop$/, '')})` : ''}. Install ${app.name} and make it the default app for ${app.what} files, or import the file here.` };
+  }
+  if (isCapacitor() && !isIOS() && Native.launchApp) {
+    const r = await Native.launchApp({ package: app.package, uri: f.uri, name: f.name, mime: f.mime || 'application/octet-stream', data: f.uri?.startsWith('content:') ? undefined : b64FromBuffer(f.data) });
+    if (r.launched) return { ok: true };
+    return { ok: false, message: r.installed ? `${app.name} opened, but it could not take this file; open it from ${app.name}.` : `${app.name} is not installed.` };
+  }
+  openExternal(app.web);
+  return { ok: true, message: `${app.name} opened in your browser. Open the file there.` };
+}
 
 // ------------------------------------------------------------------------------------------
 // Secure storage, clipboard, OAuth loopback, app resume (AI setup)

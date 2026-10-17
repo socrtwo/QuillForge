@@ -193,6 +193,12 @@ export function readPpt(data: ArrayBuffer | Uint8Array): Slide[] {
 }
 
 export function slidesToDoc(slides: Slide[], title: string): PMNode {
+  // A slide without a title placeholder: its first short, unbulleted line serves as the title.
+  for (const s of slides) {
+    if (s.title || !s.body.length || s.body[0].bullet) continue;
+    const t = s.body[0].runs.map((r) => r.text).join('').trim();
+    if (t && t.length <= 80 && !t.includes('\n')) { s.title = t; s.body.shift(); }
+  }
   const b = new DocBuilder();
   b.property('title', title);
   b.page({ width: 792, height: 612, top: 54, bottom: 54, left: 54, right: 54, landscape: true });

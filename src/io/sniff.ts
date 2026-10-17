@@ -407,7 +407,7 @@ const RULES: SniffRule[] = [
   R('wordml', 'Word 2003 XML document', DOC, ['xml'], (c) => { const r = c.xmlRoot(); return r && r.name === 'wordDocument' && r.ns.some((n) => n.includes('office/word/2003/wordml')) ? 0.95 : 0; }),
 
   // ---- WordPerfect family
-  R('wpd', 'WordPerfect document', DOC, ['wpd', 'wp', 'wp4', 'wp5', 'wp6', 'wp7', 'wpt', 'doc', 'w51', 'w60', 'w61', 'frm'], (c) => {
+  R('wpd', 'WordPerfect document', DOC, ['wpd', 'wp', 'wp4', 'wp5', 'wp6', 'wp7', 'wpt', 'w51', 'w60', 'w61', 'frm'], (c) => {
     let h = wpc(c);
     let wrapped = false;
     if (!h && c.cfb()) { const m = cfbStream(c, 'PerfectOffice_MAIN'); if (m) { h = wpc(c, m); wrapped = true; } }
@@ -415,7 +415,7 @@ const RULES: SniffRule[] = [
       const v = h.type === 0x2c ? (h.major >= 3 ? 'WordPerfect for Macintosh 3.x' : 'WordPerfect for Macintosh 2.x') : h.major === 0 ? 'WordPerfect 5.x' : h.major === 2 ? 'WordPerfect 6-X9' : 'WordPerfect';
       return { confidence: 0.98, label: `${h.product === 0x10 ? 'LetterPerfect' : v} document${wrapped ? ' (OLE wrapper)' : ''}` };
     }
-    const s = c.ext === 'doc' && c.cfb() ? 0 : wp42Score(c.bytes);
+    const s = c.cfb() ? 0 : wp42Score(c.bytes);
     return s ? { confidence: s, label: 'WordPerfect 4.2 document' } : 0;
   }),
 
@@ -489,7 +489,7 @@ const RULES: SniffRule[] = [
   R('fodt', 'Flat OpenDocument text', DOC, ['fodt', 'xml'], (c) => (!c.zip() && /opendocument\.text/.test(odfType(c)) ? 0.97 : 0)),
   R('sxw', 'OpenOffice.org 1.x text document', DOC, ['sxw', 'stw', 'sxg'], (c) => (/sun\.xml\.writer/.test(zipMime(c)) ? 0.98 : 0)),
   R('sdw', 'StarWriter document', DOC, ['sdw', 'vor', 'sgl'], (c) => (cfbHas(c, 'StarWriterDocument') ? 0.98 : 0)),
-  R('rtf', 'Rich Text Format document', DOC, ['rtf', 'doc', 'wri'], (c) => (/^\s*\{\\rtf/.test(c.head) ? 0.99 : 0)),
+  R('rtf', 'Rich Text Format document', DOC, ['rtf'], (c) => (/^\s*\{\\rtf/.test(c.head) ? 0.99 : 0)),
   R('psw', 'Pocket Word document', DOC, ['psw', 'pwd', 'pwi'], (c) => (c.at(0, '{\\pwi') ? 0.95 : 0)),
   R('epub', 'EPUB e-book', DOC, ['epub'], (c) => (zipMime(c) === 'application/epub+zip' || zipHas(c, 'META-INF/container.xml') && !!zipFind(c, /\.opf$/i) ? 0.99 : 0)),
   R('abw', 'AbiWord document', DOC, ['abw', 'awt', 'zabw'], (c) => {
@@ -620,7 +620,7 @@ const RULES: SniffRule[] = [
     if (/multipart\/related/.test(h.mime) || (/^MIME-Version:/im.test(c.head) && /Snapshot-Content-Location|Content-Location:/i.test(c.text().slice(0, 16384)) && /text\/html/i.test(c.text().slice(0, 16384)) && !/^(Received|Message-ID|Delivered-To):/im.test(c.head))) return { confidence: 0.92, label: 'Web archive (MHTML)', category: 'document' };
     return 0;
   }),
-  R('eml', 'Email message', MAIL, ['eml', 'msg', 'nws', 'mim', 'mime', 'txt', 'rfc822', 'email'], (c) => (c.binary() ? 0 : mailHeaders(c.text()).score * 0.98)),
+  R('eml', 'Email message', MAIL, ['eml', 'nws', 'mim', 'mime', 'rfc822', 'email'], (c) => (c.binary() ? 0 : mailHeaders(c.text()).score * 0.98)),
 
   // ---- Other things people open by mistake (recognized, not imported)
   R('image', 'Image', UNK, ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tif', 'tiff', 'webp', 'ico', 'heic', 'avif', 'wmf', 'emf', 'wpg', 'svg'], (c) => {
@@ -697,7 +697,7 @@ export function sniff(data: ArrayBuffer | Uint8Array, name = ''): SniffResult {
   const empty = ctx.bytes.length === 0;
   if (!best || best.hit.confidence < 0.3) {
     // Weak or no content match: trust the extension when a rule claims it, else plain text or unknown.
-    const byExt = ext ? sniffRules().find((r) => r.ext.includes(ext) && r.format !== 'txt') : undefined;
+    const byExt = ext ? sniffRules().find((r) => r.ext[0] === ext && r.format !== 'txt') || sniffRules().find((r) => r.ext.includes(ext) && r.format !== 'txt') : undefined;
     if (byExt && byExt !== best?.rule) return { format: byExt.format, label: byExt.label, confidence: empty ? 0.1 : 0.2, category: byExt.category, note: '', ext, exts: byExt.ext };
     if (!best) {
       if (!ctx.binary() || empty) {

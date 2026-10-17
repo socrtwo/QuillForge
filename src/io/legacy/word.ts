@@ -152,7 +152,7 @@ export function applyChp(chp: Chp, sprms: Sprm[], base: Chp, fonts: string[]): v
       case 0x2a42: chp.color = v > 0 && v < WORD_ICO.length ? WORD_ICO[v] : null; break;
       case 0x6870: chp.color = arg[3] ? null : hex(arg[0], arg[1], arg[2]); break;
       case 0x2a0c: { const hl = ['', '#000000', '#0000ff', '#00ffff', '#00ff00', '#ff00ff', '#ff0000', '#ffff00', '#ffffff', '#000080', '#008080', '#008000', '#800080', '#800000', '#808000', '#808080', '#c0c0c0']; chp.highlight = hl[v] || null; break; }
-      case 0x4a43: chp.size = le.u16(arg, 0) / 2; break;
+      case 0x4a43: chp.size = (arg.length >= 2 ? le.u16(arg, 0) : arg[0]) / 2; break;
       case 0xea3f: if (arg[0] & 1) chp.size = le.u16(arg, 1) / 2; break; // sprmCSizePos: fChgHps
       case 0x2a48: chp.sup = v === 1; chp.sub = v === 2; break;
       case 0x4845: { const p = (arg[0] << 24) >> 24; chp.sup = p > 0; chp.sub = p < 0; break; }
