@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE article PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN"
+                  "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd">
+<article>
+  <articleinfo>
+    <title>Pandoc Sample</title>
+    <authorgroup>
+      <author>
+        <personname>
+          <firstname>Pat</firstname>
+          <surname>Writer</surname>
+        </personname>
+      </author>
+    </authorgroup>
+  </articleinfo>
+  <sect1 id="introduction">
+    <title>Introduction</title>
+    <para>
+      This is <emphasis>emphasized</emphasis>,
+      <emphasis role="strong">strong</emphasis>,
+      <emphasis role="strikethrough">struck</emphasis>,
+      <literal>inline code</literal>, H<subscript>2</subscript>O and
+      x<superscript>2</superscript> text with a
+      <ulink url="https://example.com/docs">link</ulink> and a
+      footnote.<footnote>
+        <para>
+          The footnote text with <emphasis>emphasis</emphasis>.
+        </para>
+      </footnote>
+    </para>
+    <sect2 id="lists">
+      <title>Lists</title>
+      <itemizedlist spacing="compact">
+        <listitem>
+          <para>
+            Apple
+          </para>
+        </listitem>
+        <listitem>
+          <para>
+            Banana
+          </para>
+          <itemizedlist spacing="compact">
+            <listitem>
+              <para>
+                Nested banana
+              </para>
+            </listitem>
+          </itemizedlist>
+        </listitem>
+        <listitem>
+          <para>
+            Cherry
+          </para>
+        </listitem>
+      </itemizedlist>
+      <orderedlist numeration="arabic" spacing="compact">
+        <listitem>
+          <para>
+            First
+          </para>
+        </listitem>
+        <listitem>
+          <para>
+            Second
+          </para>
+          <orderedlist numeration="loweralpha" spacing="compact">
+            <listitem>
+              <para>
+                Sub alpha
+              </para>
+            </listitem>
+          </orderedlist>
+        </listitem>
+        <listitem>
+          <para>
+            Third
+          </para>
+        </listitem>
+      </orderedlist>
+      <blockquote>
+        <para>
+          A block quote with <emphasis role="strong">bold</emphasis>
+          inside.
+        </para>
+      </blockquote>
+      <programlisting language="python">
+def hello():
+    return &quot;world&quot;
+</programlisting>
+    </sect2>
+    <sect2 id="table">
+      <title>Table</title>
+      <informaltable>
+        <tgroup cols="3">
+          <colspec align="left" />
+          <colspec align="right" />
+          <colspec align="center" />
+          <thead>
+            <row>
+              <entry>
+                Name
+              </entry>
+              <entry>
+                Qty
+              </entry>
+              <entry>
+                Note
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                Pens
+              </entry>
+              <entry>
+                12
+              </entry>
+              <entry>
+                blue
+              </entry>
+            </row>
+            <row>
+              <entry>
+                Paper
+              </entry>
+              <entry>
+                500
+              </entry>
+              <entry>
+                <emphasis>A4</emphasis> sheets
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para>
+        Math inline
+        <emphasis>E</emphasis> = <emphasis>m</emphasis><emphasis>c</emphasis><superscript>2</superscript>
+        and display:
+      </para>
+      <para>
+        $$\int_0^1 x^2\,dx = \frac{1}{3}$$
+      </para>
+      <figure>
+        <title>Swatch image</title>
+        <mediaobject>
+          <imageobject>
+            <imagedata fileref="swatch.png" />
+          </imageobject>
+          <textobject><phrase>Swatch image</phrase></textobject>
+        </mediaobject>
+      </figure>
+      <para>
+        Final paragraph.
+      </para>
+    </sect2>
+  </sect1>
+</article>

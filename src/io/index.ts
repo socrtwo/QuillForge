@@ -8,6 +8,8 @@
 import type { Node as PMNode } from 'prosemirror-model';
 import type { RecoveryReport } from './recover';
 import { normalizeTables } from '../editor/normalize';
+import { FORMATS_B } from './formats-b';
+import { sniffB } from './sniff-b';
 
 export interface ExportOptions {
   fileName: string;
@@ -81,6 +83,7 @@ export const FORMATS: FormatDef[] = [
     import: async (d) => (await import('./native')).importNative(d),
     export: async (doc) => (await import('./native')).exportNative(doc),
   },
+  ...FORMATS_B,
   { id: 'pdf', label: 'PDF (via Print ▸ Save as PDF)', ext: ['pdf'], mime: 'application/pdf', canImport: false, canExport: true, note: 'Uses the system print service' },
 ];
 void lazy;
@@ -96,6 +99,8 @@ export function formatById(id: string): FormatDef | undefined {
 }
 
 export function sniffFormat(data: ArrayBuffer, name: string): FormatDef | undefined {
+  const byContentB = sniffB(data, name);
+  if (byContentB && formatById(byContentB)) return formatById(byContentB);
   const u8 = new Uint8Array(data.slice(0, 64));
   const head = String.fromCharCode(...u8);
   if (u8[0] === 0xd0 && u8[1] === 0xcf && u8[2] === 0x11 && u8[3] === 0xe0) return formatById('doc');

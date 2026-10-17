@@ -152,7 +152,7 @@ function parseParaAttrs(dom: HTMLElement, styleFromTag?: string): Attrs {
   attrs.spaceBefore = cssToPt(st.paddingTop) ?? cssToPt(st.marginTop);
   attrs.spaceAfter = cssToPt(st.paddingBottom) ?? cssToPt(st.marginBottom);
   if (st.lineHeight && st.lineHeight !== 'normal') attrs.lineHeight = st.lineHeight;
-  if (st.backgroundColor) attrs.bg = st.backgroundColor;
+  if (st.backgroundColor || dom.getAttribute('data-bg')) attrs.bg = st.backgroundColor || dom.getAttribute('data-bg');
   attrs.dir = dom.getAttribute('dir');
   attrs.keepNext = dom.hasAttribute('data-keep-next');
   attrs.keepLines = dom.hasAttribute('data-keep-lines');
@@ -187,7 +187,7 @@ const tbl = tableNodes({
   cellAttributes: {
     background: {
       default: null,
-      getFromDOM: (dom) => (dom as HTMLElement).style.backgroundColor || null,
+      getFromDOM: (dom) => (dom as HTMLElement).style.backgroundColor || (dom as HTMLElement).getAttribute('data-bg') || null,
       setDOMAttr: (value, attrs) => { if (value) attrs.style = (attrs.style || '') + `background-color:${value};`; },
     },
     valign: {

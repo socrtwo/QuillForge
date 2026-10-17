@@ -1790,7 +1790,7 @@ export async function importOdt(data: ArrayBuffer, name: string): Promise<PMNode
 
 export async function importFodt(data: ArrayBuffer, name: string): Promise<PMNode> {
   void name;
-  const text = utf8Decode(data).replace(/^﻿/, '');
+  const text = utf8Decode(data).replace(/^\uFEFF/, '');
   const d = parseXml(text);
   if (!d) return fallbackText(text);
   try {
@@ -1798,4 +1798,9 @@ export async function importFodt(data: ArrayBuffer, name: string): Promise<PMNod
   } catch {
     return fallbackText(text);
   }
+}
+
+/** Build a document from already-parsed ODF parts (used by converters that translate older XML dialects to ODF). */
+export function odfPartsToDoc(parts: { content: Document; styles: Document | null; meta: Document | null; files: Map<string, Uint8Array> }): PMNode {
+  return new OdtReader(parts).parse();
 }

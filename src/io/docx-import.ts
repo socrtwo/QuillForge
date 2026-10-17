@@ -828,7 +828,12 @@ class DocxImporter {
   paragraph(p: Element, items: Item[]): void {
     const pPr = kid(p, 'pPr');
     const attrs = this.paraAttrs(pPr);
-    const list = this.listInfo(pPr);
+    let list = this.listInfo(pPr);
+    // Outline numbering without a number (LibreOffice's default chapter numbering) is not a list.
+    if (list && /^(Heading \d|Title)$/.test(attrs.style)) {
+      const def = this.levelDef(list.numId, list.ilvl);
+      if (def.kind === 'bullet' && def.bullet === 'none') list = null;
+    }
     if (list) {
       if (attrs.style === 'List Paragraph') attrs.style = 'Normal';
       attrs.indentLeft = null;
@@ -1991,7 +1996,11 @@ function plainMath(e: Element | null): string {
 
 /** Import a .docx / .docm / .dotx / .dotm file into a QuillForge document. */
 export async function importDocx(data: ArrayBuffer, name: string): Promise<PMNode> {
-  const zip = await JSZip.loadAsync(data);
+  return importDocxZip(await JSZip.loadAsync(data), name);
+}
+
+/** Import an already-opened (or synthesized) WordprocessingML package. */
+export async function importDocxZip(zip: JSZip, name: string): Promise<PMNode> {
   const imp = new DocxImporter(new Package(zip), name);
   return imp.convert();
 }
