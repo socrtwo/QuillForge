@@ -8,6 +8,10 @@
 import type { Node as PMNode } from 'prosemirror-model';
 import type { RecoveryReport } from './recover';
 import { normalizeTables } from '../editor/normalize';
+import { sniff, type SniffCategory, type SniffResult } from './sniff';
+import { LEGACY_FORMATS } from './formats-legacy';
+
+export { sniff, registerSniffer, sniffRules, type SniffResult, type SniffRule, type SniffCategory } from './sniff';
 
 export interface ExportOptions {
   fileName: string;
@@ -26,6 +30,10 @@ export interface FormatDef {
   import?: (data: ArrayBuffer, name: string) => Promise<PMNode>;
   export?: (doc: PMNode, opts: ExportOptions) => Promise<Blob>;
   note?: string;
+  /** What the file holds; anything but 'document' opens through the cross-category choice. */
+  category?: SniffCategory;
+  /** How closely an import matches the original program (see docs/FORMATS.md). */
+  fidelity?: 'full' | 'high' | 'basic' | 'text';
 }
 
 const lazy = <T>(loader: () => Promise<T>) => loader;
@@ -38,8 +46,12 @@ export const FORMATS: FormatDef[] = [
   },
   {
     id: 'doc', label: 'Word 97-2003 Document (.doc)', ext: ['doc', 'dot', 'wbk', 'asd'], mime: 'application/msword', canImport: true, canExport: false,
-    import: async (d, n) => (await import('./recover')).importDoc97(d, n),
-    note: 'Opens text and paragraph structure; save as .docx to keep it',
+    import: async (d, n) => {
+      // Formatted reader first; the text-only piece-table reader is the fallback for unusual files.
+      try { return await (await import('./legacy/word')).importWord97(d, n); } catch { return (await import('./recover')).importDoc97(d, n); }
+    },
+    fidelity: 'high',
+    note: 'Text, character and paragraph formatting, styles, lists, tables, notes, pictures, headers and footers',
   },
   {
     id: 'odt', label: 'OpenDocument Text (.odt)', ext: ['odt', 'ott'], mime: 'application/vnd.oasis.opendocument.text', canImport: true, canExport: true,
@@ -81,6 +93,7 @@ export const FORMATS: FormatDef[] = [
     import: async (d) => (await import('./native')).importNative(d),
     export: async (doc) => (await import('./native')).exportNative(doc),
   },
+  ...LEGACY_FORMATS,
   { id: 'pdf', label: 'PDF (via Print ▸ Save as PDF)', ext: ['pdf'], mime: 'application/pdf', canImport: false, canExport: true, note: 'Uses the system print service' },
 ];
 void lazy;
@@ -95,24 +108,19 @@ export function formatById(id: string): FormatDef | undefined {
   return FORMATS.find((f) => f.id === id);
 }
 
+/** The format that opens this file, chosen by content (the extension only breaks ties). */
 export function sniffFormat(data: ArrayBuffer, name: string): FormatDef | undefined {
-  const u8 = new Uint8Array(data.slice(0, 64));
-  const head = String.fromCharCode(...u8);
-  if (u8[0] === 0xd0 && u8[1] === 0xcf && u8[2] === 0x11 && u8[3] === 0xe0) return formatById('doc');
-  if (head.startsWith('PK')) {
-    const byName = formatForName(name);
-    if (byName && ['docx', 'odt', 'epub'].includes(byName.id)) return byName;
-    if (head.includes('mimetypeapplication/vnd.oasis')) return formatById('odt');
-    if (head.includes('mimetypeapplication/epub')) return formatById('epub');
-    return formatById('docx');
-  }
-  if (head.startsWith('{\\rtf')) return formatById('rtf');
-  if (/^\s*\{\s*"(type|qf)"/.test(head)) return formatById('qfd');
-  if (/^\s*<(!doctype html|html|\?xml)/i.test(head)) {
-    if (/office:document/.test(new TextDecoder().decode(data.slice(0, 2000)))) return formatById('fodt');
-    return formatById('html');
-  }
-  return formatForName(name) || formatById('txt');
+  return formatForSniff(sniff(data, name), name);
+}
+
+/** The importer for a sniff result: the detected format, else the extension's, else plain text for text. */
+export function formatForSniff(s: SniffResult, name: string): FormatDef | undefined {
+  const byId = formatById(s.format);
+  if (byId?.canImport) return byId;
+  const byName = formatForName(name);
+  if (s.confidence < 0.3 && byName?.canImport) return byName;
+  if (s.format === 'txt' || s.format === 'unknown') return byName?.canImport && s.format === 'unknown' ? byName : s.format === 'txt' ? formatById('txt') : undefined;
+  return undefined;
 }
 
 export interface ImportResult {
@@ -120,21 +128,28 @@ export interface ImportResult {
   format: FormatDef;
   /** Present when the file was damaged and had to be recovered (or Open and Repair was used). */
   recovery?: RecoveryReport;
+  /** What the content was identified as. */
+  sniffed?: SniffResult;
+  /** Short note for the user, e.g. when the file name's extension disagreed with the content. */
+  note?: string;
 }
 
 /** Formats whose damaged files go through the recovery pipeline instead of failing. */
-const RECOVERABLE = ['docx', 'doc', 'odt', 'rtf', 'epub', 'fodt'];
+const RECOVERABLE = ['docx', 'doc', 'odt', 'rtf', 'epub', 'fodt', ...LEGACY_FORMATS.filter((f) => !f.category).map((f) => f.id)];
 
-export async function importFile(data: ArrayBuffer, name: string, opts: { repair?: boolean; textOnly?: boolean } = {}): Promise<ImportResult> {
-  const r = await importRaw(data, name, opts);
-  return { ...r, doc: normalizeTables(r.doc) };
+export interface ImportOptions { repair?: boolean; textOnly?: boolean; sniffed?: SniffResult }
+
+export async function importFile(data: ArrayBuffer, name: string, opts: ImportOptions = {}): Promise<ImportResult> {
+  const sniffed = opts.sniffed || sniff(data, name);
+  const r = await importRaw(data, name, opts, sniffed);
+  return { ...r, doc: normalizeTables(r.doc), sniffed, note: r.note ?? sniffed.note };
 }
 
-async function importRaw(data: ArrayBuffer, name: string, opts: { repair?: boolean; textOnly?: boolean }): Promise<ImportResult> {
-  const fmt = sniffFormat(data, name);
+async function importRaw(data: ArrayBuffer, name: string, opts: ImportOptions, sniffed: SniffResult): Promise<ImportResult> {
+  const fmt = formatForSniff(sniffed, name);
   const recover = async (cause: unknown, force: boolean) => {
     const { recoverDocument } = await import('./recover');
-    const report = await recoverDocument(data, name, { force, textOnly: opts.textOnly });
+    const report = await recoverDocument(data, name, { force, textOnly: opts.textOnly, format: sniffed.format });
     if (!report.doc) {
       const why = report.notes.join(' ') || 'No recoverable content was found.';
       throw new Error(cause instanceof Error ? `${cause.message}. ${why}` : why);
@@ -144,7 +159,11 @@ async function importRaw(data: ArrayBuffer, name: string, opts: { repair?: boole
     return { doc: report.doc, format: formatById(kind) || formatById('docx')!, recovery: report };
   };
   if (opts.repair || opts.textOnly) return recover(null, true);
-  if (!fmt || !fmt.import) return recover(new Error(`Unsupported file type: ${name}`), false);
+  if (!fmt || !fmt.import) {
+    const what = sniffed.format !== 'unknown' && sniffed.format !== 'txt' ? `${sniffed.label} files cannot be opened yet` : `Unsupported file type: ${name}`;
+    const r = await recover(new Error(what), false);
+    return { ...r, note: sniffed.format !== 'unknown' ? `${sniffed.label}: only its text could be recovered.` : undefined };
+  }
   let doc: PMNode;
   try {
     doc = await fmt.import(data, name);
@@ -153,7 +172,7 @@ async function importRaw(data: ArrayBuffer, name: string, opts: { repair?: boole
     return recover(e, false);
   }
   // A package that "opens" but yields nothing from a sizable file is usually damaged inside.
-  if (RECOVERABLE.includes(fmt.id) && data.byteLength > 4096 && !doc.textContent.trim() && !hasAtoms(doc)) {
+  if (['docx', 'doc', 'odt', 'rtf', 'epub', 'fodt'].includes(fmt.id) && data.byteLength > 4096 && !doc.textContent.trim() && !hasAtoms(doc)) {
     try {
       const r = await recover(null, true);
       if (r.doc.textContent.trim()) return r;

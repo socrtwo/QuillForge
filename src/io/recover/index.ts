@@ -28,7 +28,7 @@ import {
 export type MethodStatus = 'success' | 'partial' | 'failed' | 'skipped';
 
 export interface MethodResult {
-  key: 'standard' | 'bytes' | 'tags' | 'rtf' | 'doc97' | 'strings';
+  key: 'standard' | 'bytes' | 'tags' | 'rtf' | 'doc97' | 'legacy' | 'strings';
   name: string;
   desc: string;
   status: MethodStatus;
@@ -64,6 +64,8 @@ export interface RecoverOptions {
   force?: boolean;
   /** Skip the formatted rebuild and return text only (Recover Text from Any File). */
   textOnly?: boolean;
+  /** Format id from content sniffing; selects a format-aware text extractor for legacy files. */
+  format?: string;
 }
 
 const DOCX_CT: Record<string, string> = {
@@ -237,6 +239,20 @@ export async function recoverDocument(data: ArrayBuffer, fileName: string, opts:
   }
   report.methods.push(m5);
 
+  // ---- Method 5b: format-aware text from a legacy word processor file
+  const m5b: MethodResult = { key: 'legacy', name: 'Legacy word processor text', desc: 'Decode the text runs of the identified legacy format (WordPerfect, Works, Write, WordStar, Hangul…) without its formatting.', status: 'skipped', detail: 'Not a legacy word processor file.', text: '' };
+  try {
+    const { legacyExtractor } = await import('../legacy/extract');
+    const fmt = opts.format || (await import('../sniff')).sniff(u8, fileName).format;
+    const ex = legacyExtractor(fmt);
+    if (ex) {
+      m5b.text = (await ex(u8)).trim();
+      m5b.status = m5b.text ? 'partial' : 'failed';
+      m5b.detail = m5b.text ? `${plural(m5b.text.length, 'character')} decoded as ${fmt}.` : 'No text could be decoded.';
+    }
+  } catch (e: any) { m5b.status = 'failed'; m5b.detail = e?.message || String(e); }
+  report.methods.push(m5b);
+
   // ---- Method 6: strings scan
   const m6: MethodResult = { key: 'strings', name: 'Strings scan (last resort)', desc: 'Collect runs of printable ASCII and UTF-16LE text from the raw bytes. Works on any file, including fragments and renamed temp files.', status: 'failed', detail: '', text: '' };
   // Compressed packages hold no plain text; scan the decompressed main part instead of the archive bytes.
@@ -247,11 +263,11 @@ export async function recoverDocument(data: ArrayBuffer, fileName: string, opts:
   report.methods.push(m6);
 
   // ---- Pick the best text (original weighting, plus a prose-likeness factor for binary sources)
-  const weight: Record<MethodResult['key'], number> = { standard: 2, tags: 1.5, bytes: 1.4, doc97: 1.8, rtf: 1, strings: 0.5 };
+  const weight: Record<MethodResult['key'], number> = { standard: 2, tags: 1.5, bytes: 1.4, doc97: 1.8, legacy: 1.7, rtf: 1, strings: 0.5 };
   // The strings scan is the last resort: it competes only when no structured method found text.
   const structured = report.methods.filter((m) => m.text && m.key !== 'strings');
   const pool = structured.length ? structured : report.methods.filter((m) => m.text);
-  const scored = pool.map((m) => ({ m, score: m.text.length * weight[m.key] * (m.key === 'strings' || m.key === 'doc97' ? 0.3 + textQuality(m.text) : 1) }));
+  const scored = pool.map((m) => ({ m, score: m.text.length * weight[m.key] * (m.key === 'strings' || m.key === 'doc97' || m.key === 'legacy' ? 0.3 + textQuality(m.text) : 1) }));
   scored.sort((a, b) => b.score - a.score);
   if (scored[0]) { report.bestKey = scored[0].m.key; report.bestName = scored[0].m.name; report.bestText = scored[0].m.text; }
 
