@@ -13,7 +13,9 @@ import { h, icon, clear } from './dom';
 import { openDialog, toast, confirmDialog } from './dialog';
 import type { App } from '../app';
 import { PROVIDERS, providerById, detectKey, FREE_LABEL, type ProviderDef } from '../ai/providers';
-import { aiSettings, saveAiSettings, getApiKey, setApiKey, deleteApiKey, maskKey, resolveBaseUrl, type ProviderConfig } from '../ai/store';
+import { aiSettings, saveAiSettings, getApiKey, setApiKey, deleteApiKey, maskKey, resolveBaseUrl, qualityModel, type ProviderConfig } from '../ai/store';
+import { costNote, MIN_MEMBERS, MAX_MEMBERS, type EnsembleMode } from '../ai/ensemble';
+import type { Field } from './dialog';
 import { listModels, pickModels, chat, AiError } from '../ai/client';
 import { openExternal, readClipboardText, writeClipboardText, onAppResume, isNative, isCapacitor } from '../platform/native';
 
@@ -343,11 +345,78 @@ export async function openAiProviders(app: App): Promise<void> {
   app.ui.refresh?.();
 }
 
-/** AI options. */
-export async function openAiSettings(app: App): Promise<void> {
+const escHtml = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** AI Settings ▸ "Use several AIs": members (with models), master or consensus, master/clerk, rounds, discussion, cost and privacy. */
+function ensembleFields(mode?: EnsembleMode): Field[] {
+  const s = aiSettings();
+  const e = s.ensemble;
+  const ids = Object.keys(s.providers).filter((id) => providerById(id));
+  const member = (id: string) => e.members.find((m) => m.provider === id);
+  const fields: Field[] = [
+    { key: 'ensHead', type: 'heading', label: 'Use several AIs' },
+    { key: 'ensIntro', type: 'info', html: `<p class="qf-help qf-ens-anchor">Send each AI request to several of the AIs you have set up and get one answer from them. ${ids.length < MIN_MEMBERS ? '<b>Set up at least two AI providers first (AI ▸ Set Up AI).</b>' : `Choose ${MIN_MEMBERS} to ${MAX_MEMBERS}.`} Requests that test a key or list models always use one AI.</p>` },
+    { key: 'ensOn', type: 'checkbox', label: 'Use several AIs for AI commands (at least 2 must be chosen)', value: mode ? mode !== 'single' : e.mode !== 'single' },
+  ];
+  for (const id of ids) {
+    const p = providerById(id)!;
+    const cfg = s.providers[id];
+    fields.push(
+      { key: `ens_${id}`, type: 'checkbox', label: p.name, value: !!member(id), half: true },
+      { key: `ensModel_${id}`, type: 'combo', label: `${p.name} model`, options: cfg.models?.length ? cfg.models : [qualityModel(id, s)], value: member(id)?.model || qualityModel(id, s), half: true, visibleIf: (v) => !!v[`ens_${id}`] },
+    );
+  }
+  fields.push(
+    { key: 'ensMode', type: 'radio', label: 'When several AIs answer', options: [{ value: 'master', label: 'One AI combines the answers (master)' }, { value: 'consensus', label: 'The AIs deliberate until they agree (Quaker consensus)' }], value: mode && mode !== 'single' ? mode : e.mode === 'consensus' ? 'consensus' : 'master' },
+    { key: 'ensMaster', type: 'select', label: 'Master / clerk', options: ids.map((id) => ({ value: id, label: providerById(id)!.name })), value: ids.includes(e.master) ? e.master : s.active && ids.includes(s.active) ? s.active : ids[0], half: true },
+    { key: 'ensRounds', type: 'number', label: 'Rounds of discussion', min: 1, max: 5, value: e.maxRounds, half: true, visibleIf: (v) => v.ensMode === 'consensus' },
+    { key: 'ensShow', type: 'checkbox', label: 'Show the discussion (each AI\'s answer and the rounds, below the result)', value: e.showDeliberation },
+    { key: 'ensNotes', type: 'info', html: '<p class="qf-help qf-ens-cost"></p><p class="qf-help qf-ens-privacy"></p>' },
+  );
+  return fields;
+}
+
+/** The members, master and rounds the "Use several AIs" fields describe. */
+function ensembleChoice(v: Record<string, any>): { ids: string[]; master: string; rounds: number } {
+  const ids = Object.keys(aiSettings().providers).filter((id) => providerById(id) && v[`ens_${id}`]);
+  return { ids, master: String(v.ensMaster || ''), rounds: Math.max(1, Math.min(5, Math.round(Number(v.ensRounds) || 3))) };
+}
+
+/** Cost note and the list of every service that will receive the text. */
+function updateEnsembleNotes(v: Record<string, any>, body: HTMLElement): void {
+  const { ids, master, rounds } = ensembleChoice(v);
+  const cost = body.querySelector('.qf-ens-cost');
+  const priv = body.querySelector('.qf-ens-privacy');
+  if (cost) cost.textContent = ids.length >= MIN_MEMBERS ? costNote(ids.length, rounds) : 'Choose at least two AIs.';
+  if (!priv) return;
+  const all = [...new Set([...ids, ...(master && ids.length >= MIN_MEMBERS ? [master] : [])])];
+  const s = aiSettings();
+  const list = all.map((id) => {
+    const p = providerById(id)!;
+    const local = p.kind === 'local' || p.kind === 'builtin';
+    return `<li>${escHtml(p.name)}${local ? ' (on this device; the text does not leave it)' : ` (${escHtml(host(resolveBaseUrl(p, s.providers[id] || {})))})`}</li>`;
+  });
+  priv.innerHTML = all.length ? `<b>Privacy:</b> the text of each AI command, and the other AIs' answers, will be sent to every one of these services; each one's terms and privacy policy apply:<ul>${list.join('')}</ul>` : '';
+}
+
+/** AI options. `section: 'ensemble'` scrolls to "Use several AIs"; `mode` preselects master or consensus. */
+export async function openAiSettings(app: App, opts: { section?: 'ensemble'; mode?: EnsembleMode } = {}): Promise<void> {
   const s = aiSettings();
   const r = await openDialog({
-    title: 'AI Settings', wide: true, fields: [
+    title: 'AI Settings', wide: true,
+    onOpen: (ctl) => {
+      updateEnsembleNotes(ctl.values(), ctl.body);
+      // After the dialog has focused its first field (which scrolls to the top).
+      if (opts.section === 'ensemble') setTimeout(() => ctl.body.querySelector('.qf-ens-anchor')?.closest('.qf-info')?.previousElementSibling?.scrollIntoView({ block: 'start' }), 150);
+    },
+    onChange: (v, ctl) => updateEnsembleNotes(v, ctl.body),
+    validate: (v) => {
+      const { ids } = ensembleChoice(v);
+      if (v.ensOn && ids.length < MIN_MEMBERS) return 'To use several AIs, choose at least two of them (or turn "Use several AIs" off).';
+      if (ids.length > MAX_MEMBERS) return `Choose at most ${MAX_MEMBERS} AIs.`;
+      return null;
+    },
+    fields: [
       { key: 'enabled', label: 'AI features are on', type: 'checkbox', value: s.enabled },
       { key: 'trackAsRevisions', label: 'Insert AI edits as tracked changes (author "AI (model)") so every change can be reviewed', type: 'checkbox', value: s.trackAsRevisions },
       { key: 'confirmDocument', label: 'Ask before sending a whole document to a cloud service', type: 'checkbox', value: s.confirmDocument },
@@ -357,6 +426,7 @@ export async function openAiSettings(app: App): Promise<void> {
       { key: 'clearClipboard', label: 'Remove a recognized key from the clipboard after saving it', type: 'checkbox', value: s.clearClipboard },
       { key: 'voiceProfile', label: 'My writing voice (used by Match My Voice)', type: 'textarea', rows: 3, value: s.voiceProfile, placeholder: 'e.g. Warm, plain-spoken, short sentences, occasional dry humor, American spelling' },
       { key: 'styleGuide', label: 'Style guide (used by Check Against Style Guide)', type: 'textarea', rows: 4, value: s.styleGuide, placeholder: 'e.g. Use the serial comma. Spell out numbers under ten. "Email", not "e-mail".' },
+      ...ensembleFields(opts.mode),
       { key: 'usage', type: 'info', html: `<p class="qf-help">Requests this device has sent: ${s.usage.requests.toLocaleString()} · tokens in/out (where reported): ${s.usage.tokensIn.toLocaleString()} / ${s.usage.tokensOut.toLocaleString()} · since ${new Date(s.usage.since).toLocaleDateString()}</p>` },
     ],
   });
@@ -365,6 +435,13 @@ export async function openAiSettings(app: App): Promise<void> {
     x.enabled = !!r.enabled; x.trackAsRevisions = !!r.trackAsRevisions; x.confirmDocument = !!r.confirmDocument;
     x.alternatives = Math.max(1, Math.min(5, Number(r.alternatives) || 3)); x.language = String(r.language || 'auto');
     x.clipboardWatch = !!r.clipboardWatch; x.clearClipboard = !!r.clearClipboard; x.voiceProfile = String(r.voiceProfile || ''); x.styleGuide = String(r.styleGuide || '');
+    // Several AIs. A model left at the provider's own quality model is not stored, so it follows later changes there.
+    const { ids, master, rounds } = ensembleChoice(r);
+    x.ensemble.members = ids.map((id) => { const m = String(r[`ensModel_${id}`] || '').trim(); return m && m !== qualityModel(id, x) ? { provider: id, model: m } : { provider: id }; }).slice(0, MAX_MEMBERS);
+    x.ensemble.mode = r.ensOn && ids.length >= MIN_MEMBERS ? (r.ensMode === 'consensus' ? 'consensus' : 'master') : 'single';
+    if (master) x.ensemble.master = master;
+    x.ensemble.maxRounds = rounds;
+    x.ensemble.showDeliberation = !!r.ensShow;
   });
   app.ui.refresh?.();
 }

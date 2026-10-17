@@ -1,6 +1,6 @@
 # QuillForge Command Reference
 
-QuillForge ships **820 commands**. Every one can be placed on the Quick Access Bar, added to a custom tab, bound to a keyboard shortcut, recorded in a macro, or found with command search (Alt+Q).
+QuillForge ships **823 commands**. Every one can be placed on the Quick Access Bar, added to a custom tab, bound to a keyboard shortcut, recorded in a macro, or found with command search (Alt+Q).
 
 435 of them are "Commands Not in the Tabs" — reachable through the Quick Access Bar chooser, Customize Tabs, the command search, or menus — mirroring how desktop suites expose their full command library.
 
@@ -18,7 +18,7 @@ This file is generated from the source by `npm run catalog`.
 - **Review**: Proofing · Speech · Accessibility · Language · Comments · Tracking · Changes · Compare · Protect · Ink
 - **View**: Views · Immersive · Show · Zoom · Writing · Window · Macros
 - **Tools**: Clean Up · Typography · Text · Analyze
-- **AI**: Assistant · Write · Rewrite · Length & Structure · Proofing · Summarize & Analyze · Translate · Research · Review · Pictures · Creative
+- **AI**: Assistant · Providers · Write · Rewrite · Length & Structure · Proofing · Summarize & Analyze · Translate · Research · Review · Pictures · Creative
 - **Developer**: Code · Controls · Protect · Templates
 - **Help**: Help
 - **Table Design** (contextual): Table Style Options · Table Styles · Borders
@@ -740,7 +740,7 @@ This file is generated from the source by `npm run catalog`.
 | Non-Breaking Spaces Before Units/Numbers | Typography |  | `tools.nbspUnits` | not in tabs |
 | Typographic Clean-Up (All) | Typography |  | `tools.typographer` | inspired by Publishing typography |
 
-## AI (67)
+## AI (70)
 
 | Command | Group | Shortcut | ID | Notes |
 |---|---|---|---|---|
@@ -751,7 +751,6 @@ This file is generated from the source by `npm run catalog`.
 | Generate FAQ | Analyze |  | `ai.faq` |  |
 | Insert Summary at Top | Analyze |  | `ai.summaryTop` |  |
 | Summarize | Analyze | Ctrl+Alt+Shift+u | `ai.summarize` | has options menu |
-| Active AI | Assistant |  | `ai.chooseProvider` | has options menu |
 | AI & Privacy | Assistant |  | `ai.privacy` |  |
 | AI Pane | Assistant | Ctrl+Alt+a | `ai.chat` |  |
 | AI Settings… | Assistant |  | `ai.settings` |  |
@@ -759,7 +758,6 @@ This file is generated from the source by `npm run catalog`.
 | Delete Downloaded Models | Assistant |  | `ai.clearLocal` |  |
 | My Prompts | Assistant |  | `ai.runPrompt` | has options menu |
 | Prompt Library… | Assistant |  | `ai.prompts` |  |
-| Providers & Models… | Assistant |  | `ai.providers` |  |
 | Set Up AI… | Assistant |  | `ai.setup` |  |
 | Stop AI | Assistant |  | `ai.stop` |  |
 | Describe (Sensory Detail) | Creative |  | `ai.describe` |  |
@@ -781,6 +779,11 @@ This file is generated from the source by `npm run catalog`.
 | Clarity Suggestions | Proof |  | `ai.clarity` |  |
 | Fix OCR Errors | Proof |  | `ai.ocrFix` |  |
 | Proofread with AI | Proof | Ctrl+Alt+p | `ai.proofread` |  |
+| Active AI | Providers |  | `ai.chooseProvider` | has options menu |
+| Choose AIs… | Providers |  | `ai.ensembleMembers` |  |
+| Providers & Models… | Providers |  | `ai.providers` |  |
+| Several AIs | Providers |  | `ai.ensembleMode` | has options menu |
+| Show AI Discussion | Providers |  | `ai.showDeliberation` |  |
 | Flag Claims to Verify | Research |  | `ai.flagClaims` |  |
 | Format Citation… | Research |  | `ai.citation` | has options menu |
 | Suggest Sources | Research |  | `ai.findSources` |  |
